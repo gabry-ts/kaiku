@@ -29,6 +29,7 @@ Most call recorders either send a bot into your meeting or charge you every mont
 - **No subscription.** Free and open source. Cloud providers are billed to your own key, at their list price, or you run whisper.cpp locally for free.
 - **You own the files.** Every call is a plain folder with audio, `transcript.md` and `meta.json`.
 - **Fully offline if you want.** whisper.cpp is bundled in the app, and models download from Settings.
+- **Mute every mic in one click.** Option-click the menu bar icon: Zoom, Meet and Teams still show you as unmuted, but they only receive silence.
 
 ## Features
 
@@ -38,7 +39,8 @@ Most call recorders either send a bot into your meeting or charge you every mont
 | **Transcribe** | whisper.cpp (local, bundled, in-app model manager), ElevenLabs Scribe, OpenAI, Groq. Auto language detection. "Me" vs "Others" from the two tracks, speaker diarization on the call audio where the provider supports it, rename speakers after the fact. Echo removal when you use speakers. Silence trimming before upload and a per-call cost estimate. |
 | **Organize** | Library with search across titles, tags and transcripts, tag filter, inline player with bookmark markers and click-to-seek timestamps. Export to Markdown, TXT, SRT, VTT and DOCX. Multi-selection for bulk export, tagging, re-transcription and cleanup. Storage overview and optional cleanup of old audio. |
 | **Automate** | Notification when the transcript is ready. Fully configurable webhook (method, headers, custom body templates). Optional summary with decisions and action items, using your own OpenAI, Anthropic or Groq key. Detects Zoom, Teams, Meet, Slack, FaceTime, Webex and Discord calls and offers to record. |
-| **Privacy** | Everything is stored locally. API keys and webhook header values live in the Keychain. Audio leaves your Mac only to the provider you choose, and not at all with whisper.cpp. Option-click the menu bar icon to mute every microphone on the Mac. |
+| **Mute** | Option-click the menu bar icon to mute every microphone on the Mac at once, Bluetooth included, without opening them. Call apps keep showing you as unmuted but receive silence. If an app raises the volume back, mc.Rofone lowers it again. Unmuting, quitting or relaunching after a crash restores every device exactly as it was. |
+| **Privacy** | Everything is stored locally. API keys and webhook header values live in the Keychain. Audio leaves your Mac only to the provider you choose, and not at all with whisper.cpp. |
 
 ## Screenshots
 
