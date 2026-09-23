@@ -193,7 +193,7 @@ private struct ProviderStep: View {
                         }
                     }
                     if !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) {
-                        StatusDot(kind: .warning, text: "whisper-cli not found. Install it with brew install whisper-cpp.")
+                        StatusDot(kind: .warning, text: "whisper-cli not found. Set its path in Settings.")
                     }
                 } else {
                     Text("Paste your \(kind.displayName) API key").font(.body.weight(.semibold))

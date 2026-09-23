@@ -143,7 +143,7 @@ enum AppSettings {
             Keys.language: "auto",
             Keys.meLabel: "Me",
             Keys.othersLabel: "Others",
-            Keys.whisperPath: "/opt/homebrew/bin/whisper-cli",
+            Keys.whisperPath: "",
             Keys.whisperModel: NSHomeDirectory() + "/Library/Application Support/mc.Rofone/models/ggml-large-v3-turbo.bin",
             Keys.microphone: AudioDevices.automatic,
             Keys.hotKey: "ctrlOptCmdR",
@@ -208,7 +208,12 @@ enum AppSettings {
 
     static var meLabel: String { nonEmpty(defaults.string(forKey: Keys.meLabel), "Me") }
     static var othersLabel: String { nonEmpty(defaults.string(forKey: Keys.othersLabel), "Others") }
-    static var whisperPath: String { expand(defaults.string(forKey: Keys.whisperPath)) }
+    /// The user's whisper-cli if set and executable, otherwise the bundled one (or Homebrew's).
+    static var whisperPath: String {
+        let custom = expand(defaults.string(forKey: Keys.whisperPath))
+        if !custom.isEmpty, FileManager.default.isExecutableFile(atPath: custom) { return custom }
+        return WhisperModels.detectWhisperCLI() ?? custom
+    }
     static var whisperModel: String { expand(defaults.string(forKey: Keys.whisperModel)) }
     /// "auto", "none" or a Core Audio device UID.
     static var microphone: String { defaults.string(forKey: Keys.microphone) ?? AudioDevices.automatic }

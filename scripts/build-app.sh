@@ -7,6 +7,9 @@ APP="$ROOT/build/mc.Rofone.app"
 EXEC_NAME="McRofone"
 
 cd "$ROOT"
+"$ROOT/scripts/build-whisper.sh"
+WHISPER_BIN="$ROOT/vendor/whisper-bin"
+
 swift build -c release --product "$EXEC_NAME"
 BIN_DIR="$(swift build -c release --show-bin-path)"
 
@@ -16,7 +19,17 @@ cp "$BIN_DIR/$EXEC_NAME" "$APP/Contents/MacOS/$EXEC_NAME"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
+# Bundled whisper.cpp command line tool and its license notice.
+cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
+{
+    echo "mc.Rofone includes whisper.cpp $(cat "$WHISPER_BIN/.tag") (https://github.com/ggml-org/whisper.cpp),"
+    echo "distributed under the MIT License:"
+    echo
+    cat "$WHISPER_BIN/LICENSE-whisper.cpp"
+} > "$APP/Contents/Resources/ThirdPartyNotices.txt"
+
+codesign --force -s - "$APP/Contents/MacOS/whisper-cli"
 codesign --force --deep -s - "$APP"
-codesign --verify --verbose "$APP"
+codesign --verify --deep --strict --verbose "$APP"
 
 echo "Built $APP"

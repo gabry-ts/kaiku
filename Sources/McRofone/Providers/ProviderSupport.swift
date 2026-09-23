@@ -202,9 +202,16 @@ final class WhisperModels: NSObject, ObservableObject, URLSessionDownloadDelegat
         }
     }
 
-    /// Finds whisper-cli in the usual Homebrew locations.
+    /// whisper-cli shipped inside the app bundle.
+    nonisolated static var bundledWhisperCLI: String? {
+        Bundle.main.path(forAuxiliaryExecutable: "whisper-cli")
+            .flatMap { FileManager.default.isExecutableFile(atPath: $0) ? $0 : nil }
+    }
+
+    /// The bundled whisper-cli, or one in the usual Homebrew locations.
     nonisolated static func detectWhisperCLI() -> String? {
-        ["/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", "/opt/homebrew/bin/whisper-cpp"]
+        if let bundled = bundledWhisperCLI { return bundled }
+        return ["/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", "/opt/homebrew/bin/whisper-cpp"]
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }

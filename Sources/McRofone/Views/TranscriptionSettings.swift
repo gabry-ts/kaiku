@@ -79,7 +79,7 @@ private struct ProviderRow: View {
 // MARK: - whisper.cpp
 
 private struct WhisperSettings: View {
-    @AppStorage(Keys.whisperPath) private var whisperPath = "/opt/homebrew/bin/whisper-cli"
+    @AppStorage(Keys.whisperPath) private var whisperPath = ""
     @AppStorage(Keys.whisperModel) private var whisperModel = ""
     @ObservedObject private var models = WhisperModels.shared
     let onChange: () -> Void
@@ -110,11 +110,16 @@ private struct WhisperSettings: View {
         .onChange(of: models.version) { _, _ in onChange() }
         .onChange(of: whisperModel) { _, _ in onChange() }
 
-        Section("whisper.cpp") {
-            PathField(label: "whisper-cli", path: $whisperPath, placeholder: "/opt/homebrew/bin/whisper-cli") {
-                if let found = WhisperModels.detectWhisperCLI() { whisperPath = found }
+        Section {
+            PathField(label: "whisper-cli", path: $whisperPath, placeholder: "Automatic",
+                      fallback: WhisperModels.detectWhisperCLI()) {
+                whisperPath = ""
             }
             .onChange(of: whisperPath) { _, _ in onChange() }
+        } header: {
+            Text("whisper.cpp")
+        } footer: {
+            Text("Leave empty to use the whisper-cli bundled with the app. Detect clears a custom path.")
         }
     }
 
@@ -452,10 +457,14 @@ struct PathField: View {
     let label: String
     @Binding var path: String
     let placeholder: String
+    /// Executable used when the field is empty.
+    var fallback: String?
     var detect: (() -> Void)?
 
     var body: some View {
-        let ok = FileManager.default.isExecutableFile(atPath: (path as NSString).expandingTildeInPath)
+        let trimmed = path.trimmingCharacters(in: .whitespaces)
+        let effective = trimmed.isEmpty ? (fallback ?? "") : (trimmed as NSString).expandingTildeInPath
+        let ok = FileManager.default.isExecutableFile(atPath: effective)
         LabeledContent(label) {
             HStack(spacing: 6) {
                 TextField(label, text: $path, prompt: Text(placeholder))

@@ -21,13 +21,21 @@ struct WhisperCppProvider: TranscriptionProvider {
 
         let outBase = dir.appendingPathComponent("out")
         let threads = max(4, ProcessInfo.processInfo.activeProcessorCount - 2)
-        try await Shell.run(binary, [
-            "-m", model, "-f", wav.path,
-            "-l", language ?? "auto",
-            "-t", String(threads),
-            "-oj", "-of", outBase.path, "-np",
-        ])
-        let data = try Data(contentsOf: outBase.appendingPathExtension("json"))
-        return try ResponseParsers.whisperCpp(data)
+        let json = outBase.appendingPathExtension("json")
+        do {
+            try await Shell.run(binary, [
+                "-m", model, "-f", wav.path,
+                "-l", language ?? "auto",
+                "-t", String(threads),
+                "-oj", "-of", outBase.path, "-np",
+            ])
+        } catch {
+            // whisper.cpp can abort while releasing the Metal device at exit, after the
+            // transcript was written. Accept the output if it is complete and parses.
+            guard let data = try? Data(contentsOf: json), let result = try? ResponseParsers.whisperCpp(data) else { throw error }
+            Log.transcription.info("whisper-cli exited with an error after writing its output: \(error.localizedDescription, privacy: .public)")
+            return result
+        }
+        return try ResponseParsers.whisperCpp(Data(contentsOf: json))
     }
 }
