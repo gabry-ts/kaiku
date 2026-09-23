@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds build/mc.Rofone.app (release, ad-hoc signed).
+# Builds build/mc.Rofone.app (release, universal, ad-hoc signed).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,8 +10,10 @@ cd "$ROOT"
 "$ROOT/scripts/build-whisper.sh"
 WHISPER_BIN="$ROOT/vendor/whisper-bin"
 
-swift build -c release --product "$EXEC_NAME"
-BIN_DIR="$(swift build -c release --show-bin-path)"
+# Universal binary (Apple silicon + Intel).
+ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}" --product "$EXEC_NAME"
+BIN_DIR="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -31,5 +33,6 @@ cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
 codesign --force -s - "$APP/Contents/MacOS/whisper-cli"
 codesign --force --deep -s - "$APP"
 codesign --verify --deep --strict --verbose "$APP"
+lipo -info "$APP/Contents/MacOS/$EXEC_NAME"
 
 echo "Built $APP"
