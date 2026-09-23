@@ -23,15 +23,17 @@ Requires macOS 14.2 or later (system audio capture uses Core Audio process taps)
 open build/mc.Rofone.app
 ```
 
-The script runs `swift build -c release`, assembles `build/mc.Rofone.app` and signs it ad hoc. Copy the app to `/Applications` if you like. Needs Xcode (or the Command Line Tools) with Swift 6.
+Needs Xcode (or the Command Line Tools) with Swift 6, and `cmake` (`brew install cmake`) to build whisper.cpp. Nothing else is needed at runtime: audio conversion uses AVFoundation and whisper.cpp is bundled in the app.
 
-Tools used at runtime (install with Homebrew):
+The script first runs `scripts/build-whisper.sh`, which clones a pinned whisper.cpp release into `vendor/` (git-ignored) and builds a static, universal `whisper-cli` with Metal (only on the first run or when the pinned version changes). It then builds the app for arm64 and x86_64, assembles `build/mc.Rofone.app` with `whisper-cli` inside and signs it ad hoc. Copy the app to `/Applications` if you like.
+
+To make a disk image for sharing:
 
 ```sh
-brew install ffmpeg whisper-cpp
+./scripts/make-dmg.sh   # build/mc.Rofone-<version>.dmg
 ```
 
-`ffmpeg` is needed by every provider (format conversion, compression, chunking, mixing). `whisper-cpp` only for local transcription.
+The app is signed ad hoc and not notarized, so on another Mac Gatekeeper blocks the first launch: open System Settings > Privacy & Security and click Open Anyway (on macOS 14, right-click > Open also works).
 
 Run the unit tests with `swift test`.
 
@@ -195,7 +197,7 @@ OpenAI model behaviour:
 - `gpt-4o-transcribe` / `gpt-4o-mini-transcribe`: these only return plain text, so audio is sent in 1-minute chunks and each chunk becomes one timestamped block. Pick `whisper-1` or the diarize model if you want finer timing.
 - `gpt-4o-transcribe-diarize`: `diarized_json` with `chunking_strategy=auto`, speaker labels on the system track.
 
-For cloud providers audio is compressed to mono 16 kHz 32 kbps MP3 before upload. OpenAI and Groq requests are split into chunks (10 minutes, or 1 minute for text-only models) to stay well under the 25 MB upload limit.
+For cloud providers audio is compressed to mono 16 kHz 32 kbps AAC (.m4a) before upload. OpenAI and Groq requests are split into chunks (10 minutes, or 1 minute for text-only models) to stay well under the 25 MB upload limit.
 
 ### Language
 
@@ -304,6 +306,7 @@ Known limitations:
   ```sh
   build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-recovery   # kills a writer mid-recording, recovers the audio
   build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-trim       # silence trimming and timestamp mapping
+  build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-audiotools # mixing, 16 kHz WAV, compression and chunking
   build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-detect     # apps using a microphone right now
   build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-devicechange  # track alignment across a tap rebuild and mic switch (opens the mic for ~5 s)
   build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-mute       # mutes every mic for a moment, checks, restores (skips if a call app uses a mic)
