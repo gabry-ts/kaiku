@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>mc.Rofone</string>
+	<key>CFBundleDisplayName</key>
+	<string>mc.Rofone</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.gabrielepartiti.mcrofone</string>
+	<key>CFBundleExecutable</key>
+	<string>McRofone</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.2</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>mc.Rofone records your microphone during calls so they can be transcribed.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>mc.Rofone reads the event happening now to name your recording and suggest speaker names.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>mc.Rofone reads the event happening now to name your recording and suggest speaker names.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>mc.Rofone records system audio (the other people on the call) so it can be transcribed.</string>
+</dict>
+</plist>
