@@ -94,7 +94,6 @@ enum Keys {
     static let othersLabel = "othersLabel"
     static let whisperPath = "whisperPath"
     static let whisperModel = "whisperModel"
-    static let ffmpegPath = "ffmpegPath"
     static let microphone = "microphone"
     static let hotKey = "hotKey"
     static let systemAudioVerified = "systemAudioVerified"
@@ -146,7 +145,6 @@ enum AppSettings {
             Keys.othersLabel: "Others",
             Keys.whisperPath: "/opt/homebrew/bin/whisper-cli",
             Keys.whisperModel: NSHomeDirectory() + "/Library/Application Support/mc.Rofone/models/ggml-large-v3-turbo.bin",
-            Keys.ffmpegPath: "/opt/homebrew/bin/ffmpeg",
             Keys.microphone: AudioDevices.automatic,
             Keys.hotKey: "ctrlOptCmdR",
             Keys.systemAudioVerified: false,
@@ -212,7 +210,6 @@ enum AppSettings {
     static var othersLabel: String { nonEmpty(defaults.string(forKey: Keys.othersLabel), "Others") }
     static var whisperPath: String { expand(defaults.string(forKey: Keys.whisperPath)) }
     static var whisperModel: String { expand(defaults.string(forKey: Keys.whisperModel)) }
-    static var ffmpegPath: String { nonEmpty(expand(defaults.string(forKey: Keys.ffmpegPath)), "/opt/homebrew/bin/ffmpeg") }
     /// "auto", "none" or a Core Audio device UID.
     static var microphone: String { defaults.string(forKey: Keys.microphone) ?? AudioDevices.automatic }
     static var webhookEnabled: Bool { defaults.bool(forKey: Keys.webhookEnabled) }

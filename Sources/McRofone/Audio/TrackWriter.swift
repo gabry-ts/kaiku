@@ -178,7 +178,7 @@ final class TrackWriter: @unchecked Sendable {
     }
 }
 
-/// Offline audio file work done with AVFoundation (no ffmpeg needed).
+/// Offline audio file work done with AVFoundation.
 enum AudioFiles {
     private static let chunk: AVAudioFrameCount = 32_768
 

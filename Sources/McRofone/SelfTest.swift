@@ -362,6 +362,81 @@ enum SelfTest {
         return ok ? 0 : 1
     }
 
+    /// `McRofone --selftest-audiotools`: checks the offline conversions used by the providers
+    /// (mix, 16 kHz WAV, compression, chunking) on generated audio. No devices used.
+    static func runAudioTools() -> Int32 {
+        setvbuf(stdout, nil, _IONBF, 0)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mcrofone-tools-\(Int(Date().timeIntervalSince1970))")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var failures = 0
+        func check(_ ok: Bool, _ what: String) {
+            print("\(ok ? "ok  " : "FAIL") \(what)")
+            if !ok { failures += 1 }
+        }
+        func info(_ url: URL) -> (duration: Double, rate: Double, channels: AVAudioChannelCount, formatID: AudioFormatID)? {
+            guard let f = try? AVAudioFile(forReading: url) else { return nil }
+            let d = Double(f.length) / f.processingFormat.sampleRate
+            return (d, f.fileFormat.sampleRate, f.fileFormat.channelCount, f.fileFormat.streamDescription.pointee.mFormatID)
+        }
+        let sem = DispatchSemaphore(value: 0)
+        var error: Error?
+        Task.detached {
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let mic = dir.appendingPathComponent("mic.m4a")
+                let system = dir.appendingPathComponent("system.m4a")
+                let long = dir.appendingPathComponent("long.m4a")
+                try AudioTools.writeTone(mic, seconds: 3, frequency: 440, sampleRate: 16_000, channels: 1)
+                try AudioTools.writeTone(system, seconds: 5, frequency: 660, sampleRate: 48_000, channels: 2)
+                try AudioTools.writeTone(long, seconds: 130, frequency: 330, sampleRate: 48_000, channels: 1)
+
+                let mixed = dir.appendingPathComponent("mixed.m4a")
+                try await AudioTools.mix(mic: mic, system: system, output: mixed)
+                let m = info(mixed)
+                check(m.map { abs($0.duration - 5) < 0.1 && $0.rate == 48_000 && $0.channels == 2 && $0.formatID == kAudioFormatMPEG4AAC } ?? false,
+                      String(format: "mix: %.2f s, %.0f Hz, %d ch AAC (expected 5 s, 48000 Hz, 2 ch)", m?.duration ?? 0, m?.rate ?? 0, m?.channels ?? 0))
+                let peak = try AudioFiles.peaks(mixed, window: 1).peaks
+                check(peak.count == 5 && peak[0] > 0.4 && peak[4] > 0.2 && peak[4] < 0.4,
+                      "mix: both tracks summed for 3 s, then only the system track (peaks \(peak.map { String(format: "%.2f", $0) }))")
+
+                let wav = dir.appendingPathComponent("input.wav")
+                try await AudioTools.toWhisperWav(system, output: wav)
+                let w = info(wav)
+                let bits = (try? AVAudioFile(forReading: wav))?.fileFormat.settings[AVLinearPCMBitDepthKey] as? Int ?? 0
+                check(w.map { abs($0.duration - 5) < 0.05 && $0.rate == 16_000 && $0.channels == 1 && $0.formatID == kAudioFormatLinearPCM && bits == 16 } ?? false,
+                      String(format: "wav: %.2f s, %.0f Hz, %d ch, %d bit PCM (expected 5 s, 16000 Hz, 1 ch, 16 bit)", w?.duration ?? 0, w?.rate ?? 0, w?.channels ?? 0, bits))
+
+                let small = dir.appendingPathComponent("audio.m4a")
+                try await AudioTools.compress(long, output: small)
+                let c = info(small)
+                let size = ((try? FileManager.default.attributesOfItem(atPath: small.path)[.size]) as? Int) ?? 0
+                check(c.map { abs($0.duration - 130) < 0.1 && $0.rate == 16_000 && $0.channels == 1 } ?? false && size < 130 * 5_000,
+                      String(format: "compress: %.2f s, %.0f Hz, %d ch, %d KB", c?.duration ?? 0, c?.rate ?? 0, c?.channels ?? 0, size / 1024))
+
+                let chunkDir = dir.appendingPathComponent("chunks")
+                try FileManager.default.createDirectory(at: chunkDir, withIntermediateDirectories: true)
+                let chunks = try await AudioTools.chunks(long, seconds: 60, dir: chunkDir)
+                let expected: [(Double, Double)] = [(0, 60), (60, 60), (120, 10)]
+                check(chunks.count == 3, "chunks: \(chunks.count) files (expected 3)")
+                for (chunk, e) in zip(chunks, expected) {
+                    let measured = info(chunk.url)?.duration ?? 0
+                    check(abs(chunk.offset - e.0) < 0.01 && abs(chunk.duration - e.1) < 0.01 && abs(measured - e.1) < 0.1,
+                          String(format: "%@: offset %.2f s, duration %.2f s, file %.2f s", chunk.url.lastPathComponent, chunk.offset, chunk.duration, measured))
+                }
+            } catch let e {
+                error = e
+            }
+            sem.signal()
+        }
+        sem.wait()
+        if let error {
+            print("FAIL: \(error.diagnosticDescription)")
+            return 1
+        }
+        print(failures == 0 ? "PASS" : "FAIL")
+        return failures == 0 ? 0 : 1
+    }
+
     private struct Snapshot: CustomStringConvertible {
         let input: AudioDevice?
         let output: AudioDevice?
@@ -378,22 +453,10 @@ enum SelfTest {
         Snapshot(input: AudioDevices.defaultInput, output: AudioDevices.defaultOutput)
     }
 
-    /// Max volume in dB via ffmpeg volumedetect, if ffmpeg is available.
+    /// Max volume in dB of a file.
     private static func peak(_ url: URL) -> String? {
-        let ffmpeg = AppSettings.ffmpegPath
-        guard FileManager.default.isExecutableFile(atPath: ffmpeg), FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: ffmpeg)
-        p.arguments = ["-hide_banner", "-nostats", "-i", url.path, "-af", "volumedetect", "-f", "null", "-"]
-        let pipe = Pipe()
-        p.standardError = pipe
-        p.standardOutput = FileHandle.nullDevice
-        guard (try? p.run()) != nil else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        let text = String(decoding: data, as: UTF8.self)
-        return text.components(separatedBy: "\n").first { $0.contains("max_volume") }?
-            .components(separatedBy: "max_volume:").last?.trimmingCharacters(in: .whitespaces)
+        guard let (peaks, _) = try? AudioFiles.peaks(url, window: 1), let top = peaks.max() else { return nil }
+        return top > 0 ? String(format: "%.1f dB", 20 * log10(top)) : "-inf dB"
     }
 
     private static func describe(_ s: AVAuthorizationStatus) -> String {

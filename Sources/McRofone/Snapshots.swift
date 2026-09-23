@@ -306,12 +306,7 @@ private enum Fixtures {
             _ = try? TranscriptWriter.write(folder: f, meta: meta, rawSegments: segments)
         }
         if audio && !FileManager.default.fileExists(atPath: f.mixedURL.path) {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: AppSettings.ffmpegPath)
-            p.arguments = ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono",
-                           "-t", String(Int(duration)), "-c:a", "aac", "-b:a", "8k", f.mixedURL.path]
-            try? p.run()
-            p.waitUntilExit()
+            try? AudioTools.writeTone(f.mixedURL, seconds: Double(Int(duration)), amplitude: 0, sampleRate: 8_000)
         }
         return f
     }

@@ -3,7 +3,6 @@ import McRofoneCore
 
 struct TranscriptionSettings: View {
     @AppStorage(Keys.provider) private var provider = ProviderKind.whisperCpp.rawValue
-    @AppStorage(Keys.ffmpegPath) private var ffmpegPath = "/opt/homebrew/bin/ffmpeg"
     /// Bumped to re-evaluate readiness after keys or models change.
     @State private var refresh = 0
 
@@ -34,14 +33,6 @@ struct TranscriptionSettings: View {
             SilenceTrimSection()
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
             SummarySettings()
-
-            Section {
-                PathField(label: "ffmpeg", path: $ffmpegPath, placeholder: "/opt/homebrew/bin/ffmpeg")
-            } header: {
-                Text("Tools")
-            } footer: {
-                Text("ffmpeg converts and compresses audio for every provider. Install it with `brew install ffmpeg`.")
-            }
         }
         .formStyle(.grouped)
     }

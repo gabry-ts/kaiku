@@ -12,8 +12,8 @@ struct ElevenLabsProvider: TranscriptionProvider {
     func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
         let dir = try AudioTools.makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let mp3 = dir.appendingPathComponent("audio.mp3")
-        try await AudioTools.compress(fileURL, output: mp3)
+        let audio = dir.appendingPathComponent("audio.m4a")
+        try await AudioTools.compress(fileURL, output: audio)
 
         var form = MultipartForm()
         form.field("model_id", model)
@@ -21,7 +21,7 @@ struct ElevenLabsProvider: TranscriptionProvider {
         form.field("timestamps_granularity", "word")
         form.field("tag_audio_events", "false")
         if let language { form.field("language_code", language) }
-        try form.file("file", url: mp3, mime: "audio/mpeg")
+        try form.file("file", url: audio, mime: "audio/mp4")
 
         let data = try await HTTP.postMultipart(
             URL(string: "https://api.elevenlabs.io/v1/speech-to-text")!,

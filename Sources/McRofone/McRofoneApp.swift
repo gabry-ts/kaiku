@@ -24,6 +24,9 @@ struct McRofoneApp: App {
         if args.contains("--selftest-trim") {
             exit(SelfTest.runTrim())
         }
+        if args.contains("--selftest-audiotools") {
+            exit(SelfTest.runAudioTools())
+        }
         if args.contains("--selftest-recovery") {
             exit(SelfTest.runRecovery())
         }

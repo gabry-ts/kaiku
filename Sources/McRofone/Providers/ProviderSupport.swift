@@ -77,10 +77,7 @@ enum ProviderTester {
             let dir = try AudioTools.makeTempDir()
             defer { try? FileManager.default.removeItem(at: dir) }
             let tone = dir.appendingPathComponent("test.m4a")
-            try await Shell.run(AudioTools.ffmpeg, [
-                "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
-                "-c:a", "aac", tone.path,
-            ])
+            try AudioTools.writeTone(tone, seconds: 1)
             let start = Date()
             _ = try await provider.transcribe(fileURL: tone, language: nil, diarize: false)
             let secs = Date().timeIntervalSince(start)

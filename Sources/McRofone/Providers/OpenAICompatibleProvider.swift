@@ -24,7 +24,7 @@ struct OpenAICompatibleProvider: TranscriptionProvider {
         isDiarizeModel ? "diarized_json" : (isWhisperModel ? "verbose_json" : "json")
     }
 
-    /// Chunk length in seconds. Upload limit is 25 MB; at 32 kbps mono MP3 10 min is ~2.4 MB.
+    /// Chunk length in seconds. Upload limit is 25 MB; at 32 kbps mono AAC 10 min is ~2.4 MB.
     private var chunkSeconds: Int { (isDiarizeModel || isWhisperModel) ? 600 : 60 }
 
     func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
@@ -40,7 +40,7 @@ struct OpenAICompatibleProvider: TranscriptionProvider {
             form.field("response_format", responseFormat)
             if isDiarizeModel { form.field("chunking_strategy", "auto") }
             if let language { form.field("language", language) }
-            try form.file("file", url: chunk.url, mime: "audio/mpeg")
+            try form.file("file", url: chunk.url, mime: "audio/mp4")
 
             let data = try await HTTP.postMultipart(
                 baseURL.appendingPathComponent("audio/transcriptions"),
