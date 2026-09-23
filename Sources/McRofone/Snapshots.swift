@@ -18,6 +18,7 @@ enum Snapshots {
         let defaults = UserDefaults(suiteName: "com.gabrielepartiti.mcrofone.snapshots")!
         AppSettings.defaults = defaults
         AppSettings.registerDefaults()
+        AppSettings.displayBaseFolderOverride = "~/Documents/mc.Rofone"
         let library = dir.appendingPathComponent("fixtures/library", isDirectory: true)
         let empty = dir.appendingPathComponent("fixtures/empty", isDirectory: true)
         try? FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
@@ -28,6 +29,7 @@ enum Snapshots {
             Keys.webhookEnabled: true,
             Keys.webhookURL: "https://hooks.example.com/mcrofone",
             Keys.webhookHeaderKeys: ["Authorization"],
+            Keys.lastTags: ["Roadmap", "Design"],
         ])
         Keychain.mock = [
             ProviderKind.openAI.rawValue: "sk-demo-1234567890abcdef",
@@ -36,12 +38,19 @@ enum Snapshots {
         let folders = Fixtures.make(in: library)
         folders[0].updateMeta {
             $0.tags = ["Roadmap", "Design"]
-            $0.bookmarks = [Bookmark(time: 41, label: "Onboarding status"), Bookmark(time: 71, label: "")]
+            $0.bookmarks = [Bookmark(time: 41, label: "Onboarding test results"), Bookmark(time: 222, label: "Billing moves to November"),
+                            Bookmark(time: 1480, label: "")]
             $0.modelID = "whisper-1"
             $0.transcribedSeconds = 2100
             $0.estimatedCostUSD = 0.21
+            $0.summaryModel = "gpt-5-mini"
+            $0.calendarEvent = Fixtures.event(title: "Weekly sync with design team", start: $0.date)
         }
+        try? Fixtures.designSummary.write(to: folders[0].summaryURL, atomically: true, encoding: .utf8)
+        folders[1].updateMeta { $0.tags = ["Sales", "Acme"] }
         folders[2].updateMeta { $0.tags = ["Hiring"] }
+        folders[4].updateMeta { $0.tags = ["Engineering"] }
+        folders[5].updateMeta { $0.tags = ["Nova", "Roadmap"] }
         let state = AppState.shared
 
         func both(_ name: String, size: CGSize?, chrome: Bool = true, _ view: @escaping () -> AnyView) {
@@ -87,7 +96,9 @@ enum Snapshots {
         // Title prompt.
         state.setPreview(phase: .idle)
         for dark in [false, true] {
-            snap(AnyView(TitlePromptView(onDone: {}).environmentObject(state).defaultAppStorage(defaults)),
+            let event = Fixtures.event(title: "Q4 roadmap review", start: Date())
+            snap(AnyView(TitlePromptView(onDone: {}, initialTitle: event.title, event: event)
+                    .environmentObject(state).defaultAppStorage(defaults)),
                  name: "title-prompt-\(dark ? "dark" : "light")", size: nil, dark: dark, chrome: true, dir: dir, chromeless: true)
         }
 
@@ -97,6 +108,11 @@ enum Snapshots {
         both("library", size: CGSize(width: 1100, height: 720)) {
             AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults))
         }
+        LibraryView.preferSummaryTab = true
+        both("library-summary", size: CGSize(width: 1100, height: 720)) {
+            AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults))
+        }
+        LibraryView.preferSummaryTab = false
         state.librarySelection = folders[3].key
         snap(AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)), name: "library-error-light",
              size: CGSize(width: 1100, height: 720), dark: false, chrome: true, dir: dir)
@@ -274,8 +290,8 @@ private enum Fixtures {
 
         return [
             folder(base, title: "Weekly sync with design team", date: todayAt(10, 30), duration: 2532,
-                   model: "OpenAI (whisper-1)", detected: "italian", status: .done, segments: designSync, audio: true,
-                   names: ["Speaker 1": "Giulia"]),
+                   model: "OpenAI (whisper-1)", detected: "english", status: .done, segments: designSync, audio: true,
+                   names: ["Speaker 1": "Giulia", "Speaker 2": "Tom"]),
             folder(base, title: "Pricing call with Acme", date: todayAt(9, 5), duration: 1810,
                    model: nil, detected: nil, status: .transcribing, segments: [], audio: true),
             folder(base, title: "Candidate interview: Luca Bianchi", date: cal.date(bySettingHour: 16, minute: 0, second: 0, of: now - day)!, duration: 3120,
@@ -287,7 +303,7 @@ private enum Fixtures {
                    model: "whisper.cpp (ggml-large-v3-turbo.bin)", detected: "en", status: .done, segments: standup,
                    audio: false),
             folder(base, title: "Kickoff Progetto Nova", date: cal.date(bySettingHour: 14, minute: 0, second: 0, of: now - 40 * day)!, duration: 4210,
-                   model: "Groq (whisper-large-v3-turbo)", detected: "italian", status: .done, segments: designSync,
+                   model: "Groq (whisper-large-v3-turbo)", detected: "italian", status: .done, segments: kickoff,
                    audio: false),
         ]
     }
@@ -316,15 +332,46 @@ private enum Fixtures {
     }
 
     static let designSync: [Segment] = [
-        seg(3, "Me", "Ciao a tutti, iniziamo? Oggi vorrei chiudere la roadmap del Q4."),
-        seg(9, "Speaker 1", "Sì, ci siamo. Ho aggiornato il file con le ultime schermate dell'onboarding."),
-        seg(18, "Speaker 2", "Before we start: can we keep this in English? Tom from the Berlin office joined."),
-        seg(24, "Me", "Sure, no problem. So, the roadmap: three big items, onboarding, billing and the new library."),
+        seg(3, "Me", "Morning everyone. Today I'd like to lock the Q4 roadmap."),
+        seg(9, "Speaker 1", "Ready when you are. I updated the file with the latest onboarding screens."),
+        seg(18, "Speaker 2", "Same here. I pulled the numbers from the billing dashboard too."),
+        seg(24, "Me", "Great. Three big items: onboarding, billing and the new library."),
         seg(41, "Speaker 1", "Onboarding is basically ready. We tested it with five users last week and four finished without help."),
-        seg(58, "Speaker 2", "Billing is the risky one. The Stripe migration needs at least two sprints."),
-        seg(71, "Me", "Ok, then let's move billing to November and ship the library first."),
-        seg(80, "Speaker 1", "Makes sense. I'll share the updated roadmap after the call."),
+        seg(58, "Me", "Nice. What tripped up the fifth one?"),
+        seg(63, "Speaker 1", "The permissions step. I'll add a short explainer before the system prompt."),
+        seg(96, "Speaker 2", "Billing is the risky one. The Stripe migration needs at least two sprints."),
+        seg(222, "Me", "Then let's move billing to November and ship the library first."),
+        seg(230, "Speaker 2", "Works for me. I'll write the migration plan by Friday."),
+        seg(241, "Speaker 1", "Makes sense. I'll share the updated roadmap after the call."),
     ]
+
+    static let kickoff: [Segment] = [
+        seg(4, "Me", "Benvenuti al kickoff di Nova. Partiamo dagli obiettivi del trimestre."),
+        seg(12, "Speaker 1", "Il primo è chiaro: la beta chiusa entro fine ottobre."),
+        seg(25, "Speaker 2", "Per arrivarci ci serve il design system pronto in tre settimane."),
+    ]
+
+    static let designSummary = """
+    ## Summary
+    Weekly design sync to lock the Q4 roadmap. Onboarding is ready after a five-person test, billing carries the most risk because of the Stripe migration, and the team agreed to ship the new library first.
+
+    ## Decisions
+    - Ship the new library before billing.
+    - Move the billing migration to November.
+
+    ## Action items
+    - Giulia: add a short explainer before the permissions prompt in onboarding.
+    - Tom: write the Stripe migration plan by Friday.
+    - Giulia: share the updated roadmap after the call.
+    """
+
+    static func event(title: String, start: Date) -> CalendarEventInfo {
+        CalendarEventInfo(title: title, calendar: "Work", start: start, end: start.addingTimeInterval(3600), attendees: [
+            .init(name: "Giulia Rossi", email: "giulia@example.com"),
+            .init(name: "Tom Becker", email: "tom@example.com"),
+            .init(name: "Sara Conti", email: "sara@example.com"),
+        ])
+    }
 
     static let interview: [Segment] = [
         seg(2, "Me", "Grazie per essere qui, Luca. Partiamo dal tuo ultimo progetto."),
