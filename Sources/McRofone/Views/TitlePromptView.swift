@@ -96,7 +96,7 @@ struct TitlePromptView: View {
                 .help("Save the event and its attendees with this call")
             }
 
-            Label((AppSettings.baseFolder.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+            Label(AppSettings.baseFolderDisplayPath, systemImage: "folder")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1).truncationMode(.middle)

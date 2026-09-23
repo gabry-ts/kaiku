@@ -96,7 +96,7 @@ struct GeneralSettings: View {
                 LabeledContent("Save recordings in") {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.fill").foregroundStyle(.blue)
-                        Text((baseFolder as NSString).abbreviatingWithTildeInPath)
+                        Text(AppSettings.displayBaseFolderOverride ?? (baseFolder as NSString).abbreviatingWithTildeInPath)
                             .lineLimit(1).truncationMode(.middle)
                             .help(baseFolder)
                     }
@@ -570,7 +570,7 @@ struct AboutSettings: View {
             Button {
                 AppState.shared.openBaseFolder()
             } label: {
-                Label((AppSettings.baseFolder.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+                Label(AppSettings.baseFolderDisplayPath, systemImage: "folder")
                     .lineLimit(1).truncationMode(.middle)
             }
             .buttonStyle(.link)

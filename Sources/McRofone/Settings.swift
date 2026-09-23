@@ -189,6 +189,14 @@ enum AppSettings {
             .appendingPathComponent("Documents/mc.Rofone", isDirectory: true)
     }
 
+    /// Shown instead of the real path when rendering snapshots from temporary fixtures.
+    static var displayBaseFolderOverride: String?
+
+    /// Base folder for display, with the home folder abbreviated to `~`.
+    static var baseFolderDisplayPath: String {
+        displayBaseFolderOverride ?? (baseFolder.path as NSString).abbreviatingWithTildeInPath
+    }
+
     static var baseFolder: URL {
         let path = defaults.string(forKey: Keys.baseFolder) ?? ""
         return path.isEmpty ? defaultBaseFolder : URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)

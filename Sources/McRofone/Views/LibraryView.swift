@@ -31,6 +31,9 @@ enum PendingAction {
 }
 
 struct LibraryView: View {
+    /// Snapshot rendering opens calls that have a summary on the Summary tab.
+    static var preferSummaryTab = false
+
     @EnvironmentObject var state: AppState
     @State private var items: [LibraryItem] = []
     @State private var search = ""
@@ -118,7 +121,7 @@ struct LibraryView: View {
                     Label("No Recordings Yet", systemImage: "waveform.and.mic")
                 } description: {
                     Text(HotKeyPreset.current == .off
-                         ? "Start one from the menu bar. Calls are saved in \((AppSettings.baseFolder.path as NSString).abbreviatingWithTildeInPath)."
+                         ? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath)."
                          : "Start one from the menu bar or press \(HotKeyPreset.current.display) from any app.")
                 } actions: {
                     Button("Start Recording") { state.requestStart() }
@@ -479,7 +482,7 @@ private struct RecordingDetail: View {
             title = item.meta.title
             tags = item.meta.tags ?? []
             bytes = item.folder.totalBytes
-            if item.folder.hasSummary && !item.folder.hasTranscript { tab = .summary }
+            if item.folder.hasSummary && (!item.folder.hasTranscript || LibraryView.preferSummaryTab) { tab = .summary }
             if hasAudio, let url = [item.folder.mixedURL, item.folder.micURL, item.folder.systemURL]
                 .first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
                 player.load(url)
