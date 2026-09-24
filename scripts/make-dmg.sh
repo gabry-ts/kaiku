@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Builds the app and packages it as build/mc.Rofone-<version>.dmg, with a link to
+# Builds the app and packages it as build/Kaiku-<version>.dmg, with a link to
 # /Applications for drag-and-drop install. Uses only tools that ship with macOS.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/mc.Rofone.app"
-NAME="mc.Rofone"
+APP="$ROOT/build/Kaiku.app"
+NAME="Kaiku"
 
 "$ROOT/scripts/build-app.sh"
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Builds build/mc.Rofone.app (release, universal, ad-hoc signed).
+# Builds build/Kaiku.app (release, universal, ad-hoc signed).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/mc.Rofone.app"
-EXEC_NAME="McRofone"
+APP="$ROOT/build/Kaiku.app"
+EXEC_NAME="Kaiku"
 
 cd "$ROOT"
 "$ROOT/scripts/build-whisper.sh"
@@ -24,7 +24,7 @@ cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # Bundled whisper.cpp command line tool and its license notice.
 cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
 {
-    echo "mc.Rofone includes whisper.cpp $(cat "$WHISPER_BIN/.tag") (https://github.com/ggml-org/whisper.cpp),"
+    echo "Kaiku includes whisper.cpp $(cat "$WHISPER_BIN/.tag") (https://github.com/ggml-org/whisper.cpp),"
     echo "distributed under the MIT License:"
     echo
     cat "$WHISPER_BIN/LICENSE-whisper.cpp"

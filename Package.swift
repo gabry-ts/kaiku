@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "McRofone",
+    name: "Kaiku",
     platforms: [.macOS("14.2")],
     targets: [
         .target(
-            name: "McRofoneCore",
+            name: "KaikuCore",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
-            name: "McRofone",
-            dependencies: ["McRofoneCore"],
+            name: "Kaiku",
+            dependencies: ["KaikuCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
-            name: "McRofoneCoreTests",
-            dependencies: ["McRofoneCore"],
+            name: "KaikuCoreTests",
+            dependencies: ["KaikuCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>mc.Rofone</string>
+	<string>Kaiku</string>
 	<key>CFBundleDisplayName</key>
-	<string>mc.Rofone</string>
+	<string>Kaiku</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.gabrielepartiti.mcrofone</string>
+	<string>com.gabrielepartiti.kaiku</string>
 	<key>CFBundleExecutable</key>
-	<string>McRofone</string>
+	<string>Kaiku</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
@@ -27,12 +27,12 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>mc.Rofone records your microphone during calls so they can be transcribed.</string>
+	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>mc.Rofone reads the event happening now to name your recording and suggest speaker names.</string>
+	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>mc.Rofone reads the event happening now to name your recording and suggest speaker names.</string>
+	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>mc.Rofone records system audio (the other people on the call) so it can be transcribed.</string>
+	<string>Kaiku records system audio (the other people on the call) so it can be transcribed.</string>
 </dict>
 </plist>
