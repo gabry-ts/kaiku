@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="docs/images/icon.png" width="128" alt="mc.Rofone icon">
+<img src="docs/images/icon.png" width="128" alt="Kaiku icon">
 
-# mc.Rofone
+# Kaiku
 
 **Record and transcribe your calls on macOS. No bot joins the meeting, no subscription, your files stay yours.**
 
-<sub>The name is a pun on *microfono*, Italian for microphone.</sub>
+<sub>*Kaiku* is Finnish for echo: what was said, played back when you need it.</sub>
 
 [![macOS 14.2+](https://img.shields.io/badge/macOS-14.2%2B-black?logo=apple)](#install)
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](Package.swift)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/gabry-ts/mc.Rofone)](https://github.com/gabry-ts/mc.Rofone/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/gabry-ts/kaiku)](https://github.com/gabry-ts/kaiku/releases/latest)
 [![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-555)](#install)
 
 <picture>
@@ -23,7 +23,7 @@
 
 ## Why
 
-Most call recorders either send a bot into your meeting or charge you every month. mc.Rofone does neither. It lives in the menu bar, records your microphone and the Mac's audio directly, and hands the result to the speech-to-text engine you pick:
+Most call recorders either send a bot into your meeting or charge you every month. Kaiku does neither. It lives in the menu bar, records your microphone and the Mac's audio directly, and hands the result to the speech-to-text engine you pick:
 
 - **No bot.** Nobody sees "Notetaker has joined". It records what your Mac hears.
 - **No subscription.** Free and open source. Cloud providers are billed to your own key, at their list price, or you run whisper.cpp locally for free.
@@ -39,7 +39,7 @@ Most call recorders either send a bot into your meeting or charge you every mont
 | **Transcribe** | whisper.cpp (local, bundled, in-app model manager), ElevenLabs Scribe, OpenAI, Groq. Auto language detection. "Me" vs "Others" from the two tracks, speaker diarization on the call audio where the provider supports it, rename speakers after the fact. Echo removal when you use speakers. Silence trimming before upload and a per-call cost estimate. |
 | **Organize** | Library with search across titles, tags and transcripts, tag filter, inline player with bookmark markers and click-to-seek timestamps. Export to Markdown, TXT, SRT, VTT and DOCX. Multi-selection for bulk export, tagging, re-transcription and cleanup. Storage overview and optional cleanup of old audio. |
 | **Automate** | Notification when the transcript is ready. Fully configurable webhook (method, headers, custom body templates). Optional summary with decisions and action items, using your own OpenAI, Anthropic or Groq key. Detects Zoom, Teams, Meet, Slack, FaceTime, Webex and Discord calls and offers to record. |
-| **Mute** | Option-click the menu bar icon to mute every microphone on the Mac at once, Bluetooth included, without opening them. Call apps keep showing you as unmuted but receive silence. If an app raises the volume back, mc.Rofone lowers it again. Unmuting, quitting or relaunching after a crash restores every device exactly as it was. |
+| **Mute** | Option-click the menu bar icon to mute every microphone on the Mac at once, Bluetooth included, without opening them. Call apps keep showing you as unmuted but receive silence. If an app raises the volume back, Kaiku lowers it again. Unmuting, quitting or relaunching after a crash restores every device exactly as it was. |
 | **Privacy** | Everything is stored locally. API keys and webhook header values live in the Keychain. Audio leaves your Mac only to the provider you choose, and not at all with whisper.cpp. |
 
 ## Screenshots
@@ -102,7 +102,7 @@ The two tracks are transcribed separately, so the transcript knows who said what
 
 ## Install
 
-1. Download the latest `mc.Rofone-<version>.dmg` from [Releases](https://github.com/gabry-ts/mc.Rofone/releases/latest) and drag the app to Applications.
+1. Download the latest `Kaiku-<version>.dmg` from [Releases](https://github.com/gabry-ts/kaiku/releases/latest) and drag the app to Applications.
 2. The app is signed ad hoc and **not notarized**, so Gatekeeper blocks the first launch. Open it once, then go to **System Settings > Privacy & Security** and click **Open Anyway** (on macOS 14, right-click the app > Open also works).
 3. Grant the permissions macOS asks for on the first recording:
    - **Microphone**: Privacy & Security > Microphone.
@@ -112,9 +112,11 @@ The two tracks are transcribed separately, so the transcript knows who said what
 
 Requires macOS 14.2 or later (process taps). Universal binary for Apple Silicon and Intel.
 
+**Upgrading from mc.Rofone.** Kaiku is the same app under a new name and bundle identifier. On first launch it copies your settings, API keys and webhook header values, moves `~/Documents/mc.Rofone` to `~/Documents/Kaiku` (only if you kept the default folder and `~/Documents/Kaiku` does not exist yet) and moves downloaded models to `~/Library/Application Support/Kaiku`. Nothing is deleted, and the old Keychain items are kept. macOS sees a new app, so it asks for microphone, system audio, notification and calendar permissions again; macOS may also ask once to let Kaiku read the keys saved by mc.Rofone. You can then delete mc.Rofone.
+
 ## Quick start
 
-1. Launch mc.Rofone. A short welcome guide covers permissions, provider and shortcut.
+1. Launch Kaiku. A short welcome guide covers permissions, provider and shortcut.
 2. Pick a provider in **Settings > Transcription**. For fully local transcription keep whisper.cpp and download a model (Large v3 Turbo compact is the recommended one). For cloud providers paste your API key; **Test** sends a one-second request.
 3. Click the menu bar icon > **Start Recording…** (or press ⌃⌥⌘R anywhere). Type a title, add tags, press Enter.
 4. Talk. Pause, resume and drop bookmarks as you go.
@@ -152,7 +154,7 @@ For cloud providers audio is compressed to mono 16 kHz 32 kbps AAC before upload
 
 **Language.** Auto-detect by default (whisper.cpp gets `-l auto`). Settings offers Auto, Italian, English or any ISO code, and the title window overrides it per call.
 
-**whisper.cpp models.** Settings > Transcription downloads them for you: Tiny (75 MB), Base (142 MB), Small (466 MB), Medium (1.5 GB), Large v3 Turbo compact (547 MB, recommended) and Large v3 Turbo (1.6 GB). They live in `~/Library/Application Support/mc.Rofone/models`. Avoid the `.en` models if you speak other languages.
+**whisper.cpp models.** Settings > Transcription downloads them for you: Tiny (75 MB), Base (142 MB), Small (466 MB), Medium (1.5 GB), Large v3 Turbo compact (547 MB, recommended) and Large v3 Turbo (1.6 GB). They live in `~/Library/Application Support/Kaiku/models`. Avoid the `.en` models if you speak other languages.
 
 ### Summary
 
@@ -160,10 +162,10 @@ Off by default. Turn on *Summarize every call after transcription* in Settings >
 
 ## Output
 
-Default base folder: `~/Documents/mc.Rofone` (changeable in Settings).
+Default base folder: `~/Documents/Kaiku` (changeable in Settings).
 
 ```
-~/Documents/mc.Rofone/
+~/Documents/Kaiku/
   2026-09-23_1430_weekly-sync/
     meta.json        title, date, duration, language, provider, status, speaker names,
                      tags, pauses, bookmarks, calendar event, estimated cost, output routes,
@@ -219,12 +221,12 @@ Default JSON body:
   "date": "2026-09-23T12:30:00Z",
   "duration_seconds": 2530,
   "language": "it",
-  "folder_path": "/Users/me/Documents/mc.Rofone/2026-09-23_1430_weekly-sync",
-  "transcript_path": "/Users/me/Documents/mc.Rofone/2026-09-23_1430_weekly-sync/transcript.md",
+  "folder_path": "/Users/me/Documents/Kaiku/2026-09-23_1430_weekly-sync",
+  "transcript_path": "/Users/me/Documents/Kaiku/2026-09-23_1430_weekly-sync/transcript.md",
   "audio_paths": [
-    "/Users/me/Documents/mc.Rofone/2026-09-23_1430_weekly-sync/mic.m4a",
-    "/Users/me/Documents/mc.Rofone/2026-09-23_1430_weekly-sync/system.m4a",
-    "/Users/me/Documents/mc.Rofone/2026-09-23_1430_weekly-sync/mixed.m4a"
+    "/Users/me/Documents/Kaiku/2026-09-23_1430_weekly-sync/mic.m4a",
+    "/Users/me/Documents/Kaiku/2026-09-23_1430_weekly-sync/system.m4a",
+    "/Users/me/Documents/Kaiku/2026-09-23_1430_weekly-sync/mixed.m4a"
   ],
   "provider": "OpenAI (whisper-1)",
   "transcript_markdown": "# Weekly sync\n\n...",
@@ -275,19 +277,33 @@ A generic "create a page" payload for a notes tool or your own endpoint:
 
 ## Keyboard shortcuts
 
+Global shortcuts work from any app and are all configurable in **Settings > Shortcuts**:
+
+| Action (from any app) | Default |
+|---|---|
+| Start / stop recording | ⌃⌥⌘R |
+| Pause / resume | ⌃⌥⌘P |
+| Add bookmark | ⌃⌥⌘B |
+| Mute / unmute every microphone | None |
+| Open the recordings library | None |
+| Show the panel | None |
+
+Click a shortcut and type the new combination. It needs at least one of ⌘, ⌃ or ⌥ (Shift alone is not enough); Esc cancels, Delete clears it. Kaiku refuses a combination already used by another of its actions and warns you when another app has taken it. Each row can be reset, and **Restore Defaults** resets them all.
+
+In the panel:
+
 | Action | Shortcut |
 |---|---|
-| Start / stop recording (from any app) | ⌃⌥⌘R |
-| Pause / resume (from any app) | ⌃⌥⌘P |
-| Add bookmark (from any app) | ⌃⌥⌘B |
-| Start Recording… in the panel | ⌘R |
-| Pause / resume in the panel | ⌘P |
-| Bookmark in the panel | ⌘B |
+| Start Recording… | ⌘R |
+| Pause / resume | ⌘P |
+| Bookmark | ⌘B |
+| Stop Recording | ⌘S |
+| All Recordings / Settings | ⌘L / ⌘, |
 | Mute / unmute every microphone | Option-click the menu bar icon |
 
-The global shortcuts can be changed or turned off in Settings > General. In the title window, Enter or Tab accepts a tag, ⌫ removes the last one, and "Last used" adds the previous call's tags in one click.
+In the title window, Enter or Tab accepts a tag, ⌫ removes the last one, and "Last used" adds the previous call's tags in one click.
 
-**Option-click mute.** mc.Rofone saves each input device's state, then turns on its mute switch or sets its input volume to 0. It only changes device settings and never opens a device, so a Bluetooth headset does not switch to its call profile. Zoom, Meet or Teams keep showing you as unmuted, but they receive silence. Unmuting restores every device exactly as it was, also on quit and on the next launch after a crash. Devices that allow neither (the iPhone Continuity mic, some virtual devices) are listed in the panel.
+**Option-click mute.** Kaiku saves each input device's state, then turns on its mute switch or sets its input volume to 0. It only changes device settings and never opens a device, so a Bluetooth headset does not switch to its call profile. Zoom, Meet or Teams keep showing you as unmuted, but they receive silence. Unmuting restores every device exactly as it was, also on quit and on the next launch after a crash. Devices that allow neither (the iPhone Continuity mic, some virtual devices) are listed in the panel.
 
 ## More details
 
@@ -300,7 +316,7 @@ A global Core Audio process tap (`CATapDescription` + `AudioHardwareCreateProces
 - If the recorded mic disappears, recording switches to the automatic choice without stopping. You can also switch mic from the panel while recording.
 - **Automatic (avoid Bluetooth)** uses the default input unless it is a Bluetooth headset, in which case it uses the built-in mic. Opening a Bluetooth headset mic would switch it to its low-quality call profile for you and everyone else.
 - All system sounds are recorded, including notifications and music.
-- On loudspeakers your mic also hears the other side. mc.Rofone records which output was in use (`outputRoutes`) and, for the parts on speakers, hides "Me" lines that repeat the call audio (*Remove echo when using speakers*, on by default). Hidden lines stay in `segments.json` with `"droppedAsEcho": true`.
+- On loudspeakers your mic also hears the other side. Kaiku records which output was in use (`outputRoutes`) and, for the parts on speakers, hides "Me" lines that repeat the call audio (*Remove echo when using speakers*, on by default). Hidden lines stay in `segments.json` with `"droppedAsEcho": true`.
 - Tracks are aligned by start time; drift over long calls is typically well under a second.
 </details>
 
@@ -313,7 +329,7 @@ Audio is written as CAF files that stay readable after a crash, a force quit or 
 <details>
 <summary><b>Call detection</b></summary>
 
-Settings > Recording > Call Detection (on by default). Every few seconds mc.Rofone asks Core Audio which processes are using an input device and matches them against Zoom, Microsoft Teams, Slack, FaceTime, Webex, Discord and browsers for Google Meet (Chrome, Safari, Arc, Edge, Firefox, Brave, Zen, Vivaldi). It never opens a microphone for this. Each app can be turned off.
+Settings > Recording > Call Detection (on by default). Every few seconds Kaiku asks Core Audio which processes are using an input device and matches them against Zoom, Microsoft Teams, Slack, FaceTime, Webex, Discord and browsers for Google Meet (Chrome, Safari, Arc, Edge, Firefox, Brave, Zen, Vivaldi). It never opens a microphone for this. Each app can be turned off.
 
 - A call starting shows "Call detected in Zoom" with **Record** or **Dismiss**, or starts right away with *Start recording automatically*.
 - When every meeting app stops using the mic, you get "Call seems to have ended" with **Stop Recording**, or recording stops by itself after 30 s to 5 min if you want.
@@ -351,47 +367,49 @@ Settings > General > Storage shows the space used. **Clean Up Now…** previews 
 - **Permissions seem stuck** (common after rebuilding, since the app is signed ad hoc): remove the app from the list in System Settings and add it again, or reset them:
 
   ```sh
-  tccutil reset Microphone com.gabrielepartiti.mcrofone
-  tccutil reset AudioCapture com.gabrielepartiti.mcrofone
-  tccutil reset Calendar com.gabrielepartiti.mcrofone
+  tccutil reset Microphone com.gabrielepartiti.kaiku
+  tccutil reset AudioCapture com.gabrielepartiti.kaiku
+  tccutil reset Calendar com.gabrielepartiti.kaiku
   ```
-- **The other side is missing from the transcript**: allow mc.Rofone under Screen & System Audio Recording > System Audio Recording Only.
-- **Headphones sound bad during calls**: keep the input device on *Automatic (avoid Bluetooth)* so mc.Rofone never opens the headset mic.
-- **whisper.cpp says the model is missing**: download one in Settings > Transcription, or put a `ggml-*.bin` file in `~/Library/Application Support/mc.Rofone/models`.
-- **Logs**: `/usr/bin/log show --last 1h --info --predicate 'subsystem == "com.gabrielepartiti.mcrofone"'`
+- **Upgrading from mc.Rofone**: grant the permissions again to Kaiku (the old entries in System Settings belong to mc.Rofone and can be removed). If both `~/Documents/mc.Rofone` and `~/Documents/Kaiku` existed, Kaiku keeps using the old folder; pick another one in Settings > General if you like. The migration is logged under the `app` category (see Logs below).
+- **The other side is missing from the transcript**: allow Kaiku under Screen & System Audio Recording > System Audio Recording Only.
+- **Headphones sound bad during calls**: keep the input device on *Automatic (avoid Bluetooth)* so Kaiku never opens the headset mic.
+- **whisper.cpp says the model is missing**: download one in Settings > Transcription, or put a `ggml-*.bin` file in `~/Library/Application Support/Kaiku/models`.
+- **Logs**: `/usr/bin/log show --last 1h --info --predicate 'subsystem == "com.gabrielepartiti.kaiku"'`
 - **Audio self-test** (records a few seconds and prints formats, levels and devices; permissions belong to the terminal here):
 
   ```sh
-  build/mc.Rofone.app/Contents/MacOS/McRofone --selftest-audio 3
+  build/Kaiku.app/Contents/MacOS/Kaiku --selftest-audio 3
   ```
 
-  Other headless checks: `--selftest-recovery`, `--selftest-trim`, `--selftest-audiotools`, `--selftest-detect`, `--selftest-devicechange`, `--selftest-mute`.
+  Other headless checks: `--selftest-recovery`, `--selftest-trim`, `--selftest-audiotools`, `--selftest-detect`, `--selftest-devicechange`, `--selftest-migration` (runs the upgrade from mc.Rofone against temporary folders), `--selftest-mute`.
 
 ## Build from source
 
 Needs Xcode (or the Command Line Tools) with Swift 6 and `cmake` (`brew install cmake`) to build whisper.cpp.
 
 ```sh
-./scripts/build-app.sh      # build/mc.Rofone.app
-open build/mc.Rofone.app
-./scripts/make-dmg.sh       # build/mc.Rofone-<version>.dmg
+./scripts/build-app.sh      # build/Kaiku.app
+open build/Kaiku.app
+./scripts/make-dmg.sh       # build/Kaiku-<version>.dmg
 swift test                  # unit tests
 ```
 
 `build-app.sh` first runs `scripts/build-whisper.sh`, which clones a pinned whisper.cpp release into `vendor/` and builds a static, universal `whisper-cli` with Metal. It then builds the app for arm64 and x86_64, bundles `whisper-cli` and its license notice, and signs the app ad hoc. `make-dmg.sh` packages it with `hdiutil`, using only tools that ship with macOS.
 
-For UI review, `McRofone --render-snapshots <dir>` renders every screen with sample data in light and dark mode (it briefly shows windows on screen), and `McRofone --render-icon <dir>` regenerates `AppIcon.icns`.
+For UI review, `Kaiku --render-snapshots <dir>` renders every screen with sample data in light and dark mode (it briefly shows windows on screen), and `Kaiku --render-icon <dir>` regenerates `AppIcon.icns`.
 
 ## Project structure
 
 ```
-Sources/McRofone/        the app: menu bar, recording, providers, library, settings
+Sources/Kaiku/           the app: menu bar, recording, providers, library, settings
   Audio/                 mic recorder, system audio tap, track writer, mic muter
   Providers/             whisper.cpp, ElevenLabs, OpenAI-compatible (OpenAI, Groq)
   Views/                 SwiftUI views
-Sources/McRofoneCore/    pure logic: transcript and export formatting, webhook templates,
-                         silence trimming, echo filter, cost estimates, meeting detection
-Tests/McRofoneCoreTests/ unit tests for the core
+Sources/KaikuCore/       pure logic: transcript and export formatting, webhook templates,
+                         silence trimming, echo filter, cost estimates, meeting detection,
+                         shortcut rules, upgrade path rewriting
+Tests/KaikuCoreTests/    unit tests for the core
 scripts/                 build-whisper.sh, build-app.sh, make-dmg.sh
 Resources/               Info.plist, app icon
 ```
@@ -404,8 +422,8 @@ Issues and pull requests are welcome. Please keep changes focused, run `swift te
 
 Copyright (C) 2026 Gabriele Partiti
 
-mc.Rofone is free software, released under the [GNU General Public License v3.0](LICENSE).
+Kaiku is free software, released under the [GNU General Public License v3.0](LICENSE).
 
 ### Third-party notices
 
-The app bundles [whisper.cpp](https://github.com/ggml-org/whisper.cpp), distributed under the MIT License. Its notice is included in the app at `mc.Rofone.app/Contents/Resources/ThirdPartyNotices.txt`, generated by `scripts/build-app.sh`.
+The app bundles [whisper.cpp](https://github.com/ggml-org/whisper.cpp), distributed under the MIT License. Its notice is included in the app at `Kaiku.app/Contents/Resources/ThirdPartyNotices.txt`, generated by `scripts/build-app.sh`.
