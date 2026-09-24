@@ -120,9 +120,8 @@ struct LibraryView: View {
                 ContentUnavailableView {
                     Label("No Recordings Yet", systemImage: "waveform.and.mic")
                 } description: {
-                    Text(HotKeyPreset.current == .off
-                         ? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath)."
-                         : "Start one from the menu bar or press \(HotKeyPreset.current.display) from any app.")
+                    Text(Shortcuts.combo(for: .record).map { "Start one from the menu bar or press \($0.display) from any app." }
+                         ?? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath).")
                 } actions: {
                     Button("Start Recording") { state.requestStart() }
                         .buttonStyle(.primary)

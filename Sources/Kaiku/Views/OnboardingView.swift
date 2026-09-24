@@ -1,4 +1,5 @@
 import SwiftUI
+import KaikuCore
 
 /// First-run guide: what it does, permissions, provider, done.
 struct OnboardingView: View {
@@ -221,17 +222,18 @@ private struct DoneStep: View {
         VStack(spacing: 22) {
             StepHeader(symbol: "checkmark.circle", title: "You're all set",
                        subtitle: "Start a recording from the menu bar icon, or with the keyboard shortcut.")
-            if HotKeyPreset.current != .off {
+            if let combo = Shortcuts.combo(for: .record) {
                 HStack(spacing: 6) {
-                    ForEach(Array(HotKeyPreset.current.display), id: \.self) { key in
-                        Text(String(key))
+                    ForEach(Array(combo.displayParts.enumerated()), id: \.offset) { _, key in
+                        Text(key)
                             .font(.system(size: 20, weight: .medium, design: .rounded))
+                            .padding(.horizontal, key.count > 1 ? 10 : 0)
                             .frame(minWidth: 40, minHeight: 40)
                             .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator))
                     }
                 }
-                .accessibilityLabel("Shortcut \(HotKeyPreset.current.display)")
+                .accessibilityLabel("Shortcut \(combo.display)")
             }
             Label("Transcripts are saved in \((AppSettings.baseFolder.path as NSString).abbreviatingWithTildeInPath)",
                   systemImage: "folder")

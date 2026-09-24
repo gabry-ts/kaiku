@@ -95,6 +95,7 @@ enum Keys {
     static let whisperPath = "whisperPath"
     static let whisperModel = "whisperModel"
     static let microphone = "microphone"
+    /// Shortcut presets used before shortcuts could be recorded (read once to migrate).
     static let hotKey = "hotKey"
     static let systemAudioVerified = "systemAudioVerified"
     static let onboardingDone = "onboardingDone"
@@ -146,7 +147,6 @@ enum AppSettings {
             Keys.whisperPath: "",
             Keys.whisperModel: NSHomeDirectory() + "/Library/Application Support/Kaiku/models/ggml-large-v3-turbo.bin",
             Keys.microphone: AudioDevices.automatic,
-            Keys.hotKey: "ctrlOptCmdR",
             Keys.systemAudioVerified: false,
             Keys.onboardingDone: false,
             Keys.webhookEnabled: false,
@@ -160,8 +160,6 @@ enum AppSettings {
             Keys.model(.elevenLabs): ProviderKind.elevenLabs.defaultModel,
             Keys.model(.openAI): ProviderKind.openAI.defaultModel,
             Keys.model(.groq): ProviderKind.groq.defaultModel,
-            Keys.bookmarkHotKey: ModifierPreset.ctrlOptCmd.rawValue,
-            Keys.pauseHotKey: ModifierPreset.ctrlOptCmd.rawValue,
             Keys.trimSilence: TrimSilenceMode.cloud.rawValue,
             Keys.trimThresholdDB: -45.0,
             Keys.trimMinSilence: 2.0,

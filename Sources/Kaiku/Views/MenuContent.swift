@@ -44,7 +44,7 @@ struct MenuPanel: View {
                             Image(systemName: "record.circle.fill")
                             Text("Start Recording")
                             Spacer()
-                            Text(HotKeyPreset.current == .off ? "" : HotKeyPreset.current.display)
+                            Text(Shortcuts.display(.record))
                                 .font(.callout.monospaced()).opacity(0.75)
                         }
                         .frame(maxWidth: .infinity)
@@ -299,8 +299,8 @@ private struct RecordingCard: View {
         .card()
     }
 
-    private func shortcutHelp(_ text: String, _ action: HotKeyAction, _ local: String) -> String {
-        let global = action.display
+    private func shortcutHelp(_ text: String, _ action: ShortcutAction, _ local: String) -> String {
+        let global = Shortcuts.display(action)
         return global.isEmpty ? "\(text) (\(local))" : "\(text) (\(local), or \(global) from any app)"
     }
 

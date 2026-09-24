@@ -54,6 +54,7 @@ struct KaikuApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         Migration.runAtLaunch()
+        Shortcuts.migratePresets()
         AppSettings.registerDefaults()
     }
 

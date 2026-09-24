@@ -2,12 +2,13 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, recording, transcription, webhook, permissions, about
+    case general, shortcuts, recording, transcription, webhook, permissions, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
+        case .shortcuts: return "Shortcuts"
         case .recording: return "Recording"
         case .transcription: return "Transcription"
         case .webhook: return "Webhook"
@@ -19,6 +20,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: return "gearshape"
+        case .shortcuts: return "keyboard"
         case .recording: return "mic"
         case .transcription: return "text.quote"
         case .webhook: return "paperplane"
@@ -30,6 +32,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: return .gray
+        case .shortcuts: return .indigo
         case .recording: return Brand.accent
         case .transcription: return .blue
         case .webhook: return .purple
@@ -64,6 +67,7 @@ struct SettingsView: View {
             Group {
                 switch pane {
                 case .general: GeneralSettings()
+                case .shortcuts: ShortcutSettings()
                 case .recording: RecordingSettings()
                 case .transcription: TranscriptionSettings()
                 case .webhook: WebhookSettings()
@@ -84,9 +88,6 @@ struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
     @AppStorage(Keys.language) private var language = "auto"
     @AppStorage(Keys.notificationsEnabled) private var notificationsEnabled = true
-    @AppStorage(Keys.hotKey) private var hotKey = HotKeyPreset.ctrlOptCmdR.rawValue
-    @AppStorage(Keys.bookmarkHotKey) private var bookmarkHotKey = ModifierPreset.ctrlOptCmd.rawValue
-    @AppStorage(Keys.pauseHotKey) private var pauseHotKey = ModifierPreset.ctrlOptCmd.rawValue
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
@@ -108,25 +109,6 @@ struct GeneralSettings: View {
                 }
             } footer: {
                 Text("Every call gets its own folder with the audio, transcript.md and meta.json.")
-            }
-
-            Section {
-                Picker("Start or stop recording", selection: $hotKey) {
-                    ForEach(HotKeyPreset.allCases) { Text($0.display).tag($0.rawValue) }
-                }
-                .onChange(of: hotKey) { _, _ in HotKeyManager.apply() }
-                Picker("Pause or resume", selection: $pauseHotKey) {
-                    ForEach(ModifierPreset.allCases) { Text(HotKeyAction.pause.display(for: $0)).tag($0.rawValue) }
-                }
-                .onChange(of: pauseHotKey) { _, _ in HotKeyManager.apply() }
-                Picker("Add bookmark", selection: $bookmarkHotKey) {
-                    ForEach(ModifierPreset.allCases) { Text(HotKeyAction.bookmark.display(for: $0)).tag($0.rawValue) }
-                }
-                .onChange(of: bookmarkHotKey) { _, _ in HotKeyManager.apply() }
-            } header: {
-                Text("Keyboard Shortcuts")
-            } footer: {
-                Text("Work from any app, even when Kaiku is in the background. A bookmark is added instantly; you can label it in the panel or later in the library.")
             }
 
             Section {

@@ -1,115 +1,103 @@
 import AppKit
 import AVFoundation
 import Carbon.HIToolbox
+import KaikuCore
 import ServiceManagement
 import UserNotifications
 
-// MARK: - Global hotkey
+// MARK: - Global shortcuts
 
-/// Preset global shortcuts for start/stop recording.
-enum HotKeyPreset: String, CaseIterable, Identifiable {
-    case off, ctrlOptCmdR, optCmdR, ctrlCmdR, ctrlOptCmdM
-
-    var id: String { rawValue }
-
-    var display: String {
+extension ShortcutAction {
+    /// The preset setting this action used before shortcuts could be recorded.
+    var legacyPresetKey: String? {
         switch self {
-        case .off: return "None"
-        case .ctrlOptCmdR: return "⌃⌥⌘R"
-        case .optCmdR: return "⌥⌘R"
-        case .ctrlCmdR: return "⌃⌘R"
-        case .ctrlOptCmdM: return "⌃⌥⌘M"
-        }
-    }
-
-    fileprivate var carbon: (key: UInt32, modifiers: UInt32)? {
-        switch self {
-        case .off: return nil
-        case .ctrlOptCmdR: return (UInt32(kVK_ANSI_R), UInt32(controlKey | optionKey | cmdKey))
-        case .optCmdR: return (UInt32(kVK_ANSI_R), UInt32(optionKey | cmdKey))
-        case .ctrlCmdR: return (UInt32(kVK_ANSI_R), UInt32(controlKey | cmdKey))
-        case .ctrlOptCmdM: return (UInt32(kVK_ANSI_M), UInt32(controlKey | optionKey | cmdKey))
-        }
-    }
-
-    static var current: HotKeyPreset {
-        HotKeyPreset(rawValue: AppSettings.defaults.string(forKey: Keys.hotKey) ?? "") ?? .ctrlOptCmdR
-    }
-}
-
-/// Modifier choices for the bookmark and pause shortcuts (the letter is fixed per action).
-enum ModifierPreset: String, CaseIterable, Identifiable {
-    case off, ctrlOptCmd, optCmd, ctrlCmd
-
-    var id: String { rawValue }
-
-    var symbols: String {
-        switch self {
-        case .off: return ""
-        case .ctrlOptCmd: return "⌃⌥⌘"
-        case .optCmd: return "⌥⌘"
-        case .ctrlCmd: return "⌃⌘"
-        }
-    }
-
-    fileprivate var carbon: UInt32? {
-        switch self {
-        case .off: return nil
-        case .ctrlOptCmd: return UInt32(controlKey | optionKey | cmdKey)
-        case .optCmd: return UInt32(optionKey | cmdKey)
-        case .ctrlCmd: return UInt32(controlKey | cmdKey)
+        case .record: return Keys.hotKey
+        case .pause: return Keys.pauseHotKey
+        case .bookmark: return Keys.bookmarkHotKey
+        case .muteMicrophones, .openLibrary, .showPanel: return nil
         }
     }
 }
 
-/// Global shortcuts besides start/stop.
-enum HotKeyAction: UInt32, CaseIterable {
-    case record = 1, bookmark = 2, pause = 3
-
-    var letter: String { self == .bookmark ? "B" : "P" }
-    fileprivate var keyCode: UInt32 { UInt32(self == .bookmark ? kVK_ANSI_B : kVK_ANSI_P) }
-    var settingsKey: String { self == .bookmark ? Keys.bookmarkHotKey : Keys.pauseHotKey }
-
-    var modifiers: ModifierPreset {
-        ModifierPreset(rawValue: AppSettings.defaults.string(forKey: settingsKey) ?? "") ?? .ctrlOptCmd
+/// User-assigned global shortcuts, stored as keyCode + modifiers.
+enum Shortcuts {
+    static func combo(for action: ShortcutAction) -> KeyCombo? {
+        ShortcutRules.decode(AppSettings.defaults.object(forKey: action.settingsKey), default: action.defaultCombo)
     }
 
-    /// "⌃⌥⌘B", or "" when off.
-    var display: String {
-        switch self {
-        case .record: return HotKeyPreset.current == .off ? "" : HotKeyPreset.current.display
-        default: return modifiers == .off ? "" : modifiers.symbols + letter
-        }
+    /// nil stores "None".
+    static func set(_ combo: KeyCombo?, for action: ShortcutAction) {
+        AppSettings.defaults.set(combo?.storage ?? [String: Int](), forKey: action.settingsKey)
     }
 
-    func display(for preset: ModifierPreset) -> String { preset == .off ? "None" : preset.symbols + letter }
+    static func reset(_ action: ShortcutAction) {
+        AppSettings.defaults.removeObject(forKey: action.settingsKey)
+    }
 
-    fileprivate var combo: (key: UInt32, modifiers: UInt32)? {
-        switch self {
-        case .record: return HotKeyPreset.current.carbon
-        default: return modifiers.carbon.map { (keyCode, $0) }
+    static var assignments: [ShortcutAction: KeyCombo] {
+        var out: [ShortcutAction: KeyCombo] = [:]
+        for action in ShortcutAction.allCases { out[action] = combo(for: action) }
+        return out
+    }
+
+    /// "⌃⌥⌘R", or "" when not assigned.
+    static func display(_ action: ShortcutAction) -> String { combo(for: action)?.display ?? "" }
+
+    /// Converts the previous preset choices once.
+    static func migratePresets() {
+        let defaults = AppSettings.defaults
+        for action in ShortcutAction.allCases {
+            guard let key = action.legacyPresetKey, defaults.object(forKey: action.settingsKey) == nil,
+                  let preset = defaults.string(forKey: key),
+                  let combo = ShortcutRules.legacyCombo(for: action, preset: preset) else { continue }
+            set(combo, for: action)
+            Log.app.info("Shortcut for \(action.rawValue, privacy: .public) migrated from preset \(preset, privacy: .public)")
         }
     }
 }
 
-/// Registers the global hotkeys with Carbon (no accessibility permission needed).
+/// Registers the global shortcuts with Carbon (no accessibility permission needed).
 @MainActor
 enum HotKeyManager {
-    private static var refs: [UInt32: EventHotKeyRef] = [:]
+    private static var refs: [ShortcutAction: EventHotKeyRef] = [:]
     private static var handlerInstalled = false
+    /// While a shortcut is being recorded nothing is registered.
+    private static var suspended = false
+    /// Actions whose shortcut could not be registered (taken by another app or the system).
+    private(set) static var failed: Set<ShortcutAction> = []
 
     static func apply() {
+        unregisterAll()
+        guard !suspended else { return }
+        installHandlerIfNeeded()
+        for action in ShortcutAction.allCases {
+            guard let combo = Shortcuts.combo(for: action) else { continue }
+            var ref: EventHotKeyRef?
+            let id = EventHotKeyID(signature: OSType(0x4B61_696B), id: action.hotKeyID) // "Kaik"
+            let status = RegisterEventHotKey(combo.keyCode, combo.modifiers.rawValue, id, GetApplicationEventTarget(), 0, &ref)
+            if status == noErr, let ref {
+                refs[action] = ref
+            } else {
+                failed.insert(action)
+                Log.app.error("Could not register \(combo.display, privacy: .public) for \(action.rawValue, privacy: .public): \(status)")
+            }
+        }
+    }
+
+    static func suspend() {
+        suspended = true
+        unregisterAll()
+    }
+
+    static func resume() {
+        suspended = false
+        apply()
+    }
+
+    private static func unregisterAll() {
         for ref in refs.values { UnregisterEventHotKey(ref) }
         refs = [:]
-        installHandlerIfNeeded()
-        for action in HotKeyAction.allCases {
-            guard let combo = action.combo else { continue }
-            var ref: EventHotKeyRef?
-            let id = EventHotKeyID(signature: OSType(0x4B61_696B), id: action.rawValue) // "Kaik"
-            let status = RegisterEventHotKey(combo.key, combo.modifiers, id, GetApplicationEventTarget(), 0, &ref)
-            if status == noErr, let ref { refs[action.rawValue] = ref }
-            else { Log.app.error("Could not register hotkey \(action.rawValue): \(status)") }
-        }
+        failed = []
     }
 
     private static func installHandlerIfNeeded() {
@@ -123,10 +111,14 @@ enum HotKeyManager {
             let id = hotKey.id
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    switch HotKeyAction(rawValue: id) {
-                    case .bookmark: AppState.shared.addBookmark()
+                    switch ShortcutAction(hotKeyID: id) {
+                    case .record: AppState.shared.toggleRecording()
                     case .pause: AppState.shared.togglePause()
-                    default: AppState.shared.toggleRecording()
+                    case .bookmark: AppState.shared.addBookmark()
+                    case .muteMicrophones: MicMuter.shared.toggle()
+                    case .openLibrary: WindowManager.shared.showLibrary()
+                    case .showPanel: StatusBarController.shared.togglePanel()
+                    case nil: break
                     }
                 }
             }

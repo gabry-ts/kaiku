@@ -73,6 +73,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         button.highlight(true)
     }
 
+    func togglePanel() {
+        if popover?.isShown == true { closePanel() } else { showPanel() }
+    }
+
     func closePanel() {
         guard let popover, popover.isShown else { return }
         popover.performClose(nil)
