@@ -469,3 +469,103 @@ enum SelfTest {
         }
     }
 }
+
+extension SelfTest {
+    /// `Kaiku --selftest-migration`: runs the migration from the previous app name against
+    /// a temporary home folder and temporary defaults domains. Never touches real
+    /// settings, Keychain items or recordings.
+    static func runMigration() -> Int32 {
+        setvbuf(stdout, nil, _IONBF, 0)
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("kaiku-migration-\(UUID().uuidString)", isDirectory: true)
+        var failures = 0
+        func check(_ ok: Bool, _ what: String) {
+            print("  \(ok ? "ok  " : "FAIL") \(what)")
+            if !ok { failures += 1 }
+        }
+        func touch(_ url: URL, _ text: String = "x") {
+            try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? Data(text.utf8).write(to: url)
+        }
+        func scenario(_ name: String, _ body: (_ home: URL, _ old: UserDefaults, _ new: UserDefaults,
+                                                _ run: () -> Void, _ keychainCalls: () -> Int) -> Void) {
+            print(name)
+            let home = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try? fm.createDirectory(at: home, withIntermediateDirectories: true)
+            // Defaults domains given as absolute paths live in the temporary folder too.
+            let oldName = root.appendingPathComponent("prefs-\(UUID().uuidString)-old").path
+            let newName = root.appendingPathComponent("prefs-\(UUID().uuidString)-new").path
+            let old = UserDefaults(suiteName: oldName)!
+            let new = UserDefaults(suiteName: newName)!
+            var calls = 0
+            let context = Migration.Context(home: home, legacyDomain: oldName, target: new, targetDomain: newName,
+                                            copyKeychain: { calls += 1; return 0 }, log: { print("       log: \($0)") })
+            body(home, old, new, { Migration.run(context) }, { calls })
+        }
+
+        scenario("Default folders, only old data present") { home, old, new, run, keychainCalls in
+            let oldDocs = home.appendingPathComponent("Documents/mc.Rofone")
+            let oldModels = home.appendingPathComponent("Library/Application Support/mc.Rofone/models")
+            touch(oldDocs.appendingPathComponent("2026-09-23_1430_sync/transcript.md"), "hello")
+            touch(oldModels.appendingPathComponent("ggml-base.bin"))
+            old.set(oldModels.appendingPathComponent("ggml-base.bin").path, forKey: Keys.whisperModel)
+            old.set(oldDocs.appendingPathComponent("2026-09-23_1430_sync").path, forKey: Keys.lastRecordingFolder)
+            old.set("it", forKey: Keys.language)
+            old.set(true, forKey: "micsMuted")
+            old.set(Data("[]".utf8), forKey: "mutedDevicesState")
+            run()
+            let newDocs = home.appendingPathComponent("Documents/Kaiku")
+            let newModels = home.appendingPathComponent("Library/Application Support/Kaiku/models")
+            check(!fm.fileExists(atPath: oldDocs.path), "old recordings folder moved away")
+            check((try? String(contentsOf: newDocs.appendingPathComponent("2026-09-23_1430_sync/transcript.md"), encoding: .utf8)) == "hello",
+                  "recordings available in ~/Documents/Kaiku")
+            check(fm.fileExists(atPath: newModels.appendingPathComponent("ggml-base.bin").path), "models moved")
+            check(new.string(forKey: Keys.baseFolder) == newDocs.path, "base folder set to the new folder")
+            check(new.string(forKey: Keys.whisperModel) == newModels.appendingPathComponent("ggml-base.bin").path, "model path rewritten")
+            check(new.string(forKey: Keys.lastRecordingFolder) == newDocs.appendingPathComponent("2026-09-23_1430_sync").path,
+                  "last recording path rewritten")
+            check(new.string(forKey: Keys.language) == "it", "settings copied")
+            check(new.bool(forKey: "micsMuted") && new.data(forKey: "mutedDevicesState") != nil, "microphone restore state copied")
+            check(keychainCalls() == 1, "Keychain copy attempted once")
+            new.set("en", forKey: Keys.language)
+            run()
+            check(new.string(forKey: Keys.language) == "en" && keychainCalls() == 1, "second run does nothing")
+        }
+
+        scenario("Both folders exist") { home, old, new, run, _ in
+            let oldDocs = home.appendingPathComponent("Documents/mc.Rofone")
+            touch(oldDocs.appendingPathComponent("a/meta.json"))
+            touch(home.appendingPathComponent("Documents/Kaiku/b/meta.json"))
+            touch(home.appendingPathComponent("Library/Application Support/mc.Rofone/models/ggml-large-v3-turbo.bin"))
+            touch(home.appendingPathComponent("Library/Application Support/Kaiku/models/other.bin"))
+            old.set("auto", forKey: Keys.language)
+            run()
+            check(fm.fileExists(atPath: oldDocs.appendingPathComponent("a/meta.json").path), "old recordings left in place")
+            check(fm.fileExists(atPath: home.appendingPathComponent("Documents/Kaiku/b/meta.json").path), "new folder untouched")
+            check(new.string(forKey: Keys.baseFolder) == oldDocs.path, "keeps using the old folder")
+            check(new.string(forKey: Keys.whisperModel)?.contains("/mc.Rofone/models/") == true, "keeps the old default model")
+        }
+
+        scenario("Custom folder") { home, old, new, run, _ in
+            let custom = home.appendingPathComponent("Calls")
+            let oldDocs = home.appendingPathComponent("Documents/mc.Rofone")
+            touch(custom.appendingPathComponent("a/meta.json"))
+            touch(oldDocs.appendingPathComponent("stray.txt"))
+            old.set(custom.path, forKey: Keys.baseFolder)
+            run()
+            check(new.string(forKey: Keys.baseFolder) == custom.path, "custom folder kept")
+            check(fm.fileExists(atPath: oldDocs.appendingPathComponent("stray.txt").path), "old default folder not moved")
+        }
+
+        scenario("Nothing to migrate") { home, _, new, run, _ in
+            run()
+            check(new.bool(forKey: Migration.doneKey), "marked as done")
+            check(new.string(forKey: Keys.baseFolder) == nil, "no settings written")
+            check(!fm.fileExists(atPath: home.appendingPathComponent("Documents/Kaiku").path), "no folders created")
+        }
+
+        try? fm.removeItem(at: root)
+        print(failures == 0 ? "PASS" : "FAIL (\(failures))")
+        return failures == 0 ? 0 : 1
+    }
+}

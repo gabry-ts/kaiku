@@ -316,6 +316,8 @@ enum AppSettings {
 /// Minimal Keychain wrapper for API keys (generic passwords).
 enum Keychain {
     private static let service = "com.gabrielepartiti.kaiku"
+    /// Service name used before the app was renamed.
+    static let legacyService = "com.gabrielepartiti.mcrofone"
 
     /// When set, used instead of the real Keychain (snapshot rendering).
     static var mock: [String: String]?
@@ -347,6 +349,36 @@ enum Keychain {
         var add = base
         add[kSecValueData as String] = Data(value.utf8)
         SecItemAdd(add as CFDictionary, nil)
+    }
+
+    /// Copies every generic password of `from` that `service` does not have yet, keeping
+    /// the originals. Returns the number of items copied.
+    static func copyItems(from legacy: String) -> Int {
+        let list: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: legacy,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(list as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return 0 }
+        var copied = 0
+        for account in items.compactMap({ $0[kSecAttrAccount as String] as? String }) where get(account) == nil {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: legacy,
+                kSecAttrAccount as String: account,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne,
+            ]
+            var item: CFTypeRef?
+            guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+                  let data = item as? Data, let value = String(data: data, encoding: .utf8), !value.isEmpty else { continue }
+            set(value, for: account)
+            copied += 1
+        }
+        return copied
     }
 
     static func apiKey(for p: ProviderKind) -> String? {

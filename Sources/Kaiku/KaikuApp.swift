@@ -27,6 +27,9 @@ struct KaikuApp: App {
         if args.contains("--selftest-audiotools") {
             exit(SelfTest.runAudioTools())
         }
+        if args.contains("--selftest-migration") {
+            exit(SelfTest.runMigration())
+        }
         if args.contains("--selftest-recovery") {
             exit(SelfTest.runRecovery())
         }
@@ -50,6 +53,7 @@ struct KaikuApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        Migration.runAtLaunch()
         AppSettings.registerDefaults()
     }
 
