@@ -24,6 +24,9 @@ struct KaikuApp: App {
         if args.contains("--selftest-trim") {
             exit(SelfTest.runTrim())
         }
+        if args.contains("--selftest-retry") {
+            exit(SelfTest.runRetry())
+        }
         if args.contains("--selftest-audiotools") {
             exit(SelfTest.runAudioTools())
         }

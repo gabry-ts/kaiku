@@ -70,17 +70,32 @@ private extension Data {
 }
 
 enum HTTP {
+    /// Retries transient failures as decided by `UploadRetry`.
     static func postMultipart(_ url: URL, form: MultipartForm, headers: [String: String], timeout: TimeInterval = 1800) async throws -> Data {
         var req = URLRequest(url: url, timeoutInterval: timeout)
         req.httpMethod = "POST"
         req.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
         headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        let (data, response) = try await URLSession.shared.upload(for: req, from: form.finalized())
-        guard let http = response as? HTTPURLResponse else { throw ProviderError(message: "No HTTP response") }
-        guard (200..<300).contains(http.statusCode) else {
-            let body = String(data: data.prefix(600), encoding: .utf8) ?? ""
-            throw ProviderError(message: "HTTP \(http.statusCode) from \(url.host ?? ""): \(body)")
+        let body = form.finalized()
+        var attempt = 0
+        while true {
+            let failure: UploadRetry.Failure
+            let error: Error
+            do {
+                let (data, response) = try await URLSession.shared.upload(for: req, from: body)
+                guard let http = response as? HTTPURLResponse else { throw ProviderError(message: "No HTTP response") }
+                if (200..<300).contains(http.statusCode) { return data }
+                let text = String(data: data.prefix(600), encoding: .utf8) ?? ""
+                failure = .http(status: http.statusCode, body: text, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+                error = ProviderError(message: "HTTP \(http.statusCode) from \(url.host ?? ""): \(text)")
+            } catch let e as URLError {
+                failure = .network(code: e.errorCode)
+                error = e
+            }
+            attempt += 1
+            guard let wait = UploadRetry.delay(after: failure, attempt: attempt) else { throw error }
+            Log.transcription.error("Upload attempt \(attempt) to \(url.host ?? "", privacy: .public) failed, retrying in \(Int(wait)) s: \(error.localizedDescription, privacy: .public)")
+            try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
         }
-        return data
     }
 }

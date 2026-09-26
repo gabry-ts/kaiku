@@ -595,4 +595,78 @@ extension SelfTest {
         print(failures == 0 ? "PASS" : "FAIL (\(failures))")
         return failures == 0 ? 0 : 1
     }
+
+    /// `Kaiku --selftest-retry`: runs `HTTP.postMultipart` against scripted responses
+    /// (no network) and checks which failures are retried.
+    static func runRetry() -> Int32 {
+        setvbuf(stdout, nil, _IONBF, 0)
+        URLProtocol.registerClass(ScriptedProtocol.self)
+        defer { URLProtocol.unregisterClass(ScriptedProtocol.self) }
+        let cases: [(name: String, script: [ScriptedProtocol.Reply], succeeds: Bool, requests: Int)] = [
+            ("502, 502, then 200", [.status(502), .status(502), .status(200)], true, 3),
+            ("connection lost, then 200", [.error(.networkConnectionLost), .status(200)], true, 2),
+            ("503 four times", [.status(503), .status(503), .status(503), .status(503)], false, 4),
+            ("401 bad key", [.status(401), .status(200)], false, 1),
+            ("429 insufficient_quota", [.status(429, body: #"{"error":{"code":"insufficient_quota"}}"#), .status(200)], false, 1),
+            ("timeout", [.error(.timedOut), .status(200)], false, 1),
+        ]
+        var failures = 0
+        for c in cases {
+            ScriptedProtocol.reset(c.script)
+            let sem = DispatchSemaphore(value: 0)
+            var succeeded = false
+            Task.detached {
+                var form = MultipartForm()
+                form.field("model", "test")
+                succeeded = (try? await HTTP.postMultipart(URL(string: "https://kaiku-selftest.invalid/upload")!,
+                                                           form: form, headers: [:])) != nil
+                sem.signal()
+            }
+            sem.wait()
+            let ok = succeeded == c.succeeds && ScriptedProtocol.requests == c.requests
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(c.name): \(succeeded ? "succeeded" : "failed") after \(ScriptedProtocol.requests) request(s)")
+        }
+        print(failures == 0 ? "PASS" : "FAIL (\(failures))")
+        return failures == 0 ? 0 : 1
+    }
+}
+
+/// Answers requests from a fixed script, one reply per request.
+private final class ScriptedProtocol: URLProtocol {
+    enum Reply {
+        case status(Int, body: String = "")
+        case error(URLError.Code)
+    }
+
+    private static let lock = NSLock()
+    private static var script: [Reply] = []
+    private static var count = 0
+
+    static var requests: Int { lock.withLock { count } }
+
+    static func reset(_ replies: [Reply]) {
+        lock.withLock { script = replies; count = 0 }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "kaiku-selftest.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let reply: Reply = Self.lock.withLock {
+            defer { Self.count += 1 }
+            return Self.count < Self.script.count ? Self.script[Self.count] : .status(500)
+        }
+        switch reply {
+        case .status(let code, let body):
+            let response = HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: "HTTP/1.1", headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        case .error(let code):
+            client?.urlProtocol(self, didFailWithError: URLError(code))
+        }
+    }
+
+    override func stopLoading() {}
 }
