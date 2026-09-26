@@ -130,7 +130,7 @@ API keys are stored in the macOS Keychain, everything else in UserDefaults.
 |---|---|---|---|---|
 | whisper.cpp | Local, offline | model you download | No ("Me" / "Others" only) | free |
 | ElevenLabs Scribe | Cloud | `scribe_v2` | Yes | $0.22 |
-| OpenAI | Cloud | `gpt-4o-transcribe` | With `gpt-4o-transcribe-diarize` | $0.18 to $0.36 |
+| OpenAI | Cloud | `gpt-4o-mini-transcribe` | With `gpt-4o-transcribe-diarize` | $0.18 to $0.36 |
 | Groq | Cloud | `whisper-large-v3-turbo` | No | $0.04 (`whisper-large-v3`: $0.111) |
 
 Prices are **estimates** from list prices checked in September 2026 (editable in Settings > Transcription > Cost Estimate). Free tiers, minimum billing and plan discounts are not taken into account. Full default table:

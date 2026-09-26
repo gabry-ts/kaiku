@@ -19,7 +19,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .whisperCpp: return ""
         case .elevenLabs: return "scribe_v2"
-        case .openAI: return "gpt-4o-transcribe"
+        case .openAI: return "gpt-4o-mini-transcribe"
         case .groq: return "whisper-large-v3-turbo"
         }
     }
