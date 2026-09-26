@@ -540,6 +540,7 @@ final class AppState: ObservableObject {
         for url in folder.allAudioURLs {
             try FileManager.default.trashItem(at: url, resultingItemURL: nil)
         }
+        folder.removePartials()
         folder.updateMeta { $0.audioDeleted = true }
         libraryVersion += 1
     }

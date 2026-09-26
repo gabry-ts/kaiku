@@ -630,6 +630,84 @@ extension SelfTest {
         print(failures == 0 ? "PASS" : "FAIL (\(failures))")
         return failures == 0 ? 0 : 1
     }
+
+    /// `Kaiku --selftest-partial`: runs the real transcription job with a fake provider.
+    /// The first run fails on the call audio; trying again must reuse the microphone result.
+    static func runPartial() -> Int32 {
+        setvbuf(stdout, nil, _IONBF, 0)
+        AppSettings.registerDefaults()
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("kaiku-partial-\(Int(Date().timeIntervalSince1970))")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let folder = RecordingFolder(url: base.appendingPathComponent("2026-01-01_1000_partial-test", isDirectory: true))
+        do {
+            try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+            try AudioTools.writeTone(folder.micURL, seconds: 20)
+            try AudioTools.writeTone(folder.systemURL, seconds: 20)
+            try folder.saveMeta(RecordingMeta(title: "Partial test", date: Date(), durationSeconds: 20, language: "auto", status: .done))
+        } catch {
+            print("FAILED to build test call: \(error.diagnosticDescription)")
+            return 1
+        }
+        let fm = FileManager.default
+        let provider = FakeProvider()
+        func run() -> Bool {
+            var succeeded = false, finished = false
+            Task { @MainActor in
+                succeeded = (try? await TranscriptionJob.run(folder: folder, providerKind: .openAI, provider: provider)) != nil
+                finished = true
+            }
+            while !finished { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+            return succeeded
+        }
+        var failures = 0
+        func check(_ name: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(name)")
+        }
+
+        provider.failSystem = true
+        check("run 1 fails on call audio", !run() && folder.loadMeta()?.status == .error)
+        check("run 1 sent mic + system", provider.calls == ["mic", "system"])
+        check("mic result saved, system not", fm.fileExists(atPath: folder.micPartialURL.path) && !fm.fileExists(atPath: folder.systemPartialURL.path))
+
+        provider.failSystem = false
+        provider.calls = []
+        check("run 2 succeeds", run() && folder.loadMeta()?.status == .done)
+        check("run 2 sent only system", provider.calls == ["system"])
+        let segments = folder.loadSegments() ?? []
+        check("both tracks in segments.json", segments.map(\.speaker) == [AppSettings.meLabel, AppSettings.othersLabel])
+        check("seconds include the reused track", abs((folder.loadMeta()?.transcribedSeconds ?? 0) - 40) < 1)
+        check("partial files removed", !fm.fileExists(atPath: folder.micPartialURL.path) && !fm.fileExists(atPath: folder.systemPartialURL.path))
+
+        provider.calls = []
+        check("run 3 after success starts from scratch", run() && provider.calls == ["mic", "system"])
+
+        provider.failSystem = true
+        provider.calls = []
+        _ = run()
+        folder.updateMeta { $0.language = "it" }
+        provider.failSystem = false
+        provider.calls = []
+        check("changed language: mic sent again", run() && provider.calls == ["mic", "system"])
+
+        print(failures == 0 ? "PASS" : "FAIL (\(failures))")
+        return failures == 0 ? 0 : 1
+    }
+}
+
+/// Returns one segment per track and can fail on the call audio.
+private final class FakeProvider: TranscriptionProvider {
+    var name: String { "Fake (test)" }
+    var supportsDiarization: Bool { false }
+    var failSystem = false
+    var calls: [String] = []
+
+    func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
+        let track = fileURL.lastPathComponent.contains("system") ? "system" : "mic"
+        calls.append(track)
+        if track == "system" && failSystem { throw ProviderError(message: "HTTP 502 from fake") }
+        return TranscriptionResult(segments: [Segment(start: track == "mic" ? 1 : 2, end: 3, text: track)], detectedLanguage: "en")
+    }
 }
 
 /// Answers requests from a fixed script, one reply per request.

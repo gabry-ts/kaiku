@@ -61,6 +61,9 @@ struct RecordingFolder: Identifiable, Hashable {
     /// Crash-safe files written while recording, converted to .m4a on stop.
     static let micRawName = "mic.caf"
     static let systemRawName = "system.caf"
+    /// Per-track results kept only after a failed transcription (hidden).
+    static let micPartialName = ".mic.partial.json"
+    static let systemPartialName = ".system.partial.json"
 
     var metaURL: URL { url.appendingPathComponent(Self.metaName) }
     var transcriptURL: URL { url.appendingPathComponent(Self.transcriptName) }
@@ -71,6 +74,8 @@ struct RecordingFolder: Identifiable, Hashable {
     var summaryURL: URL { url.appendingPathComponent(Self.summaryName) }
     var micRawURL: URL { url.appendingPathComponent(Self.micRawName) }
     var systemRawURL: URL { url.appendingPathComponent(Self.systemRawName) }
+    var micPartialURL: URL { url.appendingPathComponent(Self.micPartialName) }
+    var systemPartialURL: URL { url.appendingPathComponent(Self.systemPartialName) }
 
     var hasTranscript: Bool { FileManager.default.fileExists(atPath: transcriptURL.path) }
     var hasSummary: Bool { FileManager.default.fileExists(atPath: summaryURL.path) }
@@ -115,6 +120,10 @@ struct RecordingFolder: Identifiable, Hashable {
 
     func saveSegments(_ segments: [Segment]) throws {
         try Self.encoder.encode(segments).write(to: segmentsURL, options: .atomic)
+    }
+
+    func removePartials() {
+        for url in [micPartialURL, systemPartialURL] { try? FileManager.default.removeItem(at: url) }
     }
 
     func updateMeta(_ change: (inout RecordingMeta) -> Void) {

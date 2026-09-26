@@ -5,7 +5,9 @@ import KaikuCore
 enum TranscriptionJob {
     typealias Progress = @MainActor (String) -> Void
 
-    static func run(folder: RecordingFolder, providerKind: ProviderKind, progress: @escaping Progress = { _ in }) async throws {
+    /// `provider` replaces the one built from Settings (used by the self-test).
+    static func run(folder: RecordingFolder, providerKind: ProviderKind, provider: TranscriptionProvider? = nil,
+                    progress: @escaping Progress = { _ in }) async throws {
         guard var meta = folder.loadMeta() else {
             throw ProviderError(message: "meta.json missing in \(folder.url.path)")
         }
@@ -14,7 +16,7 @@ enum TranscriptionJob {
         try? folder.saveMeta(meta)
 
         do {
-            try await transcribe(folder: folder, meta: &meta, providerKind: providerKind, progress: progress)
+            try await transcribe(folder: folder, meta: &meta, providerKind: providerKind, provider: provider, progress: progress)
         } catch {
             Log.transcription.error("Transcription failed: \(error.diagnosticDescription, privacy: .public)")
             meta.status = .error
@@ -24,7 +26,8 @@ enum TranscriptionJob {
         }
     }
 
-    private static func transcribe(folder: RecordingFolder, meta: inout RecordingMeta, providerKind: ProviderKind, progress: Progress) async throws {
+    private static func transcribe(folder: RecordingFolder, meta: inout RecordingMeta, providerKind: ProviderKind,
+                                   provider injected: TranscriptionProvider?, progress: Progress) async throws {
         let fm = FileManager.default
         let hasMic = fm.fileExists(atPath: folder.micURL.path)
         let hasSystem = fm.fileExists(atPath: folder.systemURL.path)
@@ -36,7 +39,7 @@ enum TranscriptionJob {
             try? await AudioTools.mix(mic: folder.micURL, system: folder.systemURL, output: folder.mixedURL)
         }
 
-        let provider = try ProviderFactory.make(providerKind)
+        let provider = try injected ?? ProviderFactory.make(providerKind)
         Log.transcription.info("Transcribing \(folder.url.lastPathComponent, privacy: .public) with \(provider.name, privacy: .public)")
         let language: String? = meta.language == "auto" ? nil : meta.language
         var all: [Segment] = []
@@ -48,34 +51,31 @@ enum TranscriptionJob {
         defer { try? FileManager.default.removeItem(at: workDir) }
 
         let steps = (hasMic ? 1 : 0) + (hasSystem ? 1 : 0)
+        func track(_ url: URL, cache: URL, diarize: Bool) async throws -> TrackCache {
+            try await transcribeTrack(url, cache: cache, provider: provider, language: language, diarize: diarize,
+                                      trim: trim, options: options, dir: workDir)
+        }
         if hasMic {
             await progress(steps > 1 ? "Transcribing your microphone (1 of 2)…" : "Transcribing your microphone…")
-            let input = await prepare(folder.micURL, trim: trim, options: options, dir: workDir)
-            sentSeconds += input.seconds
-            if !input.skip {
-                let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: false)
-                let me = AppSettings.meLabel
-                all += input.remap(r.segments).map { var s = $0; s.speaker = me; return s }
-                if let l = r.detectedLanguage { detected.append(l) }
-            }
+            let r = try await track(folder.micURL, cache: folder.micPartialURL, diarize: false)
+            sentSeconds += r.seconds
+            let me = AppSettings.meLabel
+            all += r.segments.map { var s = $0; s.speaker = me; return s }
+            if let l = r.detectedLanguage { detected.append(l) }
         }
         let systemDuration = await Task.detached { AudioFiles.duration(folder.systemURL) }.value
         if hasSystem, (systemDuration ?? 0) > 0.5 {
             await progress(steps > 1 ? "Transcribing call audio (2 of 2)…" : "Transcribing call audio…")
             let diarize = provider.supportsDiarization
-            let input = await prepare(folder.systemURL, trim: trim, options: options, dir: workDir)
-            sentSeconds += input.seconds
-            if !input.skip {
-                var r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
-                r.segments = input.remap(r.segments)
-                if diarize && r.segments.contains(where: { $0.speaker != nil }) {
-                    all += TranscriptFormatter.normalizeSpeakers(r.segments)
-                } else {
-                    let others = AppSettings.othersLabel
-                    all += r.segments.map { var s = $0; s.speaker = others; return s }
-                }
-                if let l = r.detectedLanguage { detected.append(l) }
+            let r = try await track(folder.systemURL, cache: folder.systemPartialURL, diarize: diarize)
+            sentSeconds += r.seconds
+            if diarize && r.segments.contains(where: { $0.speaker != nil }) {
+                all += TranscriptFormatter.normalizeSpeakers(r.segments)
+            } else {
+                let others = AppSettings.othersLabel
+                all += r.segments.map { var s = $0; s.speaker = others; return s }
             }
+            if let l = r.detectedLanguage { detected.append(l) }
         }
 
         await progress("Writing transcript…")
@@ -111,6 +111,27 @@ enum TranscriptionJob {
         try folder.saveSegments(all)
         try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: all)
         try? folder.saveMeta(meta)
+        folder.removePartials()
+    }
+
+    /// Transcribes one track. The result is saved to `cache` so that, if a later step fails,
+    /// trying again with the same settings reuses it instead of paying for it again.
+    private static func transcribeTrack(_ url: URL, cache: URL, provider: TranscriptionProvider, language: String?,
+                                        diarize: Bool, trim: Bool, options: SilenceTrimmer.Options, dir: URL) async throws -> TrackCache {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let key = TrackCache.Key(provider: provider.name, language: language, trim: trim ? options : nil,
+                                 audioBytes: (attributes?[.size] as? NSNumber)?.int64Value ?? 0,
+                                 audioModified: (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
+        if let saved = TrackCache.reusable(try? Data(contentsOf: cache), for: key) {
+            Log.transcription.info("Reusing the saved result for \(url.lastPathComponent, privacy: .public)")
+            return saved
+        }
+        let input = await prepare(url, trim: trim, options: options, dir: dir)
+        guard !input.skip else { return TrackCache(key: key, segments: [], detectedLanguage: nil, seconds: 0) }
+        let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
+        let result = TrackCache(key: key, segments: input.remap(r.segments), detectedLanguage: r.detectedLanguage, seconds: input.seconds)
+        try? JSONEncoder().encode(result).write(to: cache, options: .atomic)
+        return result
     }
 }
 
