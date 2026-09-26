@@ -157,6 +157,24 @@ final class SilenceTrimTests: XCTestCase {
                        [TimeRange(start: 0, end: 10)])
     }
 
+    func testPlanSkipsSilentTrack() {
+        let peaks = [Float](repeating: 0.0001, count: 7200)
+        let silences = SilenceTrimmer.silences(peaks: peaks, window: 0.5, options: .init())
+        XCTAssertEqual(SilenceTrimmer.plan(duration: 3600, silences: silences, padding: 0.4), .skip)
+    }
+
+    func testPlanKeepsOriginalWhenLittleToCut() {
+        let silences = [TimeRange(start: 10, end: 13)]
+        XCTAssertEqual(SilenceTrimmer.plan(duration: 60, silences: silences, padding: 0.4), .original)
+        XCTAssertEqual(SilenceTrimmer.plan(duration: 60, silences: [], padding: 0.4), .original)
+    }
+
+    func testPlanTrimsLongSilences() {
+        let silences = [TimeRange(start: 10, end: 40)]
+        let expected = TimeMap(keep: [TimeRange(start: 0, end: 10.4), TimeRange(start: 39.6, end: 60)])
+        XCTAssertEqual(SilenceTrimmer.plan(duration: 60, silences: silences, padding: 0.4), .trimmed(expected))
+    }
+
     func testTimeMapRemapsSegments() {
         let map = TimeMap(keep: [TimeRange(start: 3, end: 5.5), TimeRange(start: 9.5, end: 17.5)])
         XCTAssertEqual(map.trimmedDuration, 10.5)

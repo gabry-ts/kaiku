@@ -68,6 +68,23 @@ public enum SilenceTrimmer {
         if cursor < duration { keep.append(TimeRange(start: cursor, end: duration)) }
         return keep
     }
+
+    /// What to send to the provider for one track.
+    public enum Plan: Equatable, Sendable {
+        /// Only silence: nothing worth sending.
+        case skip
+        /// Too little to cut: send the original.
+        case original
+        /// Send only the kept ranges.
+        case trimmed(TimeMap)
+    }
+
+    /// Trims only when it saves at least `minSaving` seconds.
+    public static func plan(duration: Double, silences: [TimeRange], padding: Double, minSaving: Double = 5) -> Plan {
+        let map = TimeMap(keep: keepRanges(duration: duration, silences: silences, padding: padding))
+        if map.keep.isEmpty { return .skip }
+        return duration - map.trimmedDuration >= minSaving ? .trimmed(map) : .original
+    }
 }
 
 /// Maps times in a file made by concatenating `keep` ranges back to the original timeline.

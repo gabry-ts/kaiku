@@ -357,7 +357,34 @@ enum SelfTest {
         print(String(format: "Trimmed file %.2f s (expected %.2f s)", trimmed, map.trimmedDuration))
         let seg = map.remap([Segment(start: 4.5, end: 5.5, text: "second tone")])[0]
         print(String(format: "A word at 4.5 s in the trimmed file maps to %.2f s in the original", seg.start))
-        let ok = abs(trimmed - map.trimmedDuration) < 0.2 && map.trimmedDuration < 10 && abs(seg.start - 13.7) < 0.1
+        var ok = abs(trimmed - map.trimmedDuration) < 0.2 && map.trimmedDuration < 10 && abs(seg.start - 13.7) < 0.1
+
+        // A track with only silence is skipped instead of sent whole.
+        let silentCAF = dir.appendingPathComponent("silent.caf")
+        let silentM4A = dir.appendingPathComponent("silent.m4a")
+        do {
+            let writer = TrackWriter(url: silentCAF, gate: PauseGate())
+            for _ in 0..<18 {
+                let b = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
+                b.frameLength = 48_000
+                for i in 0..<48_000 { b.floatChannelData![0][i] = 0 }
+                writer.write(b)
+            }
+            writer.close()
+            try AudioFiles.convertToM4A(silentCAF, output: silentM4A)
+        } catch {
+            print("FAILED to build silent audio: \(error.diagnosticDescription)")
+            return 1
+        }
+        var silent: TranscriptionJob.Input?
+        Task.detached {
+            silent = await TranscriptionJob.prepare(silentM4A, trim: true, options: SilenceTrimmer.Options(), dir: dir)
+            sem.signal()
+        }
+        sem.wait()
+        let skipped = silent?.skip == true && silent?.seconds == 0
+        print("Silent 18.0 s track skipped: \(skipped ? "YES" : "NO")")
+        ok = ok && skipped
         print(ok ? "PASS" : "FAIL")
         return ok ? 0 : 1
     }

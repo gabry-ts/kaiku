@@ -52,10 +52,12 @@ enum TranscriptionJob {
             await progress(steps > 1 ? "Transcribing your microphone (1 of 2)…" : "Transcribing your microphone…")
             let input = await prepare(folder.micURL, trim: trim, options: options, dir: workDir)
             sentSeconds += input.seconds
-            let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: false)
-            let me = AppSettings.meLabel
-            all += input.remap(r.segments).map { var s = $0; s.speaker = me; return s }
-            if let l = r.detectedLanguage { detected.append(l) }
+            if !input.skip {
+                let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: false)
+                let me = AppSettings.meLabel
+                all += input.remap(r.segments).map { var s = $0; s.speaker = me; return s }
+                if let l = r.detectedLanguage { detected.append(l) }
+            }
         }
         let systemDuration = await Task.detached { AudioFiles.duration(folder.systemURL) }.value
         if hasSystem, (systemDuration ?? 0) > 0.5 {
@@ -63,15 +65,17 @@ enum TranscriptionJob {
             let diarize = provider.supportsDiarization
             let input = await prepare(folder.systemURL, trim: trim, options: options, dir: workDir)
             sentSeconds += input.seconds
-            var r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
-            r.segments = input.remap(r.segments)
-            if diarize && r.segments.contains(where: { $0.speaker != nil }) {
-                all += TranscriptFormatter.normalizeSpeakers(r.segments)
-            } else {
-                let others = AppSettings.othersLabel
-                all += r.segments.map { var s = $0; s.speaker = others; return s }
+            if !input.skip {
+                var r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
+                r.segments = input.remap(r.segments)
+                if diarize && r.segments.contains(where: { $0.speaker != nil }) {
+                    all += TranscriptFormatter.normalizeSpeakers(r.segments)
+                } else {
+                    let others = AppSettings.othersLabel
+                    all += r.segments.map { var s = $0; s.speaker = others; return s }
+                }
+                if let l = r.detectedLanguage { detected.append(l) }
             }
-            if let l = r.detectedLanguage { detected.append(l) }
         }
 
         await progress("Writing transcript…")
@@ -116,6 +120,8 @@ extension TranscriptionJob {
         let url: URL
         let map: TimeMap?
         let seconds: Double
+        /// The track is only silence, so there is nothing to send.
+        var skip = false
         func remap(_ segments: [Segment]) -> [Segment] { map?.remap(segments) ?? segments }
     }
 
@@ -129,9 +135,15 @@ extension TranscriptionJob {
             do {
                 let (peaks, duration) = try AudioFiles.peaks(url, window: 0.05)
                 let silences = SilenceTrimmer.silences(peaks: peaks, window: 0.05, options: options)
-                let map = TimeMap(keep: SilenceTrimmer.keepRanges(duration: duration, silences: silences, padding: options.padding))
-                guard !map.keep.isEmpty, duration - map.trimmedDuration >= 5 else {
+                let map: TimeMap
+                switch SilenceTrimmer.plan(duration: duration, silences: silences, padding: options.padding) {
+                case .skip:
+                    Log.transcription.info("Skipped \(url.lastPathComponent, privacy: .public): only silence")
+                    return Input(url: url, map: nil, seconds: 0, skip: true)
+                case .original:
                     return Input(url: url, map: nil, seconds: duration)
+                case .trimmed(let m):
+                    map = m
                 }
                 let out = dir.appendingPathComponent("trimmed-" + url.deletingPathExtension().lastPathComponent + ".m4a")
                 try AudioFiles.writeRanges(url, keep: map.keep, output: out)
