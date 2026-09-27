@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      SIGN_IDENTITY: "Developer ID Application"
+      ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+      ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Read version from Info.plist
+        id: version
+        run: |
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches Info.plist version
+        if: github.ref_type == 'tag'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [[ "$tag" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "Tag v$tag does not match CFBundleShortVersionString ${{ steps.version.outputs.version }}" >&2
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          p12_path="$RUNNER_TEMP/developer-id.p12"
+          echo "$DEVELOPER_ID_P12_BASE64" | base64 --decode -o "$p12_path"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$p12_path" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" \
+              -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          existing_keychains=()
+          while IFS= read -r line; do existing_keychains+=("$line"); done \
+              < <(security list-keychains -d user | sed 's/"//g')
+          security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
+
+          rm -f "$p12_path"
+          echo "KEYCHAIN_PATH=$keychain" >> "$GITHUB_ENV"
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          key_path="$RUNNER_TEMP/asc-api-key.p8"
+          echo "$ASC_API_KEY_P8_BASE64" | base64 --decode -o "$key_path"
+          echo "ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Write Sparkle private key
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          key_path="$RUNNER_TEMP/sparkle_ed_private_key"
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$key_path"
+          echo "SPARKLE_ED_KEY_FILE=$key_path" >> "$GITHUB_ENV"
+
+      - name: Build, sign, package, notarize and generate the appcast
+        run: scripts/release.sh
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          notes_file="docs/release-notes/$VERSION.md"
+          args=(--title "Kaiku $VERSION")
+          if [[ -f "$notes_file" ]]; then
+            args+=(--notes-file "$notes_file")
+          else
+            args+=(--generate-notes)
+          fi
+          gh release create "v$VERSION" \
+              "build/Kaiku-$VERSION.dmg" build/appcast.xml \
+              "${args[@]}"
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -f "$KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
