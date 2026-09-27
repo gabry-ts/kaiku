@@ -65,7 +65,7 @@ struct AppIconView: View {
             // Waveform bars on both sides.
             let bars: [(dx: CGFloat, h: CGFloat)] = [(222, 210), (286, 140), (350, 80)]
             for bar in bars {
-                for sign in [-1.0, 1.0] {
+                for sign: CGFloat in [-1, 1] {
                     let x = 512 + sign * bar.dx
                     let rect = CGRect(x: x - 17, y: 470 - bar.h / 2, width: 34, height: bar.h)
                     ctx.fill(Path(roundedRect: rect, cornerRadius: 17), with: .color(white.opacity(bar.dx == 222 ? 0.92 : (bar.dx == 286 ? 0.72 : 0.5))))
