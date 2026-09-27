@@ -565,7 +565,11 @@ struct AboutSettings: View {
                 Button("Show Welcome Guide") { WindowManager.shared.showOnboarding() }
                 Button("Open Recordings Folder") { AppState.shared.openBaseFolder() }
             }
-            .padding(.bottom, 24)
+            Button("Buy Me a Coffee…") { BuyMeACoffee.open() }
+                .buttonStyle(.link)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

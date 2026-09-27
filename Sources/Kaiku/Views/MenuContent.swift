@@ -185,6 +185,7 @@ struct MenuPanel: View {
             }
             Menu {
                 Button("Check for Updates…") { UpdaterManager.shared.checkForUpdates() }
+                Button("Buy Me a Coffee…") { BuyMeACoffee.open() }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
