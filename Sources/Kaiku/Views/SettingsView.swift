@@ -88,6 +88,7 @@ struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
     @AppStorage(Keys.language) private var language = "auto"
     @AppStorage(Keys.notificationsEnabled) private var notificationsEnabled = true
+    @State private var autoUpdateChecks = UpdaterManager.shared.automaticallyChecksForUpdates
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
@@ -132,6 +133,8 @@ struct GeneralSettings: View {
                     StatusDot(kind: .error, text: loginError)
                 }
                 Toggle("Notify me when a transcript is ready", isOn: $notificationsEnabled)
+                Toggle("Automatically check for updates", isOn: $autoUpdateChecks)
+                    .onChange(of: autoUpdateChecks) { _, v in UpdaterManager.shared.automaticallyChecksForUpdates = v }
             }
 
             StorageSection()

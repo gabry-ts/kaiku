@@ -183,6 +183,13 @@ struct MenuPanel: View {
                 closePanel()
                 WindowManager.shared.showSettings()
             }
+            Menu {
+                Button("Check for Updates…") { UpdaterManager.shared.checkForUpdates() }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             Spacer()
             FooterButton(title: "Quit", symbol: "power", shortcut: "q") { NSApp.terminate(nil) }
         }

@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "Kaiku",
     platforms: [.macOS("14.2")],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
+    ],
     targets: [
         .target(
             name: "KaikuCore",
@@ -11,7 +14,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "Kaiku",
-            dependencies: ["KaikuCore"],
+            dependencies: [
+                "KaikuCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

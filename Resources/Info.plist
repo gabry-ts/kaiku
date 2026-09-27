@@ -26,6 +26,10 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/gabry-ts/kaiku/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>N5xghnPP9eMLGnoojUNdhkwtEprucWINb2hP7brHeZc=</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

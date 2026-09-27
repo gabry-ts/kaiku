@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.setUp()
         try? FileManager.default.createDirectory(at: AppSettings.baseFolder, withIntermediateDirectories: true)
         MainActor.assumeIsolated {
+            _ = UpdaterManager.shared
             MicMuter.shared.restoreAfterCrash()
             MicMuter.shared.onChange = { muted in AppState.shared.microphonesMuted(muted) }
             StatusBarController.shared.install()
