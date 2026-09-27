@@ -102,8 +102,16 @@ The two tracks are transcribed separately, so the transcript knows who said what
 
 ## Install
 
+With [Homebrew](https://brew.sh):
+
+```
+brew install --cask gabry-ts/tap/kaiku
+```
+
+Or manually:
+
 1. Download the latest `Kaiku-<version>.dmg` from [Releases](https://github.com/gabry-ts/kaiku/releases/latest) and drag the app to Applications.
-2. The app is signed ad hoc and **not notarized**, so Gatekeeper blocks the first launch. Open it once, then go to **System Settings > Privacy & Security** and click **Open Anyway** (on macOS 14, right-click the app > Open also works).
+2. The app is signed with a Developer ID certificate and notarized by Apple, so it opens right away, no quarantine workaround needed.
 3. Grant the permissions macOS asks for on the first recording:
    - **Microphone**: Privacy & Security > Microphone.
    - **System audio recording**: Privacy & Security > Screen & System Audio Recording > "System Audio Recording Only". Without it the system track is silent and the transcript only contains your side.
@@ -111,6 +119,8 @@ The two tracks are transcribed separately, so the transcript knows who said what
    - **Calendar** (optional): to name recordings after the current event and suggest attendee names. Google and Outlook calendars must first be added in System Settings > Internet Accounts.
 
 Requires macOS 14.2 or later (process taps). Universal binary for Apple Silicon and Intel.
+
+Kaiku checks for updates on its own: it asks once, the second time you open it, whether to check automatically, and you can change that later in Settings or trigger a check any time from the menu bar icon's "Check for Updates…" item.
 
 **Upgrading from mc.Rofone.** Kaiku is the same app under a new name and bundle identifier. On first launch it copies your settings, API keys and webhook header values, moves `~/Documents/mc.Rofone` to `~/Documents/Kaiku` (only if you kept the default folder and `~/Documents/Kaiku` does not exist yet) and moves downloaded models to `~/Library/Application Support/Kaiku`. Nothing is deleted, and the old Keychain items are kept. macOS sees a new app, so it asks for microphone, system audio, notification and calendar permissions again; macOS may also ask once to let Kaiku read the keys saved by mc.Rofone. You can then delete mc.Rofone.
 
@@ -364,7 +374,7 @@ Settings > General > Storage shows the space used. **Clean Up Now…** previews 
 ## Troubleshooting
 
 - **Show Error Details…** in the menu shows the full last error with a Copy button. Failed transcriptions can be retried from the menu or re-run with any provider from the library.
-- **Permissions seem stuck** (common after rebuilding, since the app is signed ad hoc): remove the app from the list in System Settings and add it again, or reset them:
+- **Permissions seem stuck** (common after rebuilding from source with an ad hoc signature, `SIGN_IDENTITY=-`): remove the app from the list in System Settings and add it again, or reset them:
 
   ```sh
   tccutil reset Microphone com.gabrielepartiti.kaiku
@@ -386,16 +396,16 @@ Settings > General > Storage shows the space used. **Clean Up Now…** previews 
 
 ## Build from source
 
-Needs Xcode (or the Command Line Tools) with Swift 6 and `cmake` (`brew install cmake`) to build whisper.cpp.
+Needs Xcode (or the Command Line Tools) with Swift 6, `cmake` (`brew install cmake`) to build whisper.cpp, and `create-dmg` (`brew install create-dmg`) to package the DMG.
 
 ```sh
-./scripts/build-app.sh      # build/Kaiku.app
+SIGN_IDENTITY=- ./scripts/build-app.sh   # build/Kaiku.app, ad hoc signed
 open build/Kaiku.app
-./scripts/make-dmg.sh       # build/Kaiku-<version>.dmg
-swift test                  # unit tests
+SIGN_IDENTITY=- ./scripts/make-dmg.sh    # build/Kaiku-<version>.dmg
+swift test                               # unit tests
 ```
 
-`build-app.sh` first runs `scripts/build-whisper.sh`, which clones a pinned whisper.cpp release into `vendor/` and builds a static, universal `whisper-cli` with Metal. It then builds the app for arm64 and x86_64, bundles `whisper-cli` and its license notice, and signs the app ad hoc. `make-dmg.sh` packages it with `hdiutil`, using only tools that ship with macOS.
+`build-app.sh` first runs `scripts/build-whisper.sh`, which clones a pinned whisper.cpp release into `vendor/` and builds a static, universal `whisper-cli` with Metal. It then builds the app for arm64 and x86_64, embeds Sparkle.framework, bundles `whisper-cli` and its license notice, and signs everything with hardened runtime, inside out. `SIGN_IDENTITY` defaults to `Developer ID Application`; set it to `-` (as above) to sign ad hoc when you don't have a certificate. `make-dmg.sh` packages the result with `create-dmg`, using the generated background in `Resources/dmg/`. `scripts/release.sh` chains both together with notarization and Sparkle appcast generation, and needs real Apple and Sparkle credentials, so it's meant for CI (see `.github/workflows/release.yml`) rather than everyday local builds.
 
 For UI review, `Kaiku --render-snapshots <dir>` renders every screen with sample data in light and dark mode (it briefly shows windows on screen), and `Kaiku --render-icon <dir>` regenerates `AppIcon.icns`.
 
@@ -410,13 +420,14 @@ Sources/KaikuCore/       pure logic: transcript and export formatting, webhook t
                          silence trimming, echo filter, cost estimates, meeting detection,
                          shortcut rules, upgrade path rewriting
 Tests/KaikuCoreTests/    unit tests for the core
-scripts/                 build-whisper.sh, build-app.sh, make-dmg.sh
-Resources/               Info.plist, app icon
+scripts/                 build-whisper.sh, build-app.sh, make-dmg.sh, release.sh,
+                         generate-dmg-background.swift
+Resources/               Info.plist, entitlements, app icon, dmg background
 ```
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep changes focused, run `swift test` and make sure `./scripts/build-app.sh` builds without warnings. For UI changes, attach before/after snapshots from `--render-snapshots`.
+Issues and pull requests are welcome. Please keep changes focused, run `swift test` and make sure `SIGN_IDENTITY=- ./scripts/build-app.sh` builds without warnings. For UI changes, attach before/after snapshots from `--render-snapshots`.
 
 ## License
 
