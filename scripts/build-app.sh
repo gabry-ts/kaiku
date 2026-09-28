@@ -64,8 +64,8 @@ CODESIGN+=(-s "$SIGN_IDENTITY")
 # shaders at build time, so it needs no entitlements beyond the hardened runtime.
 "${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-cli"
 
-# Every build needs com.apple.security.device.audio-input, or the hardened runtime
-# silently denies microphone access. Ad-hoc builds also need
+# Every build needs the audio-input and calendars entitlements, or the hardened runtime
+# silently denies microphone and calendar access. Ad-hoc builds also need
 # com.apple.security.cs.disable-library-validation: two independently ad-hoc signed
 # binaries have no Team ID to compare, so hardened runtime library validation would
 # otherwise refuse to load Sparkle.framework. A real Developer ID build doesn't need

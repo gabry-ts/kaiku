@@ -2,9 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Required under the hardened runtime: without it macOS silently denies
-	     microphone access and never shows the permission prompt. -->
+	<!-- Required under the hardened runtime: without them macOS silently denies
+	     microphone and calendar access and never shows the permission prompt. -->
 	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
 </dict>
 </plist>
