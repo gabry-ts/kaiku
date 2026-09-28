@@ -52,6 +52,7 @@ done
 "$TOOLS_DIR/bin/generate_appcast" \
     --ed-key-file "$SPARKLE_ED_KEY_FILE" \
     --download-url-prefix "https://github.com/$REPO/releases/download/v$VERSION/" \
+    --embed-release-notes \
     "$APPCAST_INPUT"
 
 cp "$APPCAST_INPUT/appcast.xml" "$ROOT/build/appcast.xml"

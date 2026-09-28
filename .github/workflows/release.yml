@@ -93,17 +93,15 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           notes_file="docs/release-notes/$VERSION.md"
-          assets=("build/Kaiku-$VERSION.dmg" build/appcast.xml)
           args=(--title "Kaiku $VERSION")
           if [[ -f "$notes_file" ]]; then
             args+=(--notes-file "$notes_file")
-            # The appcast's sparkle:releaseNotesLink points at this asset.
-            cp "$notes_file" "build/Kaiku-$VERSION.md"
-            assets+=("build/Kaiku-$VERSION.md")
           else
             args+=(--generate-notes)
           fi
-          gh release create "v$VERSION" "${assets[@]}" "${args[@]}"
+          gh release create "v$VERSION" \
+              "build/Kaiku-$VERSION.dmg" build/appcast.xml \
+              "${args[@]}"
 
       - name: Clean up keychain
         if: always()
