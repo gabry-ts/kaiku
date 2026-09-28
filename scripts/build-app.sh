@@ -64,16 +64,17 @@ CODESIGN+=(-s "$SIGN_IDENTITY")
 # shaders at build time, so it needs no entitlements beyond the hardened runtime.
 "${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-cli"
 
-# Ad-hoc builds need com.apple.security.cs.disable-library-validation: two
-# independently ad-hoc signed binaries have no Team ID to compare, so hardened
-# runtime library validation would otherwise refuse to load Sparkle.framework.
-# A real Developer ID build doesn't need it: the app and the framework share
-# the same real Team ID and validate normally.
+# Every build needs com.apple.security.device.audio-input, or the hardened runtime
+# silently denies microphone access. Ad-hoc builds also need
+# com.apple.security.cs.disable-library-validation: two independently ad-hoc signed
+# binaries have no Team ID to compare, so hardened runtime library validation would
+# otherwise refuse to load Sparkle.framework. A real Developer ID build doesn't need
+# it: the app and the framework share the same real Team ID and validate normally.
+ENTITLEMENTS="$ROOT/Resources/Kaiku.entitlements"
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
-    "${CODESIGN[@]}" --entitlements "$ROOT/Resources/Kaiku.entitlements" "$APP"
-else
-    "${CODESIGN[@]}" "$APP"
+    ENTITLEMENTS="$ROOT/Resources/Kaiku-adhoc.entitlements"
 fi
+"${CODESIGN[@]}" --entitlements "$ENTITLEMENTS" "$APP"
 
 codesign --verify --strict --verbose "$APP"
 lipo -info "$APP/Contents/MacOS/$EXEC_NAME"
