@@ -175,7 +175,7 @@ struct MenuPanel: View {
 
     private var footer: some View {
         HStack(spacing: 2) {
-            FooterButton(title: "All Recordings", symbol: "list.bullet.rectangle", shortcut: "l") {
+            FooterButton(title: "Recordings", symbol: "list.bullet.rectangle", shortcut: "l") {
                 closePanel()
                 state.openInLibrary(nil)
             }
@@ -470,6 +470,8 @@ private struct FooterButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: symbol)
+                .lineLimit(1)
+                .fixedSize()
                 .font(.callout)
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(hover ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 6))
