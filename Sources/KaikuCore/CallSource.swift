@@ -19,6 +19,13 @@ public struct CallSource: Equatable, Sendable {
     public let titleKeywords: [String]
     public let defaultRule: SourceRule
 
+    public init(name: String, bundlePrefixes: [String], titleKeywords: [String], defaultRule: SourceRule) {
+        self.name = name
+        self.bundlePrefixes = bundlePrefixes
+        self.titleKeywords = titleKeywords
+        self.defaultRule = defaultRule
+    }
+
     /// Source of recordings started by hand.
     public static let manual = "Manual"
 
@@ -42,16 +49,16 @@ public struct CallSource: Equatable, Sendable {
         CallSource(name: "Element", bundlePrefixes: ["im.riot.app"], titleKeywords: ["Element"], defaultRule: .new),
     ]
 
-    /// The known source of a native app.
-    public static func native(bundleID: String) -> CallSource? {
-        known.first { s in s.bundlePrefixes.contains { bundleID.hasPrefix($0) } }
+    /// The known source of a native app, else the matching app added by the user.
+    public static func native(bundleID: String, custom: [CustomApp] = []) -> CallSource? {
+        (known + custom.map(\.source)).first { s in s.bundlePrefixes.contains { bundleID.hasPrefix($0) } }
     }
 
     /// Source name for a process using the mic: the native app's source, or for a browser
     /// the normalized front window title, falling back to the browser name.
     /// nil for apps that are neither.
-    public static func resolve(bundleID: String, windowTitle: String?) -> String? {
-        if let source = native(bundleID: bundleID) { return source.name }
+    public static func resolve(bundleID: String, windowTitle: String?, custom: [CustomApp] = []) -> String? {
+        if let source = native(bundleID: bundleID, custom: custom) { return source.name }
         guard let browser = MeetingApp.match(bundleID: bundleID), browser.isBrowser else { return nil }
         return windowTitle.flatMap(normalizeBrowserTitle) ?? browser.name
     }
@@ -102,6 +109,37 @@ public struct CallSource: Equatable, Sendable {
     }
 }
 
+/// An app added by hand in Settings > Sources, detected by its bundle id.
+public struct CustomApp: Codable, Equatable, Sendable {
+    public let name: String
+    public let bundleID: String
+
+    public init(name: String, bundleID: String) {
+        self.name = name
+        self.bundleID = bundleID
+    }
+
+    public var source: CallSource {
+        CallSource(name: name, bundlePrefixes: [bundleID], titleKeywords: [], defaultRule: .always)
+    }
+
+    public enum AddResult: Equatable, Sendable {
+        /// New app to add.
+        case add(CustomApp)
+        /// Already a known or added source, by that name.
+        case existing(String)
+        /// A browser: its calls are told apart by window title, not added as one source.
+        case browser(String)
+    }
+
+    /// What adding the app with this bundle id and name should do.
+    public static func adding(bundleID: String, name: String, to custom: [CustomApp]) -> AddResult {
+        if let source = CallSource.native(bundleID: bundleID, custom: custom) { return .existing(source.name) }
+        if let browser = MeetingApp.match(bundleID: bundleID), browser.isBrowser { return .browser(browser.name) }
+        return .add(CustomApp(name: name, bundleID: bundleID))
+    }
+}
+
 /// A call noticed by call detection: its source and the app it runs in.
 public struct DetectedCall: Equatable, Sendable {
     public let source: String
@@ -136,13 +174,15 @@ public struct SourceRules: Codable, Equatable, Sendable {
         saved[source] = rule
     }
 
-    /// Sources to list in Settings: the known ones first, then every other source seen
-    /// or decided, alphabetically, without duplicates (case-insensitive).
-    public func listed(seen: [String]) -> [String] {
-        let others = (seen + saved.keys).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    /// Sources to list in Settings: the known ones first, then apps added by hand and
+    /// every other source seen or decided, alphabetically, without duplicates
+    /// (case-insensitive). Removed sources are left out.
+    public func listed(seen: [String], custom: [CustomApp] = [], removed: [String] = []) -> [String] {
+        let others = (seen + saved.keys + custom.map(\.name))
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         var out: [String] = []
         for name in CallSource.known.map(\.name) + others
-        where !out.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+        where !(out + removed).contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
             out.append(name)
         }
         return out

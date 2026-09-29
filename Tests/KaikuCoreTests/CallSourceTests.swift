@@ -83,6 +83,31 @@ final class CallSourceTests: XCTestCase {
         XCTAssertEqual(Array(listed.dropFirst(CallSource.known.count)), ["Acme Portal", "Client X", "Gmail"])
     }
 
+    func testListedSourcesIncludeCustomAppsAndSkipRemoved() {
+        let custom = [CustomApp(name: "Bria", bundleID: "com.counterpath.bria")]
+        let listed = SourceRules().listed(seen: ["Gmail"], custom: custom, removed: ["zoom", "gmail"])
+        XCTAssertFalse(listed.contains("Zoom"))
+        XCTAssertFalse(listed.contains("Gmail"))
+        XCTAssertTrue(listed.contains("Bria"))
+        XCTAssertTrue(listed.contains("Microsoft Teams"))
+    }
+
+    func testCustomAppsAreDetectedAsSources() {
+        let custom = [CustomApp(name: "Bria", bundleID: "com.counterpath.bria")]
+        XCTAssertEqual(CallSource.resolve(bundleID: "com.counterpath.bria", windowTitle: nil, custom: custom), "Bria")
+        XCTAssertNil(CallSource.resolve(bundleID: "com.counterpath.bria", windowTitle: nil))
+        XCTAssertEqual(SourceRules().rule(for: "Bria"), .new)
+    }
+
+    func testAddingApps() {
+        let custom = [CustomApp(name: "Bria", bundleID: "com.counterpath.bria")]
+        XCTAssertEqual(CustomApp.adding(bundleID: "com.example.softphone", name: "Softphone", to: custom),
+                       .add(CustomApp(name: "Softphone", bundleID: "com.example.softphone")))
+        XCTAssertEqual(CustomApp.adding(bundleID: "us.zoom.xos", name: "zoom.us", to: custom), .existing("Zoom"))
+        XCTAssertEqual(CustomApp.adding(bundleID: "com.counterpath.bria", name: "Bria 6", to: custom), .existing("Bria"))
+        XCTAssertEqual(CustomApp.adding(bundleID: "com.google.Chrome", name: "Google Chrome", to: custom), .browser("Google Chrome"))
+    }
+
     func testMigrationFromDisabledApps() {
         let rules = SourceRules.migrated(disabledAppIDs: ["zoom", "chrome", "teams", "unknown"])
         XCTAssertEqual(rules.saved, ["Zoom": .never, "Microsoft Teams": .never])
