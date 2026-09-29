@@ -57,19 +57,22 @@ public struct CallSource: Equatable, Sendable {
     /// Source name for a process using the mic: the native app's source, or for a browser
     /// the normalized front window title, falling back to the browser name.
     /// nil for apps that are neither.
-    public static func resolve(bundleID: String, windowTitle: String?, custom: [CustomApp] = []) -> String? {
+    public static func resolve(bundleID: String, windowTitle: String?, custom: [CustomApp] = [],
+                               sites: [CustomWebsite] = []) -> String? {
         if let source = native(bundleID: bundleID, custom: custom) { return source.name }
         guard let browser = MeetingApp.match(bundleID: bundleID), browser.isBrowser else { return nil }
-        return windowTitle.flatMap(normalizeBrowserTitle) ?? browser.name
+        return windowTitle.flatMap { normalizeBrowserTitle($0, sites: sites) } ?? browser.name
     }
 
     /// "(3) WhatsApp" → "WhatsApp", "Meet – abc-defg-hij – Google Chrome" → "Google Meet",
     /// "Chat | Microsoft Teams" → "Microsoft Teams". Unknown titles keep their first part.
     /// nil when nothing is left.
-    public static func normalizeBrowserTitle(_ title: String) -> String? {
+    /// Websites added by hand are checked after the known services.
+    public static func normalizeBrowserTitle(_ title: String, sites: [CustomWebsite] = []) -> String? {
         let parts = titleParts(title)
+        let candidates = known + sites.map(\.source)
         for part in parts {
-            if let source = known.first(where: { $0.titleKeywords.contains { containsWords(part, $0) } }) {
+            if let source = candidates.first(where: { $0.titleKeywords.contains { containsWords(part, $0) } }) {
                 return source.name
             }
         }
@@ -140,6 +143,28 @@ public struct CustomApp: Codable, Equatable, Sendable {
     }
 }
 
+/// A website added by hand in Settings > Sources, recognized by words in the browser
+/// window title.
+public struct CustomWebsite: Codable, Equatable, Sendable {
+    public let name: String
+    /// Words to look for in the window title; the name when empty.
+    public let keywords: [String]
+
+    public init(name: String, keywords: [String] = []) {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.keywords = keywords.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    public var source: CallSource {
+        CallSource(name: name, bundlePrefixes: [], titleKeywords: keywords.isEmpty ? [name] : keywords, defaultRule: .always)
+    }
+
+    /// "Client Portal" and "portal, acme" → keywords ["portal", "acme"].
+    public static func parseKeywords(_ text: String) -> [String] {
+        text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
 /// A call noticed by call detection: its source and the app it runs in.
 public struct DetectedCall: Equatable, Sendable {
     public let source: String
@@ -182,8 +207,9 @@ public struct SourceRules: Codable, Equatable, Sendable {
     /// Sources to list in Settings: the known ones first, then apps added by hand and
     /// every other source seen or decided, alphabetically, without duplicates
     /// (case-insensitive). Removed sources are left out.
-    public func listed(seen: [String], custom: [CustomApp] = [], removed: [String] = []) -> [String] {
-        let others = (seen + saved.keys + custom.map(\.name))
+    public func listed(seen: [String], custom: [CustomApp] = [], sites: [CustomWebsite] = [],
+                       removed: [String] = []) -> [String] {
+        let others = (seen + saved.keys + custom.map(\.name) + sites.map(\.name))
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         var out: [String] = []
         for name in CallSource.known.map(\.name) + others

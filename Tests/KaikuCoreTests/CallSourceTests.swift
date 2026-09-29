@@ -101,6 +101,24 @@ final class CallSourceTests: XCTestCase {
         XCTAssertEqual(SourceRules().rule(for: "Bria"), .new)
     }
 
+    func testCustomWebsitesAreRecognizedInBrowserTitles() {
+        let sites = [CustomWebsite(name: "Client Portal", keywords: CustomWebsite.parseKeywords("acme portal, acme calls")),
+                     CustomWebsite(name: "Intranet")]
+        XCTAssertEqual(CallSource.resolve(bundleID: "com.google.Chrome", windowTitle: "Room 4 - Acme Portal - Google Chrome", sites: sites),
+                       "Client Portal")
+        XCTAssertEqual(CallSource.resolve(bundleID: "com.apple.Safari", windowTitle: "(2) Intranet | Call", sites: sites), "Intranet")
+        XCTAssertEqual(CallSource.normalizeBrowserTitle("Acme Calls", sites: sites), "Client Portal")
+        XCTAssertEqual(CallSource.normalizeBrowserTitle("Acme Portal"), "Acme Portal")
+        // Known services come first.
+        XCTAssertEqual(CallSource.normalizeBrowserTitle("Meet - Intranet", sites: sites), "Google Meet")
+        XCTAssertEqual(SourceRules().listed(seen: [], sites: sites).suffix(2), ["Client Portal", "Intranet"])
+    }
+
+    func testWebsiteKeywordsAreTrimmed() {
+        XCTAssertEqual(CustomWebsite.parseKeywords(" a , ,b "), ["a", "b"])
+        XCTAssertEqual(CustomWebsite(name: " Intranet ").source.titleKeywords, ["Intranet"])
+    }
+
     func testAddingApps() {
         let custom = [CustomApp(name: "Bria", bundleID: "com.counterpath.bria")]
         XCTAssertEqual(CustomApp.adding(bundleID: "com.example.softphone", name: "Softphone", to: custom),
