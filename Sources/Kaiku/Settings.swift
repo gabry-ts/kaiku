@@ -125,6 +125,7 @@ enum Keys {
     static let detectSourceRules = "detectSourceRules"
     static let detectSeenSources = "detectSeenSources"
     static let detectCustomApps = "detectCustomApps"
+    static let detectCustomWebsites = "detectCustomWebsites"
     static let detectRemovedSources = "detectRemovedSources"
     static let sourceRulesMigrated = "sourceRulesMigrated"
     static let accessibilityAsked = "accessibilityAsked"
@@ -315,6 +316,15 @@ enum AppSettings {
                 .flatMap { try? JSONDecoder().decode([CustomApp].self, from: $0) } ?? []
         }
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectCustomApps) }
+    }
+
+    /// Websites added by hand in Settings > Sources.
+    static var customWebsites: [CustomWebsite] {
+        get {
+            defaults.data(forKey: Keys.detectCustomWebsites)
+                .flatMap { try? JSONDecoder().decode([CustomWebsite].self, from: $0) } ?? []
+        }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectCustomWebsites) }
     }
 
     /// Sources removed from the Settings list (their rule is Never).

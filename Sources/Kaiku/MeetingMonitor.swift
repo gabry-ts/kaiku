@@ -93,7 +93,8 @@ final class MeetingMonitor {
     /// Source of a mic user: its native source, or the browser's front window title.
     static func source(of user: MicUser) -> String {
         guard user.isBrowser else { return user.key }
-        return CallSource.resolve(bundleID: user.bundleID, windowTitle: windowTitle(of: user)) ?? user.appName
+        return CallSource.resolve(bundleID: user.bundleID, windowTitle: windowTitle(of: user),
+                                  sites: AppSettings.customWebsites) ?? user.appName
     }
 
     /// Known call apps and browsers whose processes are currently capturing audio input.
