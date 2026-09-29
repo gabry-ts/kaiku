@@ -67,7 +67,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// A new source also offers Always Record / Never.
     func postCallDetected(_ call: DetectedCall, isNew: Bool) {
         send(title: isNew ? "New source: \(call.source)" : "Call detected in \(call.source)", body: "Record it?",
-             userInfo: ["kind": "callDetected", "source": call.source, "app": call.app],
+             userInfo: ["kind": "callDetected", "source": call.source, "app": call.app, "windowTitle": call.windowTitle ?? ""],
              category: isNew ? Self.callDetectedNewCategory : Self.callDetectedCategory, force: true, id: "callDetected")
     }
 
@@ -114,7 +114,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let path = info["folder"] as? String
         let kind = info["kind"] as? String
         let source = info["source"] as? String
-        let call = source.map { DetectedCall(source: $0, app: info["app"] as? String ?? $0) }
+        let windowTitle = (info["windowTitle"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let call = source.map { DetectedCall(source: $0, app: info["app"] as? String ?? $0, windowTitle: windowTitle) }
         let action = response.actionIdentifier
         DispatchQueue.main.async {
             MainActor.assumeIsolated {

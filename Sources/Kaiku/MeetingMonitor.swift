@@ -12,6 +12,8 @@ final class MeetingMonitor {
     private var timer: Timer?
     private var detector = MeetingDetector()
     private var cache = SourceCache()
+    /// Auto-started recording still waiting for a meaningful call window title.
+    private var retitle: (source: String, user: MicUser, until: Date)?
     private let ownPID = getpid()
 
     /// A known call app (native or browser) whose process is capturing audio input.
@@ -32,6 +34,7 @@ final class MeetingMonitor {
             guard timer == nil else { return }
             detector = MeetingDetector()
             cache = SourceCache()
+            retitle = nil
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
                 Task { @MainActor in MeetingMonitor.shared.tick() }
             }
@@ -46,28 +49,51 @@ final class MeetingMonitor {
         let sources = cache.update(active: Set(users.keys)) { key in Self.source(of: users[key]!) }
         let rules = AppSettings.sourceRules
         var calls: [String: DetectedCall] = [:]
+        var owners: [String: MicUser] = [:]
         for (key, source) in sources.sorted(by: { $0.key < $1.key }) {
             AppSettings.noteSeen(source)
             guard rules.rule(for: source) != .never, calls[source] == nil else { continue }
             calls[source] = DetectedCall(source: source, app: users[key]!.appName)
+            owners[source] = users[key]!
         }
         detector.autoStopAfter = Double(AppSettings.detectAutoStopSeconds)
         let state = AppState.shared
-        for event in detector.update(active: Set(calls.keys), isRecording: state.isRecording, now: Date()) {
+        let now = Date()
+        for event in detector.update(active: Set(calls.keys), isRecording: state.isRecording, now: now) {
             switch event {
             case .started(let source):
-                if let call = calls[source] { state.meetingStarted(call, rule: rules.rule(for: source)) }
+                guard var call = calls[source], let owner = owners[source] else { continue }
+                call.windowTitle = Self.windowTitle(of: owner)
+                if state.meetingStarted(call, rule: rules.rule(for: source)) {
+                    retitle = (source, owner, now.addingTimeInterval(30))
+                }
             case .ended(let source): state.meetingEnded(app: source)
             case .autoStop: state.meetingAutoStop()
             }
         }
+        retryTitle(now: now)
+    }
+
+    /// Some apps name the call window late: re-read it during the first 30 s.
+    private func retryTitle(now: Date) {
+        guard let r = retitle else { return }
+        guard now < r.until else { retitle = nil; return }
+        // The recording starts asynchronously; retitleAutoStarted checks it is still ours.
+        guard AppState.shared.isRecording else { return }
+        if let title = Self.windowTitle(of: r.user).flatMap({ CallTitle.clean($0, source: r.source) }) {
+            AppState.shared.retitleAutoStarted(to: title)
+            retitle = nil
+        }
+    }
+
+    static func windowTitle(of user: MicUser) -> String? {
+        WindowTitle.front(pid: user.pid, bundleID: user.bundleID, bundlePrefixes: user.bundlePrefixes)
     }
 
     /// Source of a mic user: its native source, or the browser's front window title.
     static func source(of user: MicUser) -> String {
         guard user.isBrowser else { return user.key }
-        let title = WindowTitle.front(pid: user.pid, bundleID: user.bundleID, bundlePrefixes: user.bundlePrefixes)
-        return CallSource.resolve(bundleID: user.bundleID, windowTitle: title) ?? user.appName
+        return CallSource.resolve(bundleID: user.bundleID, windowTitle: windowTitle(of: user)) ?? user.appName
     }
 
     /// Known call apps and browsers whose processes are currently capturing audio input.

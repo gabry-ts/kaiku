@@ -60,6 +60,9 @@ final class AppState: ObservableObject {
     private var cleanupTimer: Timer?
     /// Source of the current recording when it was started automatically.
     private var autoStartedSource: String?
+    /// Fallback title given to the current auto-started recording, replaced if the
+    /// call window gets a meaningful title soon after.
+    private var autoFallbackTitle: String?
 
     var isRecording: Bool { if case .recording = phase { return true } else { return false } }
 
@@ -83,7 +86,8 @@ final class AppState: ObservableObject {
         guard !isRecording else { return }
         let event = CalendarService.shared.currentEvent()
         let date = Date()
-        let title = event?.title ?? call.map { "\($0.source) call \(Naming.defaultTitle(date: date).dropFirst(5))" } ?? Naming.defaultTitle(date: date)
+        let title = call.map { CallTitle.choose(eventTitle: event?.title, windowTitle: $0.windowTitle, source: $0.source, date: date) }
+            ?? event?.title ?? Naming.defaultTitle(date: date)
         WindowManager.shared.showTitlePrompt(title: title, event: event, call: call)
     }
 
@@ -153,6 +157,7 @@ final class AppState: ObservableObject {
             bookmarks = []
             currentEvent = event
             autoStartedSource = nil
+            autoFallbackTitle = nil
             AppSettings.lastRecordingFolder = folder.url
             phase = .recording(title: title, start: date)
             now = date
@@ -502,14 +507,23 @@ final class AppState: ObservableObject {
     // MARK: Call detection
 
     /// A call started. `rule` is never `.never` here: those are filtered out by the monitor.
-    func meetingStarted(_ call: DetectedCall, rule: SourceRule) {
-        guard !isRecording else { return }
+    /// Returns true when the recording started with the fallback title, so the monitor
+    /// can look for a better one in the call window.
+    @discardableResult
+    func meetingStarted(_ call: DetectedCall, rule: SourceRule) -> Bool {
+        guard !isRecording else { return false }
+        var usedFallback = false
         if AppSettings.detectAutoStart {
             let event = CalendarService.shared.currentEvent()
-            let title = event?.title ?? "\(call.source) call \(Naming.defaultTitle(date: Date()).dropFirst(5))"
+            let date = Date()
+            let title = CallTitle.choose(eventTitle: event?.title, windowTitle: call.windowTitle, source: call.source, date: date)
+            usedFallback = title == CallTitle.fallback(source: call.source, date: date)
             Task {
                 await startRecording(title: title, language: AppSettings.language, event: event, call: call)
-                if isRecording { autoStartedSource = call.source }
+                if isRecording {
+                    autoStartedSource = call.source
+                    autoFallbackTitle = usedFallback ? title : nil
+                }
             }
             if rule == .new {
                 Notifier.shared.postNewSource(call)
@@ -519,6 +533,19 @@ final class AppState: ObservableObject {
         } else {
             Notifier.shared.postCallDetected(call, isNew: rule == .new)
         }
+        return usedFallback
+    }
+
+    /// Gives the auto-started recording the call window's title, unless it was renamed meanwhile.
+    func retitleAutoStarted(to newTitle: String) {
+        guard case .recording(let current, let start) = phase, let folder = currentFolder,
+              let fallback = autoFallbackTitle, current == fallback,
+              folder.loadMeta()?.title == fallback else { return }
+        autoFallbackTitle = nil
+        folder.updateMeta { $0.title = newTitle }
+        phase = .recording(title: newTitle, start: start)
+        libraryVersion += 1
+        Log.app.info("Recording titled from the call window")
     }
 
     /// Saves the Always/Never choice for a source. Never also discards the recording

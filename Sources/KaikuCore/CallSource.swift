@@ -107,10 +107,13 @@ public struct DetectedCall: Equatable, Sendable {
     public let source: String
     /// e.g. "Google Chrome" for WhatsApp Web.
     public let app: String
+    /// Raw title of the call window when the call started, if readable.
+    public var windowTitle: String?
 
-    public init(source: String, app: String) {
+    public init(source: String, app: String, windowTitle: String? = nil) {
         self.source = source
         self.app = app
+        self.windowTitle = windowTitle
     }
 }
 
