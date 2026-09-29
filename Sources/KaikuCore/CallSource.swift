@@ -102,6 +102,18 @@ public struct CallSource: Equatable, Sendable {
     }
 }
 
+/// A call noticed by call detection: its source and the app it runs in.
+public struct DetectedCall: Equatable, Sendable {
+    public let source: String
+    /// e.g. "Google Chrome" for WhatsApp Web.
+    public let app: String
+
+    public init(source: String, app: String) {
+        self.source = source
+        self.app = app
+    }
+}
+
 /// Always/Never choices saved per source name (case-insensitive).
 public struct SourceRules: Codable, Equatable, Sendable {
     public private(set) var saved: [String: SourceRule]
@@ -119,6 +131,18 @@ public struct SourceRules: Codable, Equatable, Sendable {
     public mutating func set(_ rule: SourceRule, for source: String) {
         for key in saved.keys where key.caseInsensitiveCompare(source) == .orderedSame { saved[key] = nil }
         saved[source] = rule
+    }
+
+    /// Sources to list in Settings: the known ones first, then every other source seen
+    /// or decided, alphabetically, without duplicates (case-insensitive).
+    public func listed(seen: [String]) -> [String] {
+        let others = (seen + saved.keys).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        var out: [String] = []
+        for name in CallSource.known.map(\.name) + others
+        where !out.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+            out.append(name)
+        }
+        return out
     }
 
     /// Rules from the old per-app toggles: disabled apps become `.never`. Browsers are

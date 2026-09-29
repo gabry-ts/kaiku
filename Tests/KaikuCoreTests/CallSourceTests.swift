@@ -75,6 +75,14 @@ final class CallSourceTests: XCTestCase {
         XCTAssertEqual(decoded, rules)
     }
 
+    func testListedSourcesPutKnownOnesFirst() {
+        var rules = SourceRules()
+        rules.set(.never, for: "Client X")
+        let listed = rules.listed(seen: ["whatsapp", "Gmail", "Acme Portal"])
+        XCTAssertEqual(Array(listed.prefix(CallSource.known.count)), CallSource.known.map(\.name))
+        XCTAssertEqual(Array(listed.dropFirst(CallSource.known.count)), ["Acme Portal", "Client X", "Gmail"])
+    }
+
     func testMigrationFromDisabledApps() {
         let rules = SourceRules.migrated(disabledAppIDs: ["zoom", "chrome", "teams", "unknown"])
         XCTAssertEqual(rules.saved, ["Zoom": .never, "Microsoft Teams": .never])
