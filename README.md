@@ -38,7 +38,7 @@ Most call recorders either send a bot into your meeting or charge you every mont
 | **Record** | Mic and system audio on separate tracks (Core Audio process tap, no virtual driver). Asks for the title *when you start*, prefilled from the calendar event happening now, with tags and autocomplete. Pause / resume and bookmarks from the panel or global shortcuts. Never opens a Bluetooth headset mic, so your headphones stay in high quality. Survives output and mic changes mid-call. Crash safe. |
 | **Transcribe** | whisper.cpp (local, bundled, in-app model manager), ElevenLabs Scribe, OpenAI, Groq. Auto language detection. "Me" vs "Others" from the two tracks, speaker diarization on the call audio where the provider supports it, rename speakers after the fact. Echo removal when you use speakers. Silence trimming before upload and a per-call cost estimate. |
 | **Organize** | Library with search across titles, tags and transcripts, tag filter, inline player with bookmark markers and click-to-seek timestamps. Export to Markdown, TXT, SRT, VTT and DOCX. Multi-selection for bulk export, tagging, re-transcription and cleanup. Storage overview and optional cleanup of old audio. |
-| **Automate** | Notification when the transcript is ready. Fully configurable webhook (method, headers, custom body templates). Optional summary with decisions and action items, using your own OpenAI, Anthropic or Groq key. Detects Zoom, Teams, Meet, Slack, FaceTime, Webex and Discord calls and offers to record. |
+| **Automate** | Notification when the transcript is ready. Fully configurable webhook (method, headers, custom body templates). Optional summary with decisions and action items, using your own OpenAI, Anthropic or Groq key. Detects Zoom, Teams, Meet, Slack, FaceTime, WhatsApp and more, with per-source Always/Never rules, and offers to record. |
 | **Mute** | Option-click the menu bar icon to mute every microphone on the Mac at once, Bluetooth included, without opening them. Call apps keep showing you as unmuted but receive silence. If an app raises the volume back, Kaiku lowers it again. Unmuting, quitting or relaunching after a crash restores every device exactly as it was. |
 | **Privacy** | Everything is stored locally. API keys and webhook header values live in the Keychain. Audio leaves your Mac only to the provider you choose, and not at all with whisper.cpp. |
 
@@ -117,6 +117,7 @@ Or manually:
    - **System audio recording**: Privacy & Security > Screen & System Audio Recording > "System Audio Recording Only". Without it the system track is silent and the transcript only contains your side.
    - **Notifications**: for "Transcript ready", "Call detected" and "Recovered call".
    - **Calendar** (optional): to name recordings after the current event and suggest attendee names. Google and Outlook calendars must first be added in System Settings > Internet Accounts.
+   - **Accessibility** (optional): to read the title of the call window, so web calls (WhatsApp Web, Google Meet, Teams) are told apart and recordings get the meeting or chat name.
 
 Requires macOS 14.2 or later (process taps). Universal binary for Apple Silicon and Intel.
 
@@ -339,10 +340,17 @@ Audio is written as CAF files that stay readable after a crash, a force quit or 
 <details>
 <summary><b>Call detection</b></summary>
 
-Settings > Recording > Call Detection (on by default). Every few seconds Kaiku asks Core Audio which processes are using an input device and matches them against Zoom, Microsoft Teams, Slack, FaceTime, Webex, Discord and browsers for Google Meet (Chrome, Safari, Arc, Edge, Firefox, Brave, Zen, Vivaldi). It never opens a microphone for this. Each app can be turned off.
+Settings > Recording > Call Detection (on by default). Every few seconds Kaiku asks Core Audio which processes are using an input device and matches them against known call apps (Zoom, Microsoft Teams, Slack, FaceTime, Phone, Webex, Discord, GoTo Meeting, RingCentral, WhatsApp, Telegram, Signal, Viber, Element) and browsers (Chrome, Safari, Arc, Edge, Firefox, Brave, Zen, Vivaldi). It never opens a microphone for this.
 
-- A call starting shows "Call detected in Zoom" with **Record** or **Dismiss**, or starts right away with *Start recording automatically*.
+Every call gets a **source**: the app name, or for a browser the title of its front window (`WhatsApp`, `Google Meet`), read through Accessibility. The same service is one source in the app and on the web. Without the Accessibility permission a browser call's source is the browser name.
+
+- Each source is **Always**, **Never** or **New** in Settings > Call Detection > Sources. Call apps default to Always, messaging apps with voice notes (WhatsApp, Telegram, Signal, Viber, Element) and unknown web pages to New.
+- An Always source shows "Call detected in Zoom" with **Record** or **Dismiss**, or starts right away with *Start recording automatically*. Never sources are ignored.
+- A New source offers **Always Record** or **Never**. With automatic start it records first and asks after: Never stops the recording and deletes it.
+- Without a calendar event, an auto-detected recording is named after the call window (Teams meeting name, FaceTime contact, WhatsApp chat), else "Zoom call 2026-09-23 14:30".
 - When every meeting app stops using the mic, you get "Call seems to have ended" with **Stop Recording**, or recording stops by itself after 30 s to 5 min if you want.
+- The source is saved in `meta.json` (`source`, plus `sourceApp` such as `Google Chrome`), can be edited per recording and filters the Library.
+- Only the browser's front window is read: a call in a background window or tab may get the wrong source or title.
 </details>
 
 <details>
