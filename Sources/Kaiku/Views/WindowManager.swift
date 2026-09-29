@@ -10,8 +10,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     private var windows: [String: NSWindow] = [:]
 
-    func showTitlePrompt(title: String, event: CalendarEventInfo?) {
-        let view = TitlePromptView(onDone: { [weak self] in self?.close("title") }, initialTitle: title, event: event)
+    func showTitlePrompt(title: String, event: CalendarEventInfo?, call: DetectedCall? = nil) {
+        let view = TitlePromptView(onDone: { [weak self] in self?.close("title") }, initialTitle: title, event: event, call: call)
             .environmentObject(AppState.shared)
             .defaultAppStorage(AppSettings.defaults)
         let panel = KeyPanel(contentRect: .zero,
@@ -41,8 +41,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
         present(id: "library", window: window, view: view, title: "Recordings", recreate: false, bridgeToolbar: true)
     }
 
-    func showOnboarding() {
-        let view = OnboardingView(finish: { [weak self] in self?.close("onboarding") })
+    func showOnboarding(accessibilityOnly: Bool = false) {
+        let view = OnboardingView(accessibilityOnly: accessibilityOnly, finish: { [weak self] in self?.close("onboarding") })
             .environmentObject(AppState.shared)
         let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)

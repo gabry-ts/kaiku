@@ -62,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Migration.runAtLaunch()
         Shortcuts.migratePresets()
         AppSettings.registerDefaults()
+        Migration.migrateSourceRules()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -80,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MeetingMonitor.shared.apply()
             if !AppSettings.defaults.bool(forKey: Keys.onboardingDone) {
                 WindowManager.shared.showOnboarding()
+            } else if !AppSettings.defaults.bool(forKey: Keys.accessibilityAsked) && !Permissions.shared.accessibilityGranted {
+                WindowManager.shared.showOnboarding(accessibilityOnly: true)
             }
         }
     }

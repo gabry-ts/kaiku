@@ -355,7 +355,8 @@ struct CallDetectionSection: View {
     @AppStorage(Keys.detectAutoStart) private var autoStart = false
     @AppStorage(Keys.detectEndNotify) private var endNotify = true
     @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
-    @State private var disabled: Set<String> = []
+    @State private var rules = SourceRules()
+    @State private var sources: [String] = []
 
     var body: some View {
         Section {
@@ -371,23 +372,30 @@ struct CallDetectionSection: View {
                     Text("After 2 minutes").tag(120)
                     Text("After 5 minutes").tag(300)
                 }
-                DisclosureGroup("Apps") {
-                    ForEach(MeetingApp.known) { app in
-                        Toggle(app.name + (app.isBrowser ? " (Google Meet and web calls)" : ""), isOn: Binding(
-                            get: { !disabled.contains(app.id) },
-                            set: { on in
-                                if on { disabled.remove(app.id) } else { disabled.insert(app.id) }
-                                AppSettings.defaults.set(Array(disabled).sorted(), forKey: Keys.detectDisabledApps)
-                            }))
+                DisclosureGroup("Sources") {
+                    ForEach(sources, id: \.self) { source in
+                        Picker(source, selection: Binding(
+                            get: { rules.rule(for: source) },
+                            set: { rule in
+                                rules.set(rule, for: source)
+                                AppSettings.sourceRules = rules
+                            })) {
+                            Text("Always").tag(SourceRule.always)
+                            Text("Never").tag(SourceRule.never)
+                            Text("New (ask)").tag(SourceRule.new)
+                        }
                     }
                 }
             }
         } header: {
             Text("Call Detection")
         } footer: {
-            Text("Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it.")
+            Text("Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. A new source is recorded the first time, then Kaiku asks whether to always record it. Web calls are told apart by the browser window title, which needs the Accessibility permission.")
         }
-        .onAppear { disabled = Set(AppSettings.detectDisabledApps) }
+        .onAppear {
+            rules = AppSettings.sourceRules
+            sources = rules.listed(seen: AppSettings.seenSources)
+        }
     }
 }
 
@@ -478,6 +486,12 @@ struct PermissionsSettings: View {
                     state: permissions.calendar,
                     action: permissions.calendar == .notAsked ? "Allow…" : "Open Settings…",
                     perform: { permissions.requestCalendar() })
+                PermissionRow(
+                    symbol: "accessibility", tint: .purple, title: "Accessibility",
+                    detail: "Optional. Reads the browser window title to tell web calls apart, like WhatsApp Web and Google Meet.",
+                    state: permissions.accessibility,
+                    action: permissions.accessibility == .notAsked ? "Allow…" : "Open Settings…",
+                    perform: { permissions.requestAccessibility() })
             } footer: {
                 Text("Changes made in System Settings show up here when you come back.")
             }

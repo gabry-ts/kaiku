@@ -6,6 +6,7 @@ struct TitlePromptView: View {
     @EnvironmentObject var state: AppState
     let onDone: () -> Void
     var event: CalendarEventInfo?
+    var call: DetectedCall?
 
     @State private var title: String
     @State private var language = AppSettings.language
@@ -13,9 +14,10 @@ struct TitlePromptView: View {
     @State private var tags: [String] = []
     @State private var knownTags: [String] = []
 
-    init(onDone: @escaping () -> Void, initialTitle: String? = nil, event: CalendarEventInfo? = nil) {
+    init(onDone: @escaping () -> Void, initialTitle: String? = nil, event: CalendarEventInfo? = nil, call: DetectedCall? = nil) {
         self.onDone = onDone
         self.event = event
+        self.call = call
         _title = State(initialValue: initialTitle ?? Naming.defaultTitle(date: Date()))
     }
     @FocusState private var focused: Bool
@@ -126,8 +128,9 @@ struct TitlePromptView: View {
         let l = language
         let e = useEvent ? event : nil
         let tg = tags
+        let c = call
         onDone()
-        Task { await state.startRecording(title: t, language: l, event: e, tags: tg) }
+        Task { await state.startRecording(title: t, language: l, event: e, tags: tg, call: c) }
     }
 
     private func eventSummary(_ e: CalendarEventInfo) -> String {

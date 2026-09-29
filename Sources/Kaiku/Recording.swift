@@ -42,6 +42,10 @@ struct RecordingMeta: Codable {
     var tags: [String]?
     /// Model that wrote summary.md, e.g. "Anthropic (claude-sonnet-5)".
     var summaryModel: String?
+    /// Where the call came from, e.g. "WhatsApp" or "Manual"; editable in the Library.
+    var source: String?
+    /// App the call ran in, e.g. "Google Chrome" for WhatsApp Web.
+    var sourceApp: String?
 }
 
 /// A recording folder on disk.

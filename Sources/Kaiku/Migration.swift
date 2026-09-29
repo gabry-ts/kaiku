@@ -103,6 +103,19 @@ enum Migration {
         c.target.set(true, forKey: doneKey)
     }
 
+    /// The old per-app toggles become source rules: disabled apps become Never. Runs once.
+    static func migrateSourceRules() {
+        let d = AppSettings.defaults
+        guard !d.bool(forKey: Keys.sourceRulesMigrated) else { return }
+        let disabled = AppSettings.detectDisabledApps
+        if !disabled.isEmpty {
+            AppSettings.sourceRules = SourceRules.migrated(disabledAppIDs: disabled)
+            Log.app.info("Migration: \(disabled.count) disabled apps turned into source rules")
+        }
+        d.removeObject(forKey: Keys.detectDisabledApps)
+        d.set(true, forKey: Keys.sourceRulesMigrated)
+    }
+
     private static func move(_ from: URL, to: URL, _ c: Context) -> Bool {
         do {
             try FileManager.default.createDirectory(at: to.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -11,13 +11,27 @@ final class MeetingMonitor {
 
     private var timer: Timer?
     private var detector = MeetingDetector()
+    private var cache = SourceCache()
     private let ownPID = getpid()
+
+    /// A known call app (native or browser) whose process is capturing audio input.
+    struct MicUser {
+        /// Source name for native apps, browser id for browsers.
+        let key: String
+        /// App the process belongs to, e.g. "Google Chrome".
+        let appName: String
+        let bundleID: String
+        let pid: pid_t
+        let bundlePrefixes: [String]
+        let isBrowser: Bool
+    }
 
     /// Starts or stops polling to match the setting.
     func apply() {
         if AppSettings.detectCalls {
             guard timer == nil else { return }
             detector = MeetingDetector()
+            cache = SourceCache()
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
                 Task { @MainActor in MeetingMonitor.shared.tick() }
             }
@@ -28,33 +42,52 @@ final class MeetingMonitor {
     }
 
     private func tick() {
-        let disabled = Set(AppSettings.detectDisabledApps)
-        let active = Set(Self.appsUsingMicrophone(excluding: ownPID).map(\.id)).subtracting(disabled)
+        let users = Dictionary(Self.micUsers(excluding: ownPID).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let sources = cache.update(active: Set(users.keys)) { key in Self.source(of: users[key]!) }
+        let rules = AppSettings.sourceRules
+        var calls: [String: DetectedCall] = [:]
+        for (key, source) in sources.sorted(by: { $0.key < $1.key }) {
+            AppSettings.noteSeen(source)
+            guard rules.rule(for: source) != .never, calls[source] == nil else { continue }
+            calls[source] = DetectedCall(source: source, app: users[key]!.appName)
+        }
         detector.autoStopAfter = Double(AppSettings.detectAutoStopSeconds)
         let state = AppState.shared
-        for event in detector.update(active: active, isRecording: state.isRecording, now: Date()) {
+        for event in detector.update(active: Set(calls.keys), isRecording: state.isRecording, now: Date()) {
             switch event {
-            case .started(let id): state.meetingStarted(app: Self.name(id))
-            case .ended(let id): state.meetingEnded(app: Self.name(id))
+            case .started(let source):
+                if let call = calls[source] { state.meetingStarted(call, rule: rules.rule(for: source)) }
+            case .ended(let source): state.meetingEnded(app: source)
             case .autoStop: state.meetingAutoStop()
             }
         }
     }
 
-    private static func name(_ id: String) -> String {
-        MeetingApp.known.first { $0.id == id }?.name ?? id
+    /// Source of a mic user: its native source, or the browser's front window title.
+    static func source(of user: MicUser) -> String {
+        guard user.isBrowser else { return user.key }
+        let title = WindowTitle.front(pid: user.pid, bundleID: user.bundleID, bundlePrefixes: user.bundlePrefixes)
+        return CallSource.resolve(bundleID: user.bundleID, windowTitle: title) ?? user.appName
     }
 
-    /// Known meeting apps whose processes are currently capturing audio input.
-    nonisolated static func appsUsingMicrophone(excluding pid: pid_t) -> [MeetingApp] {
-        var result: [MeetingApp] = []
+    /// Known call apps and browsers whose processes are currently capturing audio input.
+    nonisolated static func micUsers(excluding pid: pid_t) -> [MicUser] {
+        var result: [MicUser] = []
         for process in processObjects() {
-            guard uint32(process, kAudioProcessPropertyIsRunningInput) != 0,
-                  pidOf(process) != pid,
-                  let bundle = string(process, kAudioProcessPropertyBundleID),
-                  let app = MeetingApp.match(bundleID: bundle),
-                  !result.contains(app) else { continue }
-            result.append(app)
+            let processPID = pidOf(process)
+            guard uint32(process, kAudioProcessPropertyIsRunningInput) != 0, processPID != pid,
+                  let bundle = string(process, kAudioProcessPropertyBundleID) else { continue }
+            let user: MicUser
+            if let native = CallSource.native(bundleID: bundle) {
+                user = MicUser(key: native.name, appName: native.name, bundleID: bundle, pid: processPID,
+                               bundlePrefixes: native.bundlePrefixes, isBrowser: false)
+            } else if let browser = MeetingApp.match(bundleID: bundle), browser.isBrowser {
+                user = MicUser(key: browser.id, appName: browser.name, bundleID: bundle, pid: processPID,
+                               bundlePrefixes: browser.bundlePrefixes, isBrowser: true)
+            } else {
+                continue
+            }
+            if !result.contains(where: { $0.key == user.key }) { result.append(user) }
         }
         return result
     }

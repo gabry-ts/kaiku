@@ -1,5 +1,6 @@
 import AppKit
 import UserNotifications
+import KaikuCore
 
 /// Local notifications. Clicking one that belongs to a recording (`userInfo["folder"]`)
 /// opens the Library with that recording selected. "Transcript ready" notifications
@@ -11,12 +12,16 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private static let recoveredCategory = "recovered"
     private static let callDetectedCategory = "callDetected"
     private static let callEndedCategory = "callEnded"
+    private static let callDetectedNewCategory = "callDetectedNew"
+    private static let newSourceCategory = "newSource"
     private static let openAction = "open"
     private static let copyAction = "copy"
     private static let transcribeAction = "transcribe"
     private static let recordAction = "record"
     private static let dismissAction = "dismiss"
     private static let stopAction = "stop"
+    private static let alwaysAction = "always"
+    private static let neverAction = "never"
 
     func setUp() {
         let center = UNUserNotificationCenter.current()
@@ -27,11 +32,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let record = UNNotificationAction(identifier: Self.recordAction, title: "Record", options: [.foreground])
         let dismiss = UNNotificationAction(identifier: Self.dismissAction, title: "Dismiss", options: [])
         let stop = UNNotificationAction(identifier: Self.stopAction, title: "Stop Recording", options: [])
+        let always = UNNotificationAction(identifier: Self.alwaysAction, title: "Always Record", options: [])
+        let never = UNNotificationAction(identifier: Self.neverAction, title: "Never", options: [.destructive])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Self.transcriptCategory, actions: [open, copy], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.recoveredCategory, actions: [transcribe, open], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.callDetectedCategory, actions: [record, dismiss], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.callEndedCategory, actions: [stop, dismiss], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Self.callDetectedNewCategory, actions: [record, always, never], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Self.newSourceCategory, actions: [always, never], intentIdentifiers: []),
         ])
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in
             Task { @MainActor in Permissions.shared.refresh() }
@@ -55,9 +64,18 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// "Call detected in Zoom. Record?" Clicking or Record opens the title prompt.
-    func postCallDetected(app: String) {
-        send(title: "Call detected in \(app)", body: "Record it?", userInfo: ["kind": "callDetected", "app": app],
-             category: Self.callDetectedCategory, force: true, id: "callDetected")
+    /// A new source also offers Always Record / Never.
+    func postCallDetected(_ call: DetectedCall, isNew: Bool) {
+        send(title: isNew ? "New source: \(call.source)" : "Call detected in \(call.source)", body: "Record it?",
+             userInfo: ["kind": "callDetected", "source": call.source, "app": call.app],
+             category: isNew ? Self.callDetectedNewCategory : Self.callDetectedCategory, force: true, id: "callDetected")
+    }
+
+    /// Recording already started for a source never seen before: keep recording it, or never.
+    func postNewSource(_ call: DetectedCall) {
+        send(title: "New source: \(call.source)", body: "Recording started. Always record calls from \(call.source)?",
+             userInfo: ["kind": "newSource", "source": call.source, "app": call.app],
+             category: Self.newSourceCategory, force: true, id: "newSource")
     }
 
     func postCallEnded(app: String, autoStopSeconds: Int) {
@@ -95,13 +113,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         let path = info["folder"] as? String
         let kind = info["kind"] as? String
-        let app = info["app"] as? String
+        let source = info["source"] as? String
+        let call = source.map { DetectedCall(source: $0, app: info["app"] as? String ?? $0) }
         let action = response.actionIdentifier
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 switch (kind, action) {
                 case ("callDetected", Self.recordAction), ("callDetected", UNNotificationDefaultActionIdentifier):
-                    AppState.shared.requestStart(app: app)
+                    AppState.shared.requestStart(call: call)
+                case ("callDetected", Self.alwaysAction):
+                    if let source { AppState.shared.setRule(.always, for: source) }
+                    AppState.shared.requestStart(call: call)
+                case ("callDetected", Self.neverAction), ("newSource", Self.neverAction):
+                    if let source { AppState.shared.setRule(.never, for: source) }
+                case ("newSource", Self.alwaysAction):
+                    if let source { AppState.shared.setRule(.always, for: source) }
                 case ("callEnded", Self.stopAction):
                     AppState.shared.stopRecording()
                 default: break

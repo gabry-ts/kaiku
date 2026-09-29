@@ -1,20 +1,26 @@
 import SwiftUI
 import KaikuCore
 
-/// First-run guide: what it does, permissions, provider, done.
+/// First-run guide: what it does, permissions, provider, done. `accessibilityOnly`
+/// shows just the Accessibility request, once, to people who onboarded before it existed.
 struct OnboardingView: View {
     @State var step = 0
+    var accessibilityOnly = false
     var finish: () -> Void = {}
-    private let steps = 4
+    private var steps: Int { accessibilityOnly ? 1 : 4 }
 
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                switch step {
-                case 0: WelcomeStep()
-                case 1: PermissionsStep()
-                case 2: ProviderStep()
-                default: DoneStep()
+                if accessibilityOnly {
+                    AccessibilityStep()
+                } else {
+                    switch step {
+                    case 0: WelcomeStep()
+                    case 1: PermissionsStep()
+                    case 2: ProviderStep()
+                    default: DoneStep()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -25,7 +31,7 @@ struct OnboardingView: View {
             Divider()
             HStack {
                 HStack(spacing: 6) {
-                    ForEach(0..<steps, id: \.self) { i in
+                    ForEach(0..<(steps > 1 ? steps : 0), id: \.self) { i in
                         Circle()
                             .fill(i == step ? Brand.accent : Color.secondary.opacity(0.3))
                             .frame(width: 7, height: 7)
@@ -37,9 +43,10 @@ struct OnboardingView: View {
                 if step > 0 && step < steps - 1 {
                     Button("Back") { withAnimation(.snappy) { step -= 1 } }
                 }
-                Button(step == steps - 1 ? "Start Using Kaiku" : "Continue") {
+                Button(accessibilityOnly ? "Done" : step == steps - 1 ? "Start Using Kaiku" : "Continue") {
                     if step == steps - 1 {
                         AppSettings.defaults.set(true, forKey: Keys.onboardingDone)
+                        AppSettings.defaults.set(true, forKey: Keys.accessibilityAsked)
                         finish()
                     } else {
                         withAnimation(.snappy) { step += 1 }
@@ -139,9 +146,44 @@ private struct PermissionsStep: View {
                               detail: "To name recordings after the meeting you're in.", state: permissions.calendar,
                               action: permissions.calendar == .notAsked ? "Allow" : "Open Settings…",
                               perform: { permissions.requestCalendar() })
+                Divider()
+                AccessibilityRow(permissions: permissions)
             }
             .card()
             .frame(maxWidth: 480)
+        }
+        .padding(28)
+        .onAppear { permissions.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissions.refresh()
+        }
+    }
+}
+
+private struct AccessibilityRow: View {
+    @ObservedObject var permissions: Permissions
+
+    var body: some View {
+        PermissionRow(symbol: "accessibility", tint: .purple, title: "Accessibility (optional)",
+                      detail: "To tell web calls apart, like WhatsApp Web and Meet.",
+                      state: permissions.accessibility,
+                      action: permissions.accessibility == .notAsked ? "Allow" : "Open Settings…",
+                      perform: { permissions.requestAccessibility() })
+    }
+}
+
+private struct AccessibilityStep: View {
+    @ObservedObject private var permissions = Permissions.shared
+
+    var body: some View {
+        VStack(spacing: 22) {
+            StepHeader(symbol: "macwindow.on.rectangle", title: "Choose what gets recorded",
+                       subtitle: "Kaiku can now tell apart calls from the same browser, so WhatsApp Web doesn't count as Google Meet. It reads only the title of the window in front.")
+            AccessibilityRow(permissions: permissions)
+                .card()
+                .frame(maxWidth: 480)
+            Text("You can decide which sources to record in Settings > Call Detection.")
+                .font(.callout).foregroundStyle(.secondary)
         }
         .padding(28)
         .onAppear { permissions.refresh() }

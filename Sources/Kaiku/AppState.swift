@@ -58,6 +58,8 @@ final class AppState: ObservableObject {
     private var routes: [OutputRoute] = []
     private var muteIntervals: [MuteInterval] = []
     private var cleanupTimer: Timer?
+    /// Source of the current recording when it was started automatically.
+    private var autoStartedSource: String?
 
     var isRecording: Bool { if case .recording = phase { return true } else { return false } }
 
@@ -76,13 +78,13 @@ final class AppState: ObservableObject {
     // MARK: Recording
 
     /// Shows the title prompt, prefilled from the calendar event happening now if any,
-    /// otherwise from the app that started the call.
-    func requestStart(app: String? = nil) {
+    /// otherwise from the call that was detected.
+    func requestStart(call: DetectedCall? = nil) {
         guard !isRecording else { return }
         let event = CalendarService.shared.currentEvent()
         let date = Date()
-        let title = event?.title ?? app.map { "\($0) call \(Naming.defaultTitle(date: date).dropFirst(5))" } ?? Naming.defaultTitle(date: date)
-        WindowManager.shared.showTitlePrompt(title: title, event: event)
+        let title = event?.title ?? call.map { "\($0.source) call \(Naming.defaultTitle(date: date).dropFirst(5))" } ?? Naming.defaultTitle(date: date)
+        WindowManager.shared.showTitlePrompt(title: title, event: event, call: call)
     }
 
     func toggleRecording() {
@@ -104,8 +106,9 @@ final class AppState: ObservableObject {
         WindowManager.shared.showLibrary()
     }
 
+    /// - Parameter call: the detected call being recorded; nil for a manual recording.
     func startRecording(title rawTitle: String, language rawLanguage: String, event: CalendarEventInfo? = nil,
-                        tags rawTags: [String] = []) async {
+                        tags rawTags: [String] = [], call: DetectedCall? = nil) async {
         guard !isRecording else { return }
         let date = Date()
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -123,7 +126,8 @@ final class AppState: ObservableObject {
             let folder = try makeFolder(date: date, title: title)
             try folder.saveMeta(RecordingMeta(
                 title: title, date: date, durationSeconds: 0, language: language,
-                status: .recording, calendarEvent: event, tags: Tags.normalize(rawTags).nilIfEmpty))
+                status: .recording, calendarEvent: event, tags: Tags.normalize(rawTags).nilIfEmpty,
+                source: call?.source ?? CallSource.manual, sourceApp: call?.app))
             if !rawTags.isEmpty { AppSettings.defaults.set(Tags.normalize(rawTags), forKey: Keys.lastTags) }
             let micSetting = AppSettings.microphone
             let micDevice = AudioDevices.resolveMicrophone(setting: micSetting)
@@ -148,6 +152,7 @@ final class AppState: ObservableObject {
             isPaused = false
             bookmarks = []
             currentEvent = event
+            autoStartedSource = nil
             AppSettings.lastRecordingFolder = folder.url
             phase = .recording(title: title, start: date)
             now = date
@@ -162,6 +167,35 @@ final class AppState: ObservableObject {
             }
         } catch {
             fail("Could not start recording. \(error.diagnosticDescription)", folderPath: nil)
+        }
+    }
+
+    /// Stops the current recording and deletes it for good, without transcribing.
+    func discardRecording() {
+        guard isRecording, let rec = recorder, let folder = currentFolder else { return }
+        recorder = nil
+        stopTicker()
+        stopLevelTimer()
+        currentFolder = nil
+        clock = nil
+        currentMic = nil
+        isPaused = false
+        currentEvent = nil
+        autoStartedSource = nil
+        bookmarks = []
+        phase = .idle
+        Task {
+            await Task.detached { rec.stop() }.value
+            do {
+                try FileManager.default.removeItem(at: folder.url)
+                Log.app.info("Recording discarded: \(folder.url.path, privacy: .public)")
+            } catch {
+                Log.app.error("Could not delete discarded recording: \(error.localizedDescription, privacy: .public)")
+            }
+            if let last = AppSettings.lastRecordingFolder, RecordingFolder(url: last).key == folder.key {
+                AppSettings.lastRecordingFolder = nil
+            }
+            libraryVersion += 1
         }
     }
 
@@ -467,15 +501,34 @@ final class AppState: ObservableObject {
 
     // MARK: Call detection
 
-    func meetingStarted(app: String) {
+    /// A call started. `rule` is never `.never` here: those are filtered out by the monitor.
+    func meetingStarted(_ call: DetectedCall, rule: SourceRule) {
         guard !isRecording else { return }
         if AppSettings.detectAutoStart {
             let event = CalendarService.shared.currentEvent()
-            let title = event?.title ?? "\(app) call \(Naming.defaultTitle(date: Date()).dropFirst(5))"
-            Task { await startRecording(title: title, language: AppSettings.language, event: event) }
-            Notifier.shared.post(title: "Recording started", body: "Call detected in \(app).", folderPath: nil)
+            let title = event?.title ?? "\(call.source) call \(Naming.defaultTitle(date: Date()).dropFirst(5))"
+            Task {
+                await startRecording(title: title, language: AppSettings.language, event: event, call: call)
+                if isRecording { autoStartedSource = call.source }
+            }
+            if rule == .new {
+                Notifier.shared.postNewSource(call)
+            } else {
+                Notifier.shared.post(title: "Recording started", body: "Call detected in \(call.source).", folderPath: nil)
+            }
         } else {
-            Notifier.shared.postCallDetected(app: app)
+            Notifier.shared.postCallDetected(call, isNew: rule == .new)
+        }
+    }
+
+    /// Saves the Always/Never choice for a source. Never also discards the recording
+    /// that was started automatically for it.
+    func setRule(_ rule: SourceRule, for source: String) {
+        var rules = AppSettings.sourceRules
+        rules.set(rule, for: source)
+        AppSettings.sourceRules = rules
+        if rule == .never, let current = autoStartedSource, current.caseInsensitiveCompare(source) == .orderedSame {
+            discardRecording()
         }
     }
 
@@ -507,6 +560,13 @@ final class AppState: ObservableObject {
         meta.tags = Tags.normalize(tags).nilIfEmpty
         try? folder.saveMeta(meta)
         if let raw = folder.loadSegments() { _ = try? TranscriptWriter.write(folder: folder, meta: meta, rawSegments: raw) }
+        libraryVersion += 1
+    }
+
+    /// Relabels one recording; detection rules are not touched.
+    func setSource(_ folder: RecordingFolder, _ source: String) {
+        let s = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        folder.updateMeta { $0.source = s.isEmpty ? nil : s }
         libraryVersion += 1
     }
 

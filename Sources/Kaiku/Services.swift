@@ -151,6 +151,9 @@ final class Permissions: ObservableObject {
     @Published private(set) var microphone: PermissionState = .unknown
     @Published private(set) var notifications: PermissionState = .unknown
     @Published private(set) var calendar: PermissionState = .unknown
+    /// Used to read call window titles (the source of browser calls).
+    @Published private(set) var accessibility: PermissionState = .unknown
+    var accessibilityGranted: Bool { AXIsProcessTrusted() }
     /// macOS has no API to query system audio recording permission. We know it
     /// works once a recording captured non-silent system audio.
     var systemAudioVerified: Bool { AppSettings.defaults.bool(forKey: Keys.systemAudioVerified) }
@@ -162,6 +165,8 @@ final class Permissions: ObservableObject {
         default: microphone = .denied
         }
         calendar = CalendarService.shared.state
+        accessibility = accessibilityGranted ? .granted
+            : AppSettings.defaults.bool(forKey: Keys.accessibilityAsked) ? .denied : .notAsked
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let state: PermissionState
             switch settings.authorizationStatus {
@@ -203,7 +208,19 @@ final class Permissions: ObservableObject {
         }
     }
 
-    enum Pane { case microphone, systemAudio, notifications, calendar, loginItems }
+    /// macOS shows its own prompt only once; later we open System Settings.
+    func requestAccessibility() {
+        if accessibility == .notAsked {
+            let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+            AppSettings.defaults.set(true, forKey: Keys.accessibilityAsked)
+        } else {
+            Self.open(.accessibility)
+        }
+        refresh()
+    }
+
+    enum Pane { case microphone, systemAudio, notifications, calendar, accessibility, loginItems }
 
     static func open(_ pane: Pane) {
         let url: String
@@ -212,6 +229,7 @@ final class Permissions: ObservableObject {
         case .systemAudio: url = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         case .notifications: url = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
         case .calendar: url = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
+        case .accessibility: url = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
         case .loginItems:
             SMAppService.openSystemSettingsLoginItems()
             return

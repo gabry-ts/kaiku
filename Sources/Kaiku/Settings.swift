@@ -122,6 +122,10 @@ enum Keys {
     static let detectAutoStart = "detectAutoStart"
     static let detectEndNotify = "detectEndNotify"
     static let detectAutoStopSeconds = "detectAutoStopSeconds"
+    static let detectSourceRules = "detectSourceRules"
+    static let detectSeenSources = "detectSeenSources"
+    static let sourceRulesMigrated = "sourceRulesMigrated"
+    static let accessibilityAsked = "accessibilityAsked"
     static let calendarEnabled = "calendarEnabled"
     static let calendarIDs = "calendarIDs"
     static let summaryEnabled = "summaryEnabled"
@@ -292,6 +296,24 @@ enum AppSettings {
     static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
     static var detectEndNotify: Bool { defaults.bool(forKey: Keys.detectEndNotify) }
     static var detectAutoStopSeconds: Int { defaults.integer(forKey: Keys.detectAutoStopSeconds) }
+
+    /// Always/Never choice per call source.
+    static var sourceRules: SourceRules {
+        get {
+            defaults.data(forKey: Keys.detectSourceRules)
+                .flatMap { try? JSONDecoder().decode(SourceRules.self, from: $0) } ?? SourceRules()
+        }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectSourceRules) }
+    }
+
+    /// Every call source detected so far, for the Settings list.
+    static var seenSources: [String] { defaults.stringArray(forKey: Keys.detectSeenSources) ?? [] }
+
+    static func noteSeen(_ source: String) {
+        let seen = seenSources
+        guard !seen.contains(where: { $0.caseInsensitiveCompare(source) == .orderedSame }) else { return }
+        defaults.set(seen + [source], forKey: Keys.detectSeenSources)
+    }
 
     static var autoCleanupEnabled: Bool { defaults.bool(forKey: Keys.autoCleanupEnabled) }
     static var autoCleanupDays: Int { max(1, defaults.integer(forKey: Keys.autoCleanupDays)) }
