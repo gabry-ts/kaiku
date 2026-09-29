@@ -182,7 +182,7 @@ private struct AccessibilityStep: View {
             AccessibilityRow(permissions: permissions)
                 .card()
                 .frame(maxWidth: 480)
-            Text("You can decide which sources to record in Settings > Call Detection.")
+            Text("You can decide which sources to record in Settings > Sources.")
                 .font(.callout).foregroundStyle(.secondary)
         }
         .padding(28)

@@ -45,7 +45,7 @@ final class MeetingMonitor {
     }
 
     private func tick() {
-        let users = Dictionary(Self.micUsers(excluding: ownPID).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let users = Dictionary(Self.micUsers(excluding: ownPID, custom: AppSettings.customApps).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let sources = cache.update(active: Set(users.keys)) { key in Self.source(of: users[key]!) }
         let rules = AppSettings.sourceRules
         var calls: [String: DetectedCall] = [:]
@@ -97,14 +97,14 @@ final class MeetingMonitor {
     }
 
     /// Known call apps and browsers whose processes are currently capturing audio input.
-    nonisolated static func micUsers(excluding pid: pid_t) -> [MicUser] {
+    nonisolated static func micUsers(excluding pid: pid_t, custom: [CustomApp]) -> [MicUser] {
         var result: [MicUser] = []
         for process in processObjects() {
             let processPID = pidOf(process)
             guard uint32(process, kAudioProcessPropertyIsRunningInput) != 0, processPID != pid,
                   let bundle = string(process, kAudioProcessPropertyBundleID) else { continue }
             let user: MicUser
-            if let native = CallSource.native(bundleID: bundle) {
+            if let native = CallSource.native(bundleID: bundle, custom: custom) {
                 user = MicUser(key: native.name, appName: native.name, bundleID: bundle, pid: processPID,
                                bundlePrefixes: native.bundlePrefixes, isBrowser: false)
             } else if let browser = MeetingApp.match(bundleID: bundle), browser.isBrowser {

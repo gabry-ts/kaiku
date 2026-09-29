@@ -2,7 +2,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, shortcuts, recording, transcription, webhook, permissions, about
+    case general, shortcuts, recording, sources, transcription, webhook, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -10,6 +10,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .shortcuts: return "Shortcuts"
         case .recording: return "Recording"
+        case .sources: return "Sources"
         case .transcription: return "Transcription"
         case .webhook: return "Webhook"
         case .permissions: return "Permissions"
@@ -22,6 +23,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .shortcuts: return "keyboard"
         case .recording: return "mic"
+        case .sources: return "dot.radiowaves.left.and.right"
         case .transcription: return "text.quote"
         case .webhook: return "paperplane"
         case .permissions: return "lock.shield"
@@ -34,6 +36,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return .gray
         case .shortcuts: return .indigo
         case .recording: return Brand.accent
+        case .sources: return .teal
         case .transcription: return .blue
         case .webhook: return .purple
         case .permissions: return .green
@@ -69,6 +72,7 @@ struct SettingsView: View {
                 case .general: GeneralSettings()
                 case .shortcuts: ShortcutSettings()
                 case .recording: RecordingSettings()
+                case .sources: SourcesSettings()
                 case .transcription: TranscriptionSettings()
                 case .webhook: WebhookSettings()
                 case .permissions: PermissionsSettings()
@@ -355,8 +359,6 @@ struct CallDetectionSection: View {
     @AppStorage(Keys.detectAutoStart) private var autoStart = false
     @AppStorage(Keys.detectEndNotify) private var endNotify = true
     @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
-    @State private var rules = SourceRules()
-    @State private var sources: [String] = []
 
     var body: some View {
         Section {
@@ -372,29 +374,11 @@ struct CallDetectionSection: View {
                     Text("After 2 minutes").tag(120)
                     Text("After 5 minutes").tag(300)
                 }
-                DisclosureGroup("Sources") {
-                    ForEach(sources, id: \.self) { source in
-                        Picker(source, selection: Binding(
-                            get: { rules.rule(for: source) },
-                            set: { rule in
-                                rules.set(rule, for: source)
-                                AppSettings.sourceRules = rules
-                            })) {
-                            Text("Always").tag(SourceRule.always)
-                            Text("Never").tag(SourceRule.never)
-                            Text("New (ask)").tag(SourceRule.new)
-                        }
-                    }
-                }
             }
         } header: {
             Text("Call Detection")
         } footer: {
-            Text("Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. A new source is recorded the first time, then Kaiku asks whether to always record it. Web calls are told apart by the browser window title, which needs the Accessibility permission.")
-        }
-        .onAppear {
-            rules = AppSettings.sourceRules
-            sources = rules.listed(seen: AppSettings.seenSources)
+            Text("Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources.")
         }
     }
 }

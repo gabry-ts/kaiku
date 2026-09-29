@@ -315,7 +315,7 @@ enum SelfTest {
         setvbuf(stdout, nil, _IONBF, 0)
         let all = MeetingMonitor.inputProcessBundleIDs()
         print("Processes using audio input: \(all.isEmpty ? "none" : all.joined(separator: ", "))")
-        let users = MeetingMonitor.micUsers(excluding: getpid())
+        let users = MeetingMonitor.micUsers(excluding: getpid(), custom: AppSettings.customApps)
         let sources = MainActor.assumeIsolated { users.map { "\(MeetingMonitor.source(of: $0)) (\($0.appName))" } }
         print("Call sources detected: \(sources.isEmpty ? "none" : sources.joined(separator: ", "))")
         return 0

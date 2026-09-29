@@ -124,6 +124,8 @@ enum Keys {
     static let detectAutoStopSeconds = "detectAutoStopSeconds"
     static let detectSourceRules = "detectSourceRules"
     static let detectSeenSources = "detectSeenSources"
+    static let detectCustomApps = "detectCustomApps"
+    static let detectRemovedSources = "detectRemovedSources"
     static let sourceRulesMigrated = "sourceRulesMigrated"
     static let accessibilityAsked = "accessibilityAsked"
     static let calendarEnabled = "calendarEnabled"
@@ -304,6 +306,21 @@ enum AppSettings {
                 .flatMap { try? JSONDecoder().decode(SourceRules.self, from: $0) } ?? SourceRules()
         }
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectSourceRules) }
+    }
+
+    /// Apps added by hand in Settings > Sources.
+    static var customApps: [CustomApp] {
+        get {
+            defaults.data(forKey: Keys.detectCustomApps)
+                .flatMap { try? JSONDecoder().decode([CustomApp].self, from: $0) } ?? []
+        }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectCustomApps) }
+    }
+
+    /// Sources removed from the Settings list (their rule is Never).
+    static var removedSources: [String] {
+        get { defaults.stringArray(forKey: Keys.detectRemovedSources) ?? [] }
+        set { defaults.set(newValue, forKey: Keys.detectRemovedSources) }
     }
 
     /// Every call source detected so far, for the Settings list.
