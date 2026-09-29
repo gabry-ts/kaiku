@@ -45,12 +45,15 @@ enum Snapshots {
             $0.estimatedCostUSD = 0.21
             $0.summaryModel = "gpt-5-mini"
             $0.calendarEvent = Fixtures.event(title: "Weekly sync with design team", start: $0.date)
+            $0.source = "Google Meet"
+            $0.sourceApp = "Google Chrome"
         }
         try? Fixtures.designSummary.write(to: folders[0].summaryURL, atomically: true, encoding: .utf8)
-        folders[1].updateMeta { $0.tags = ["Sales", "Acme"] }
-        folders[2].updateMeta { $0.tags = ["Hiring"] }
-        folders[4].updateMeta { $0.tags = ["Engineering"] }
-        folders[5].updateMeta { $0.tags = ["Nova", "Roadmap"] }
+        folders[1].updateMeta { $0.tags = ["Sales", "Acme"]; $0.source = "Zoom" }
+        folders[2].updateMeta { $0.tags = ["Hiring"]; $0.source = "Microsoft Teams" }
+        folders[3].updateMeta { $0.source = CallSource.manual }
+        folders[4].updateMeta { $0.tags = ["Engineering"]; $0.source = "Google Meet"; $0.sourceApp = "Safari" }
+        folders[5].updateMeta { $0.tags = ["Nova", "Roadmap"]; $0.source = "Zoom" }
         let state = AppState.shared
 
         func both(_ name: String, size: CGSize?, chrome: Bool = true, _ view: @escaping () -> AnyView) {

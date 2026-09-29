@@ -38,6 +38,7 @@ struct LibraryView: View {
     @State private var items: [LibraryItem] = []
     @State private var search = ""
     @State private var tagFilter: String?
+    @State private var sourceFilter: String?
     @State private var selection: Set<String> = []
     @State private var deleteCallTargets: [RecordingFolder] = []
     @State private var deleteAudioTargets: [RecordingFolder] = []
@@ -49,14 +50,21 @@ struct LibraryView: View {
         Tags.byRecency(items.map { ($0.meta.date, $0.meta.tags ?? []) })
     }
 
+    /// Sources of the recordings, most recently used first.
+    private var allSources: [String] {
+        Tags.byRecency(items.map { ($0.meta.date, [$0.meta.source].compactMap { $0 }) })
+    }
+
     private var filtered: [LibraryItem] {
         let q = search.trimmingCharacters(in: .whitespaces)
         return items.filter { item in
             let tags = item.meta.tags ?? []
             if let tagFilter, !Tags.contains(tags, tagFilter) { return false }
+            if let sourceFilter, !Tags.contains([item.meta.source].compactMap { $0 }, sourceFilter) { return false }
             guard !q.isEmpty else { return true }
             return item.meta.title.localizedCaseInsensitiveContains(q)
                 || tags.contains { $0.localizedCaseInsensitiveContains(q) }
+                || (item.meta.source?.localizedCaseInsensitiveContains(q) ?? false)
                 || (item.transcript?.localizedCaseInsensitiveContains(q) ?? false)
         }
     }
@@ -95,16 +103,20 @@ struct LibraryView: View {
                 contextMenu(for: items.filter { ids.contains($0.id) })
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                if !allTags.isEmpty { tagFilterBar }
+                VStack(spacing: 0) {
+                    if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
+                    if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
+                }
             }
-            .searchable(text: $search, placement: .sidebar, prompt: "Search calls, tags and transcripts")
+            .searchable(text: $search, placement: .sidebar, prompt: "Search calls, tags, sources and transcripts")
             .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 380)
             .overlay {
                 if items.isEmpty {
                     Text("No recordings").foregroundStyle(.tertiary)
                 } else if filtered.isEmpty {
                     if search.isEmpty {
-                        ContentUnavailableView("No Calls Tagged \(tagFilter ?? "")", systemImage: "tag")
+                        ContentUnavailableView("No Matching Calls", systemImage: "line.3.horizontal.decrease.circle",
+                                               description: Text([tagFilter, sourceFilter].compactMap { $0 }.joined(separator: " · ")))
                     } else {
                         ContentUnavailableView.search(text: search)
                     }
@@ -178,12 +190,19 @@ struct LibraryView: View {
         }
     }
 
-    private var tagFilterBar: some View {
+    /// Chips to filter by one value (a tag or a source).
+    private func filterBar(_ values: [String], selection: Binding<String?>, symbol: String? = nil) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 5) {
-                filterChip("All", selected: tagFilter == nil) { tagFilter = nil }
-                ForEach(allTags, id: \.self) { tag in
-                    filterChip(tag, selected: tagFilter == tag) { tagFilter = tagFilter == tag ? nil : tag }
+                if let symbol {
+                    Image(systemName: symbol).font(.caption).foregroundStyle(.secondary)
+                        .help("Filter by source")
+                }
+                filterChip("All", selected: selection.wrappedValue == nil) { selection.wrappedValue = nil }
+                ForEach(values, id: \.self) { value in
+                    filterChip(value, selected: selection.wrappedValue == value) {
+                        selection.wrappedValue = selection.wrappedValue == value ? nil : value
+                    }
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -429,6 +448,8 @@ private struct RecordingDetail: View {
     @State private var exportError: String?
     @State private var bytes: Int64 = 0
     @State private var editingTitle = false
+    @State private var source = ""
+    @State private var editingSource = false
     @FocusState private var titleFocused: Bool
     @State private var showErrorDetails = false
     @State private var webhookStatus: (ok: Bool, text: String)?
@@ -479,6 +500,7 @@ private struct RecordingDetail: View {
         .toolbar { toolbar }
         .onAppear {
             title = item.meta.title
+            source = item.meta.source ?? ""
             tags = item.meta.tags ?? []
             bytes = item.folder.totalBytes
             if item.folder.hasSummary && (!item.folder.hasTranscript || LibraryView.preferSummaryTab) { tab = .summary }
@@ -615,6 +637,7 @@ private struct RecordingDetail: View {
                     Label(event.calendar.map { "\($0) event" } ?? "Calendar event", systemImage: "calendar.badge.clock")
                         .help(([event.title] + event.attendeeNames).joined(separator: "\n"))
                 }
+                sourceField
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -622,6 +645,27 @@ private struct RecordingDetail: View {
             TagField(tags: $tags, known: knownTags, placeholder: "Add tag")
                 .font(.callout)
                 .frame(maxWidth: 520, alignment: .leading)
+        }
+    }
+
+    /// Where the call came from; editable, it only relabels this recording.
+    @ViewBuilder private var sourceField: some View {
+        if editingSource {
+            TextField("Source", text: $source, prompt: Text("Source"))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 160)
+                .onSubmit {
+                    state.setSource(item.folder, source)
+                    editingSource = false
+                }
+                .onExitCommand { source = item.meta.source ?? ""; editingSource = false }
+        } else {
+            Button { editingSource = true } label: {
+                Label(source.isEmpty ? "No source" : source, systemImage: "dot.radiowaves.left.and.right")
+            }
+            .buttonStyle(.borderless)
+            .help((item.meta.sourceApp.map { "Recorded from \($0). " } ?? "") + "Click to change the source.")
+            .accessibilityLabel("Source: \(source.isEmpty ? "none" : source). Change")
         }
     }
 
