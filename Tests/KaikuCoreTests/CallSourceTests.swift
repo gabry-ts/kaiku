@@ -81,3 +81,27 @@ final class CallSourceTests: XCTestCase {
         XCTAssertEqual(rules.rule(for: "Slack"), .always)
     }
 }
+
+final class SourceCacheTests: XCTestCase {
+    func testSourceIsResolvedOnceWhileActive() {
+        var cache = SourceCache()
+        var calls = 0
+        var title = "WhatsApp"
+        let resolve: (String) -> String = { _ in calls += 1; return title }
+        XCTAssertEqual(cache.update(active: ["chrome"], resolve: resolve), ["chrome": "WhatsApp"])
+        title = "Gmail"
+        XCTAssertEqual(cache.update(active: ["chrome"], resolve: resolve), ["chrome": "WhatsApp"])
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testSourceIsResolvedAgainAfterTheAppStops() {
+        var cache = SourceCache()
+        var title = "WhatsApp"
+        let resolve: (String) -> String = { _ in title }
+        _ = cache.update(active: ["chrome"], resolve: resolve)
+        XCTAssertEqual(cache.update(active: [], resolve: resolve), [:])
+        title = "Google Meet"
+        XCTAssertEqual(cache.update(active: ["chrome", "Zoom"], resolve: { $0 == "Zoom" ? "Zoom" : title }),
+                       ["chrome": "Google Meet", "Zoom": "Zoom"])
+    }
+}

@@ -132,3 +132,19 @@ public struct SourceRules: Codable, Equatable, Sendable {
         return rules
     }
 }
+
+/// Source of each app using the mic, resolved once when the app starts using it and
+/// kept until it stops, so switching browser tabs mid-call doesn't change the source.
+public struct SourceCache: Sendable {
+    /// App key → source name.
+    public private(set) var sources: [String: String] = [:]
+
+    public init() {}
+
+    /// Forgets apps that stopped using the mic and resolves the ones that just started.
+    public mutating func update(active: Set<String>, resolve: (String) -> String) -> [String: String] {
+        sources = sources.filter { active.contains($0.key) }
+        for key in active where sources[key] == nil { sources[key] = resolve(key) }
+        return sources
+    }
+}
