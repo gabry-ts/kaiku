@@ -174,6 +174,11 @@ public struct SourceRules: Codable, Equatable, Sendable {
         saved[source] = rule
     }
 
+    /// Drops the saved choice, so the default applies again.
+    public mutating func forget(_ source: String) {
+        for key in saved.keys where key.caseInsensitiveCompare(source) == .orderedSame { saved[key] = nil }
+    }
+
     /// Sources to list in Settings: the known ones first, then apps added by hand and
     /// every other source seen or decided, alphabetically, without duplicates
     /// (case-insensitive). Removed sources are left out.

@@ -65,6 +65,8 @@ final class CallSourceTests: XCTestCase {
         XCTAssertEqual(rules.saved.count, 1)
         rules.set(.never, for: "Zoom")
         XCTAssertEqual(rules.rule(for: "zoom"), .never)
+        rules.forget("ZOOM")
+        XCTAssertEqual(rules.rule(for: "Zoom"), .always)
     }
 
     func testRulesRoundTripThroughJSON() throws {
