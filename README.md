@@ -344,7 +344,7 @@ Settings > Recording > Call Detection (on by default). Every few seconds Kaiku a
 
 Every call gets a **source**: the app name, or for a browser the title of its front window (`WhatsApp`, `Google Meet`), read through Accessibility. The same service is one source in the app and on the web. Without the Accessibility permission a browser call's source is the browser name.
 
-- Each source is **Always**, **Never** or **New** in Settings > Call Detection > Sources. Call apps default to Always, messaging apps with voice notes (WhatsApp, Telegram, Signal, Viber, Element) and unknown web pages to New.
+- Each source is **Always**, **Never** or **New** in Settings > Sources. Call apps default to Always, messaging apps with voice notes (WhatsApp, Telegram, Signal, Viber, Element) and unknown web pages to New. **Add App…** picks any other app from the Finder (a softphone, say); any source can be removed, which ignores it, and restored later.
 - An Always source shows "Call detected in Zoom" with **Record** or **Dismiss**, or starts right away with *Start recording automatically*. Never sources are ignored.
 - A New source offers **Always Record** or **Never**. With automatic start it records first and asks after: Never stops the recording and deletes it.
 - Without a calendar event, an auto-detected recording is named after the call window (Teams meeting name, FaceTime contact, WhatsApp chat), else "Zoom call 2026-09-23 14:30".
