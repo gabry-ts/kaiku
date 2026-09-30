@@ -100,6 +100,14 @@ enum Snapshots {
         both("panel-idle", size: nil, chrome: false, panel)
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0.62, system: 0.41)
         both("panel-recording", size: nil, chrome: false, panel)
+        if LiveTranscription.isSupported {
+            state.live.setPreview(Fixtures.liveTranscript)
+            both("panel-recording-live", size: nil, chrome: false, panel)
+            state.live.setPreview(Fixtures.liveTranscript, running: false,
+                                  notice: "Live transcription stopped (call audio): The speech recognizer was interrupted.")
+            snap(panel(), name: "panel-recording-live-failed-light", size: nil, dark: false, chrome: false, dir: dir)
+            state.live.setPreview(LiveTranscript(), running: false)
+        }
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0, system: 0,
                          paused: true, bookmarks: [Bookmark(time: 312, label: "Pricing question"), Bookmark(time: 540)])
         both("panel-paused", size: nil, chrome: false, panel)
@@ -386,6 +394,18 @@ private enum Fixtures {
         seg(230, "Speaker 2", "Works for me. I'll write the migration plan by Friday."),
         seg(241, "Speaker 1", "Makes sense. I'll share the updated roadmap after the call."),
     ]
+
+    static let liveTranscript: LiveTranscript = {
+        var t = LiveTranscript()
+        t.addFinal("Morning everyone. Today I'd like to lock the Q4 roadmap.", speaker: .me, start: 3, end: 8)
+        t.addFinal("Ready when you are. I updated the file with the latest onboarding screens.", speaker: .them, start: 9, end: 15)
+        t.addFinal("Great. Three big items: onboarding, billing and the new library.", speaker: .me, start: 24, end: 30)
+        t.addFinal("Onboarding is basically ready. We tested it with five users last week and four finished without help.",
+                   speaker: .them, start: 41, end: 50)
+        t.addFinal("Nice. What tripped up the fifth one?", speaker: .me, start: 58, end: 61)
+        t.setPartial("The permissions step. I'll add a short explainer before", speaker: .them, at: 63)
+        return t
+    }()
 
     static let kickoff: [Segment] = [
         seg(4, "Me", "Benvenuti al kickoff di Nova. Partiamo dagli obiettivi del trimestre."),

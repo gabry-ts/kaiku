@@ -160,6 +160,7 @@ extension PopoverSection {
     var title: String {
         switch self {
         case .record: return "Record button"
+        case .live: return "Live transcript"
         case .mute: return "Mute all microphones"
         case .status: return "Transcription status"
         case .recovered: return "Recovered calls"
@@ -170,6 +171,7 @@ extension PopoverSection {
     var detail: String {
         switch self {
         case .record: return "Always shown, at the top."
+        case .live: return "What is being said, while recording with live transcription on."
         case .mute: return "The switch that silences every microphone."
         case .status: return "Progress and result of the latest transcription."
         case .recovered: return "Calls saved after an interruption."
@@ -180,6 +182,7 @@ extension PopoverSection {
     var symbol: String {
         switch self {
         case .record: return "record.circle"
+        case .live: return "captions.bubble"
         case .mute: return "mic.slash"
         case .status: return "waveform"
         case .recovered: return "arrow.uturn.backward.circle"

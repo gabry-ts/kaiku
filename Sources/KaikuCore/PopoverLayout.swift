@@ -5,6 +5,8 @@ import Foundation
 public enum PopoverSection: String, CaseIterable, Codable, Sendable {
     /// The Start Recording button, or the card of the recording in progress.
     case record
+    /// What is being said, while recording with live transcription on.
+    case live
     /// The Mute all microphones switch.
     case mute
     /// Progress and result of the transcription.

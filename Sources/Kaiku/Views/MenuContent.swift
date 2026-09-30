@@ -34,6 +34,8 @@ struct MenuPanel: View {
                     recordSection
                     // A failed transcription shows even with the status section switched off.
                     if !sections.contains(.status) { errorCard }
+                case .live:
+                    if state.isRecording { LiveCard(live: state.live) }
                 case .mute: MuteCard(muter: muter)
                 case .status: statusSection
                 case .recovered: recoveredSection
@@ -274,6 +276,8 @@ private struct RecordingCard: View {
                     }
                     .help("Switch microphone without stopping")
                 }
+
+                LiveNotice(live: state.live)
 
                 HStack(spacing: PUI.Space.m) {
                     Button { state.togglePause() } label: {

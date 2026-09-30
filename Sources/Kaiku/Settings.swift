@@ -357,8 +357,10 @@ enum AppSettings {
 
     /// The popover's sections from their saved form: sections added since it was saved go
     /// to the end, ones that no longer exist are dropped. Nothing saved is the standard layout.
+    /// The live transcript is left out where live transcription can't run.
     static func popoverItems(from data: Data?) -> [PopoverItem] {
-        PopoverLayout.settled(Reorder.normalized(PopoverLayout.decode(data), known: PopoverLayout.defaults, by: \.section))
+        let known = PopoverLayout.defaults.filter { $0.section != .live || LiveTranscription.isSupported }
+        return PopoverLayout.settled(Reorder.normalized(PopoverLayout.decode(data), known: known, by: \.section))
     }
 
     /// What the popover shows and in which order.

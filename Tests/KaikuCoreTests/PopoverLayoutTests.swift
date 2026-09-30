@@ -3,9 +3,9 @@ import XCTest
 
 final class PopoverLayoutTests: XCTestCase {
     func testDefaultsAreTheStandardLayout() {
-        XCTAssertEqual(PopoverLayout.defaults.map(\.section), [.record, .mute, .status, .recovered, .recent])
+        XCTAssertEqual(PopoverLayout.defaults.map(\.section), [.record, .live, .mute, .status, .recovered, .recent])
         XCTAssertTrue(PopoverLayout.defaults.allSatisfy(\.isOn))
-        XCTAssertEqual(PopoverLayout.visible(PopoverLayout.defaults), [.record, .mute, .status, .recovered, .recent])
+        XCTAssertEqual(PopoverLayout.visible(PopoverLayout.defaults), [.record, .live, .mute, .status, .recovered, .recent])
     }
 
     func testOnlyRecordIsLocked() {
@@ -40,6 +40,11 @@ final class PopoverLayoutTests: XCTestCase {
         XCTAssertEqual(PopoverLayout.decode(saved), [PopoverItem(.recent, isOn: false), PopoverItem(.mute)])
         XCTAssertEqual(PopoverLayout.decode(nil), [])
         XCTAssertEqual(PopoverLayout.decode(Data("nope".utf8)), [])
+    }
+
+    func testLayoutSavedBeforeLiveStillReads() {
+        let saved = Data(#"[{"id":"record","on":true},{"id":"recent","on":true},{"id":"mute","on":false}]"#.utf8)
+        XCTAssertEqual(PopoverLayout.decode(saved), [PopoverItem(.record), PopoverItem(.recent), PopoverItem(.mute, isOn: false)])
     }
 
     func testRecentCount() {
