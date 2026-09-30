@@ -101,26 +101,6 @@ struct GroupRow<Content: View>: View {
     }
 }
 
-/// A settings row with a switch on the right; the title also names the switch for VoiceOver.
-struct SwitchRow: View {
-    let title: String
-    var subtitle: String?
-    @Binding var isOn: Bool
-
-    init(_ title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
-        self.title = title
-        self.subtitle = subtitle
-        self._isOn = isOn
-    }
-
-    var body: some View {
-        SettingsRow(Text(title), subtitle: subtitle.map { Text($0) }) {
-            Toggle(isOn: $isOn) { Text(title) }
-                .toggleStyle(PUISwitchStyle(showsLabel: false))
-        }
-    }
-}
-
 /// A multi-line text editor drawn like a Partiti UI field.
 struct EditorField: View {
     @Binding var text: String

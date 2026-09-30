@@ -79,21 +79,14 @@ struct MenuPanel: View {
 
         } footer: {
             PopoverFooter(
-                actions: [.init("Recordings", symbol: "list.bullet.rectangle") { openRecordings() }],
+                actions: [.init("Recordings", symbol: "list.bullet.rectangle",
+                                shortcut: KeyboardShortcut("l", modifiers: .command)) { openRecordings() }],
                 onSettings: {
                     closePanel()
                     WindowManager.shared.showSettings()
                 },
                 onCheckForUpdates: { UpdaterManager.shared.checkForUpdates() },
                 onBuyMeACoffee: { BuyMeACoffee.open() })
-                .background {
-                    // The footer's Recordings action has no key equivalent of its own.
-                    Button("Recordings", action: openRecordings)
-                        .keyboardShortcut("l", modifiers: .command)
-                        .opacity(0)
-                        .frame(width: 0, height: 0)
-                        .accessibilityHidden(true)
-                }
         }
         .puiAccent(.kaiku)
         .onAppear(perform: reload)
@@ -241,7 +234,7 @@ private struct RecordingCard: View {
                 .opacity(paused ? 0.45 : 1)
 
                 if let mic = state.currentMic {
-                    Menu {
+                    PopUpMenu(mic.name, symbol: "mic") {
                         ForEach(AudioDevices.inputs()) { d in
                             Button {
                                 state.switchMicrophone(to: d)
@@ -253,13 +246,7 @@ private struct RecordingCard: View {
                                 }
                             }
                         }
-                    } label: {
-                        PopUpField(mic.name, symbol: "mic")
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
                     .help("Switch microphone without stopping")
                 }
 

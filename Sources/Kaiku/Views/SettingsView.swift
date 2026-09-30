@@ -69,9 +69,6 @@ struct SettingsView: View {
             case .about: AboutSettings()
             }
         }
-        // The sidebar leaves room for the traffic lights itself, so it runs under the
-        // transparent title bar instead of below it.
-        .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: PUI.Window.settingsMin.width, minHeight: PUI.Window.settingsMin.height)
         .defaultAppStorage(AppSettings.defaults)
         .puiAccent(.kaiku)
@@ -513,18 +510,6 @@ struct PermissionRow: View {
             }
         }
         .font(.system(size: 12))
-    }
-}
-
-/// A value on the right of a settings row, in secondary body text with steady digits.
-struct ValueText: View {
-    let text: String
-    @Environment(\.colorScheme) private var scheme
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text).font(PUI.Font.body).monospacedDigit().foregroundStyle(Ink(scheme).secondary)
     }
 }
 
