@@ -1,5 +1,6 @@
 import Foundation
 import KaikuCore
+import PartitiUI
 import Security
 
 enum ProviderKind: String, CaseIterable, Identifiable, Codable {
@@ -136,6 +137,8 @@ enum Keys {
     static let summaryPrompt = "summaryPrompt"
     static let lastTags = "lastTags"
     static let removeEcho = "removeEcho"
+    static let popoverSections = "popoverSections"
+    static let popoverRecentCount = "popoverRecentCount"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
 }
@@ -180,6 +183,7 @@ enum AppSettings {
             Keys.calendarEnabled: true,
             Keys.calendarIDs: [String](),
             Keys.removeEcho: true,
+            Keys.popoverRecentCount: PopoverLayout.defaultRecentCount,
             Keys.summaryEnabled: false,
             Keys.summaryProvider: SummaryProviderKind.openAI.rawValue,
             Keys.summaryPrompt: SummaryAPI.defaultPrompt,
@@ -344,6 +348,21 @@ enum AppSettings {
 
     static var autoCleanupEnabled: Bool { defaults.bool(forKey: Keys.autoCleanupEnabled) }
     static var autoCleanupDays: Int { max(1, defaults.integer(forKey: Keys.autoCleanupDays)) }
+
+    /// The popover's sections from their saved form: sections added since it was saved go
+    /// to the end, ones that no longer exist are dropped. Nothing saved is the standard layout.
+    static func popoverItems(from data: Data?) -> [PopoverItem] {
+        PopoverLayout.settled(Reorder.normalized(PopoverLayout.decode(data), known: PopoverLayout.defaults, by: \.section))
+    }
+
+    /// What the popover shows and in which order.
+    static var popoverItems: [PopoverItem] {
+        get { popoverItems(from: defaults.data(forKey: Keys.popoverSections)) }
+        set { defaults.set(PopoverLayout.encode(newValue), forKey: Keys.popoverSections) }
+    }
+
+    /// How many calls the popover lists under Recent.
+    static var popoverRecentCount: Int { PopoverLayout.recentCount(defaults.integer(forKey: Keys.popoverRecentCount)) }
 
     static var lastRecordingFolder: URL? {
         get { defaults.string(forKey: Keys.lastRecordingFolder).map { URL(fileURLWithPath: $0, isDirectory: true) } }

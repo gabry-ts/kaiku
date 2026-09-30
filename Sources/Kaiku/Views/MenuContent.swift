@@ -8,6 +8,8 @@ struct MenuPanel: View {
     @ObservedObject private var muter = MicMuter.shared
     @State private var recent: [(folder: RecordingFolder, meta: RecordingMeta)] = []
     @State private var totalCalls = 0
+    @AppStorage(Keys.popoverSections) private var layout = Data()
+    @AppStorage(Keys.popoverRecentCount) private var recentCount = PopoverLayout.defaultRecentCount
     var closePanel: () -> Void = MenuPanel.closeMenuBarWindow
 
     var body: some View {
@@ -25,58 +27,19 @@ struct MenuPanel: View {
                 MutedBanner(unsupported: muter.unsupported) { muter.unmute() }
             }
 
-            if case .recording(let title, _) = state.phase {
-                RecordingCard(title: title, elapsed: state.elapsed, paused: state.isPaused, levels: state.levels) {
-                    state.stopRecording()
-                }
-            } else {
-                Button {
-                    closePanel()
-                    state.requestStart()
-                } label: {
-                    HStack(spacing: PUI.Space.s) {
-                        Image(systemName: "record.circle.fill")
-                        Text("Start Recording")
-                        Spacer(minLength: PUI.Space.m)
-                        Text(Shortcuts.display(.record))
-                            .font(PUI.Font.callout.monospaced()).opacity(0.75)
-                    }
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut("r", modifiers: .command)
-            }
-
-            MuteCard(muter: muter)
-
-            statusSection
-
-            ForEach(state.recoveredFolders, id: \.key) { folder in
-                RecoveredCard(folder: folder, busy: state.isBusy(folder)) {
-                    state.transcribe(folder: folder, provider: AppSettings.provider)
-                } dismiss: {
-                    state.dismissRecovered(folder)
+            let sections = PopoverLayout.visible(AppSettings.popoverItems(from: layout))
+            ForEach(sections, id: \.self) { section in
+                switch section {
+                case .record:
+                    recordSection
+                    // A failed transcription shows even with the status section switched off.
+                    if !sections.contains(.status) { errorCard }
+                case .mute: MuteCard(muter: muter)
+                case .status: statusSection
+                case .recovered: recoveredSection
+                case .recent: recentSection
                 }
             }
-
-            if !recent.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: PUI.Space.xs) {
-                        SectionHeader("Recent") {
-                            Text(totalCalls == 1 ? "1 call" : "\(totalCalls) calls")
-                        }
-                        VStack(spacing: 0) {
-                            ForEach(recent, id: \.folder.id) { item in
-                                RecentRow(folder: item.folder, meta: item.meta, busy: state.isBusy(item.folder)) {
-                                    closePanel()
-                                    state.openInLibrary(item.folder)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, -PUI.Space.s)
-                    }
-                }
-            }
-
         } footer: {
             PopoverFooter(
                 actions: [.init("Recordings", symbol: "list.bullet.rectangle",
@@ -91,19 +54,66 @@ struct MenuPanel: View {
         .puiAccent(.kaiku)
         .onAppear(perform: reload)
         .onChange(of: state.libraryVersion) { _, _ in reload() }
+        .onChange(of: recentCount) { _, _ in reload() }
     }
 
-    @ViewBuilder private var statusSection: some View {
-        if let key = state.busyFolders.first {
-            Card {
-                HStack(spacing: PUI.Space.m) {
-                    ProgressView().controlSize(.small)
-                    StatusText("Transcribing", detail: state.busyStage[key] ?? "Working…")
-                    Spacer(minLength: 0)
+    @ViewBuilder private var recordSection: some View {
+        if case .recording(let title, _) = state.phase {
+            RecordingCard(title: title, elapsed: state.elapsed, paused: state.isPaused, levels: state.levels) {
+                state.stopRecording()
+            }
+        } else {
+            Button {
+                closePanel()
+                state.requestStart()
+            } label: {
+                HStack(spacing: PUI.Space.s) {
+                    Image(systemName: "record.circle.fill")
+                    Text("Start Recording")
+                    Spacer(minLength: PUI.Space.m)
+                    Text(Shortcuts.display(.record))
+                        .font(PUI.Font.callout.monospaced()).opacity(0.75)
                 }
             }
-            .transition(.opacity)
-        } else if case .error(let message) = state.phase {
+            .buttonStyle(PrimaryButtonStyle())
+            .keyboardShortcut("r", modifiers: .command)
+        }
+    }
+
+    private var recoveredSection: some View {
+        ForEach(state.recoveredFolders, id: \.key) { folder in
+            RecoveredCard(folder: folder, busy: state.isBusy(folder)) {
+                state.transcribe(folder: folder, provider: AppSettings.provider)
+            } dismiss: {
+                state.dismissRecovered(folder)
+            }
+        }
+    }
+
+    @ViewBuilder private var recentSection: some View {
+        if !recent.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: PUI.Space.xs) {
+                    SectionHeader("Recent") {
+                        Text(totalCalls == 1 ? "1 call" : "\(totalCalls) calls")
+                    }
+                    VStack(spacing: 0) {
+                        ForEach(recent, id: \.folder.id) { item in
+                            RecentRow(folder: item.folder, meta: item.meta, busy: state.isBusy(item.folder)) {
+                                closePanel()
+                                state.openInLibrary(item.folder)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, -PUI.Space.s)
+                }
+            }
+        }
+    }
+
+    /// The failed transcription, with the ways out of it. Empty in any other state.
+    @ViewBuilder private var errorCard: some View {
+        if state.busyFolders.isEmpty, case .error(let message) = state.phase {
             Card(tint: AppAccent.kaiku.color) {
                 VStack(alignment: .leading, spacing: PUI.Space.m) {
                     Inked { ink in
@@ -131,6 +141,21 @@ struct MenuPanel: View {
                     .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var statusSection: some View {
+        if let key = state.busyFolders.first {
+            Card {
+                HStack(spacing: PUI.Space.m) {
+                    ProgressView().controlSize(.small)
+                    StatusText("Transcribing", detail: state.busyStage[key] ?? "Working…")
+                    Spacer(minLength: 0)
+                }
+            }
+            .transition(.opacity)
+        } else if case .error = state.phase {
+            errorCard
         } else if case .done(let title) = state.phase {
             Card {
                 HStack(spacing: PUI.Space.m) {
@@ -161,7 +186,7 @@ struct MenuPanel: View {
             .compactMap { f in f.loadMeta().map { (f, $0) } }
             .sorted { $0.1.date > $1.1.date }
         totalCalls = all.count
-        recent = Array(all.prefix(5))
+        recent = Array(all.prefix(PopoverLayout.recentCount(recentCount)))
     }
 
     static func closeMenuBarWindow() {

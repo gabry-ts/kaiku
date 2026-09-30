@@ -3,12 +3,13 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, shortcuts, recording, sources, transcription, webhook, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, webhook, permissions, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
+        case .popover: return "Popover"
         case .shortcuts: return "Shortcuts"
         case .recording: return "Recording"
         case .sources: return "Sources"
@@ -22,6 +23,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: return "gearshape.fill"
+        case .popover: return "menubar.rectangle"
         case .shortcuts: return "keyboard.fill"
         case .recording: return "mic.fill"
         case .sources: return "dot.radiowaves.left.and.right"
@@ -35,6 +37,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: return .gray
+        case .popover: return .orange
         case .shortcuts: return .indigo
         case .recording: return AppAccent.kaiku.color
         case .sources: return .teal
@@ -60,6 +63,7 @@ struct SettingsView: View {
         SettingsWindow(sections: Self.sections, selection: selection) {
             switch pane {
             case .general: GeneralSettings()
+            case .popover: PopoverSettings()
             case .shortcuts: ShortcutSettings()
             case .recording: RecordingSettings()
             case .sources: SourcesSettings()
@@ -143,6 +147,62 @@ struct GeneralSettings: View {
         panel.prompt = "Use Folder"
         panel.directoryURL = URL(fileURLWithPath: baseFolder)
         if panel.runModal() == .OK, let url = panel.url { baseFolder = url.path }
+    }
+}
+
+// MARK: - Popover
+
+extension PopoverSection {
+    var title: String {
+        switch self {
+        case .record: return "Record button"
+        case .mute: return "Mute all microphones"
+        case .status: return "Transcription status"
+        case .recovered: return "Recovered calls"
+        case .recent: return "Recent calls"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .record: return "Always shown, at the top."
+        case .mute: return "The switch that silences every microphone."
+        case .status: return "Progress and result of the latest transcription."
+        case .recovered: return "Calls saved after an interruption."
+        case .recent: return "Your latest calls, one click from the library."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .record: return "record.circle"
+        case .mute: return "mic.slash"
+        case .status: return "waveform"
+        case .recovered: return "arrow.uturn.backward.circle"
+        case .recent: return "clock"
+        }
+    }
+}
+
+struct PopoverSettings: View {
+    @State private var items = AppSettings.popoverItems
+    @AppStorage(Keys.popoverRecentCount) private var recentCount = PopoverLayout.defaultRecentCount
+
+    var body: some View {
+        KaikuPane(pane: .popover, subtitle: "What the menu bar popover shows, and in which order.") {
+            ReorderableGroup("Sections", footer: "Drag to reorder. Switch off what you don't need.",
+                             items: $items, isOn: \.isOn, isLocked: { $0.section.isLocked }) { item in
+                ReorderableLabel(item.section.title, subtitle: item.section.detail, symbol: item.section.symbol)
+            }
+
+            SettingsGroup("Recent Calls", footer: "Problems, like a failed transcription or muted microphones, always show in the popover.") {
+                SettingsRow("Calls to show") {
+                    SegmentedPill(PopoverLayout.recentCounts.map { (value: $0, title: "\($0)") },
+                                  selection: Binding(get: { PopoverLayout.recentCount(recentCount) }, set: { recentCount = $0 }))
+                }
+            }
+        }
+        .onChange(of: items) { _, new in AppSettings.popoverItems = new }
     }
 }
 
