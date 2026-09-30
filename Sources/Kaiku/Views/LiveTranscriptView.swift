@@ -58,7 +58,58 @@ struct LiveCard: View {
     }
 }
 
-/// In the recording card: why the live transcription stopped. The recording goes on.
+/// The floating window: the whole live transcript, following the newest line.
+struct LiveWindowView: View {
+    @ObservedObject var live: LiveSession
+    @Environment(\.colorScheme) private var scheme
+
+    static let size = CGSize(width: 380, height: 300)
+    static let minSize = CGSize(width: 280, height: 160)
+    private static let end = "end"
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: PUI.Space.l) {
+                    if live.transcript.isEmpty {
+                        Text(live.isRunning ? "Listening…" : "Nothing to show. The live transcript follows the call while you record.")
+                            .font(PUI.Font.callout).foregroundStyle(Ink(scheme).tertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        LiveLines(lines: live.transcript.lines)
+                    }
+                    LiveNotice(live: live)
+                    Color.clear.frame(height: 1).id(Self.end)
+                }
+                .padding(PUI.Space.xl)
+            }
+            .onAppear { proxy.scrollTo(Self.end, anchor: .bottom) }
+            .onChange(of: live.transcript) { _, _ in proxy.scrollTo(Self.end, anchor: .bottom) }
+        }
+        .frame(minWidth: Self.minSize.width, maxWidth: .infinity, minHeight: Self.minSize.height, maxHeight: .infinity)
+        .puiAccent(.kaiku)
+    }
+}
+
+/// In the recording card: opens the floating window, and says why the live
+/// transcription stopped if it did. The recording goes on either way.
+struct LiveControls: View {
+    @ObservedObject var live: LiveSession
+
+    var body: some View {
+        if live.isVisible {
+            Button { WindowManager.shared.showLiveTranscript() } label: {
+                Label("Open Live Transcript", systemImage: "captions.bubble")
+                    .labelStyle(TightLabelStyle(spacing: PUI.Space.s))
+            }
+            .buttonStyle(SecondaryButtonStyle(fullWidth: true))
+            .help("Show the live transcript in a window that stays on top")
+        }
+        LiveNotice(live: live)
+    }
+}
+
+/// Why the live transcription stopped.
 struct LiveNotice: View {
     @ObservedObject var live: LiveSession
 

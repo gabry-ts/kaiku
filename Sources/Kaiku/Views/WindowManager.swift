@@ -57,6 +57,41 @@ final class WindowManager: NSObject, NSWindowDelegate {
         present(id: "onboarding", window: window, view: view, title: "Welcome to Kaiku", recreate: true)
     }
 
+    /// The live transcript in a panel that stays above other windows, on every space, and
+    /// never takes the focus from the call. Its frame is remembered.
+    func showLiveTranscript() {
+        let id = "live"
+        if let existing = windows[id] {
+            existing.orderFrontRegardless()
+            return
+        }
+        let hosting = NSHostingController(rootView: LiveWindowView(live: AppState.shared.live))
+        hosting.sizingOptions = []
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: LiveWindowView.size),
+                            styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.contentViewController = hosting
+        panel.title = "Live Transcript"
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.hidesOnDeactivate = false
+        panel.isMovableByWindowBackground = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+        panel.delegate = self
+        panel.identifier = NSUserInterfaceItemIdentifier(id)
+        panel.minSize = LiveWindowView.minSize
+        panel.setContentSize(LiveWindowView.size)
+        let autosave = "kaiku.live"
+        if !panel.setFrameUsingName(autosave), let screen = NSScreen.main?.visibleFrame {
+            // First time: the top right corner, clear of the menu bar popover's usual place.
+            panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 24, y: screen.maxY - 24))
+        }
+        panel.setFrameAutosaveName(autosave)
+        windows[id] = panel
+        panel.orderFrontRegardless()
+    }
+
     /// Transparent title bar, content up to the top edge.
     static func makeChromeless(_ window: NSWindow, hideButtons: Bool) {
         window.titlebarAppearsTransparent = true

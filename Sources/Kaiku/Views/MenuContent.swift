@@ -277,7 +277,7 @@ private struct RecordingCard: View {
                     .help("Switch microphone without stopping")
                 }
 
-                LiveNotice(live: state.live)
+                LiveControls(live: state.live)
 
                 HStack(spacing: PUI.Space.m) {
                     Button { state.togglePause() } label: {

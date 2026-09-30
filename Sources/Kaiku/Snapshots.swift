@@ -106,6 +106,8 @@ enum Snapshots {
             state.live.setPreview(Fixtures.liveTranscript, running: false,
                                   notice: "Live transcription stopped (call audio): The speech recognizer was interrupted.")
             snap(panel(), name: "panel-recording-live-failed-light", size: nil, dark: false, chrome: false, dir: dir)
+            state.live.setPreview(Fixtures.liveTranscript)
+            both("live-window", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live)) }
             state.live.setPreview(LiveTranscript(), running: false)
         }
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0, system: 0,

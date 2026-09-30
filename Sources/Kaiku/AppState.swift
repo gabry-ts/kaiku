@@ -187,7 +187,7 @@ final class AppState: ObservableObject {
     func discardRecording() {
         guard isRecording, let rec = recorder, let folder = currentFolder else { return }
         recorder = nil
-        live.cancel()
+        endLive()
         stopTicker()
         stopLevelTimer()
         currentFolder = nil
@@ -231,6 +231,7 @@ final class AppState: ObservableObject {
                 return Result { try AudioFinalizer.finalize(folder) }
             }.value
             _ = await live.finish()
+            WindowManager.shared.close("live")
             currentFolder = nil
             clock = nil
             currentMic = nil
@@ -258,7 +259,7 @@ final class AppState: ObservableObject {
     func finalizeOnQuit() {
         guard isRecording, let rec = recorder, let folder = currentFolder else { return }
         rec.stop()
-        live.cancel()
+        endLive()
         stopTicker()
         stopLevelTimer()
         let date = Date()
@@ -266,6 +267,12 @@ final class AppState: ObservableObject {
         let duration = elapsed(at: date)
         phase = .idle
         folder.updateMeta { $0.durationSeconds = duration }
+    }
+
+    /// Drops the live transcript and closes its window.
+    private func endLive() {
+        live.cancel()
+        WindowManager.shared.close("live")
     }
 
     // MARK: Device changes
