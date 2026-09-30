@@ -1,4 +1,5 @@
 import AppKit
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -62,25 +63,25 @@ enum Snapshots {
             }
         }
 
-        // Settings panes.
+        // Settings panes, in a window with a clear title bar like the real one, grown to
+        // the pane's height so long panes aren't cropped.
+        func settings(_ name: String, _ pane: SettingsPane, dark: Bool) {
+            snap(AnyView(SettingsView(pane: pane).environmentObject(state)), name: name, size: PUI.Window.settings,
+                 dark: dark, chrome: true, dir: dir, chromeless: false, growToContent: true)
+        }
         for pane in SettingsPane.allCases {
-            both("settings-\(pane.rawValue)", size: nil) {
-                AnyView(SettingsView(pane: pane).environmentObject(state))
-            }
+            for dark in [false, true] { settings("settings-\(pane.rawValue)-\(dark ? "dark" : "light")", pane, dark: dark) }
         }
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
-        both("settings-transcription-openai", size: nil) {
-            AnyView(SettingsView(pane: .transcription).environmentObject(state))
-        }
+        for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }
         defaults.register(defaults: [Keys.provider: ProviderKind.whisperCpp.rawValue, Keys.webhookBodyMode: "template"])
-        snap(AnyView(SettingsView(pane: .webhook).environmentObject(state)), name: "settings-webhook-template-light",
-             size: nil, dark: false, chrome: true, dir: dir)
+        settings("settings-webhook-template-light", .webhook, dark: false)
         defaults.register(defaults: [Keys.webhookBodyMode: "default"])
 
-        // Menu bar panel.
+        // Menu bar panel. The popover's own glass comes from NSPopover, so it's painted in here.
         let panel: () -> AnyView = {
             AnyView(MenuPanel(closePanel: {}).environmentObject(state).defaultAppStorage(defaults)
-                .background(Color(nsColor: .windowBackgroundColor)))
+                .puiGlass(RoundedRectangle(cornerRadius: PUI.Radius.popover, style: .continuous)))
         }
         state.setPreview(phase: .idle)
         both("panel-idle", size: nil, chrome: false, panel)
@@ -149,22 +150,35 @@ enum Snapshots {
     // MARK: Rendering
 
     private static func snap(_ view: AnyView, name: String, size: CGSize?, dark: Bool, chrome: Bool, dir: URL,
-                             chromeless: Bool? = nil) {
-        let hosting = NSHostingController(rootView: view)
+                             chromeless: Bool? = nil, growToContent: Bool = false) {
+        // Glass is painted, so offscreen captures match the running app.
+        let hosting = NSHostingController(rootView: AnyView(view.puiGlassRendering(.painted)))
         hosting.sceneBridgingOptions = chrome ? [.toolbars, .title] : []
         let style: NSWindow.StyleMask = chrome ? [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView] : [.borderless]
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size ?? CGSize(width: 400, height: 300)),
                               styleMask: style, backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentViewController = hosting
-        if chrome { window.toolbarStyle = .unified }
+        if chrome {
+            window.toolbarStyle = .unified
+        } else {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
         if let hide = chromeless { WindowManager.makeChromeless(window, hideButtons: hide) }
         if let size { window.setContentSize(size) } else { window.setContentSize(hosting.view.fittingSize) }
         window.alphaValue = CGFloat(Double(ProcessInfo.processInfo.environment["SNAP_ALPHA"] ?? "1") ?? 1)
-        window.setFrameOrigin(NSPoint(x: 40, y: 40))
+        // Off screen, so rendering never shows windows over the desktop.
+        window.setFrameOrigin(NSPoint(x: -6000, y: -6000))
         window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.8))
         if size == nil { window.setContentSize(hosting.view.fittingSize) }
+        if growToContent, let size {
+            let height = tallestDocumentHeight(in: hosting.view)
+            if height > size.height - 40 {
+                window.setContentSize(NSSize(width: size.width, height: min(height + 40, 1400)))
+            }
+        }
         RunLoop.main.run(until: Date().addingTimeInterval(0.4))
 
         if let image = windowImage(window) {
@@ -187,6 +201,18 @@ enum Snapshots {
         }
         window.orderOut(nil)
         window.close()
+    }
+
+    /// The height of the tallest scroll view's document inside `view`.
+    private static func tallestDocumentHeight(in view: NSView) -> CGFloat {
+        var tallest: CGFloat = 0
+        if let scrollView = view as? NSScrollView, let document = scrollView.documentView {
+            tallest = document.frame.height
+        }
+        for subview in view.subviews {
+            tallest = max(tallest, tallestDocumentHeight(in: subview))
+        }
+        return tallest
     }
 
     /// Captures one of our own windows through the window server, so AppKit-backed
