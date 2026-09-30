@@ -51,10 +51,14 @@ final class TrackWriter: @unchecked Sendable {
     /// Until this active time, any lag is treated as a source change and padded.
     private var gapArmedUntil: Double = 0
     private(set) var paddedSeconds: Double = 0
+    /// Gets a copy of every buffer written, with its start in the file in seconds.
+    /// Only set when live transcription is on; called on the audio thread.
+    private let tap: (@Sendable (AVAudioPCMBuffer, Double) -> Void)?
 
-    init(url: URL, gate: PauseGate) {
+    init(url: URL, gate: PauseGate, tap: (@Sendable (AVAudioPCMBuffer, Double) -> Void)? = nil) {
         self.url = url
         self.gate = gate
+        self.tap = tap
     }
 
     /// Seconds written so far (audio and silence).
@@ -95,6 +99,7 @@ final class TrackWriter: @unchecked Sendable {
         padIfNeeded(now: now, incoming: out.frameLength, file: file)
         do {
             try file.write(from: out)
+            if let tap, let copy = Self.copy(out) { tap(copy, Double(framesWritten) / rate) }
             framesWritten += AVAudioFramePosition(out.frameLength)
         } catch {
             Log.audio.error("Write failed for \(self.url.lastPathComponent, privacy: .public): \(error.diagnosticDescription, privacy: .public)")
@@ -156,6 +161,19 @@ final class TrackWriter: @unchecked Sendable {
             return buffer
         }
         return error == nil ? out : nil
+    }
+
+    /// A buffer that owns its samples, so it outlives the capture callback.
+    private static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else { return nil }
+        copy.frameLength = buffer.frameLength
+        let source = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffer.audioBufferList))
+        let target = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        for (from, to) in zip(source, target) {
+            guard let src = from.mData, let dst = to.mData else { return nil }
+            memcpy(dst, src, Int(min(from.mDataByteSize, to.mDataByteSize)))
+        }
+        return copy
     }
 
     /// Closes the file, which finalizes the CAF header.

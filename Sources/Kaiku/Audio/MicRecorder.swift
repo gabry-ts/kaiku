@@ -145,14 +145,22 @@ final class CallRecorder {
     var onRoute: ((SystemAudioTap.Route, _ initial: Bool) -> Void)?
     /// After the mic was lost: the device switched to, or nil if none is left (background queue).
     var onMicFallback: ((_ lost: String, _ now: AudioDevice?) -> Void)?
+    /// Gets a copy of the audio written to each track, for live transcription. Set before
+    /// `start`; called on the audio threads.
+    var liveTap: (@Sendable (AVAudioPCMBuffer, Double, LiveTrack) -> Void)?
     /// Human readable problems with either track (nil when both started as configured).
     private(set) var warnings: [String] = []
+
+    private func tap(for track: LiveTrack) -> (@Sendable (AVAudioPCMBuffer, Double) -> Void)? {
+        guard let liveTap else { return nil }
+        return { buffer, time in liveTap(buffer, time, track) }
+    }
 
     /// - Parameter micDevice: nil records system audio only.
     func start(micURL: URL, systemURL: URL, micDevice: AudioDevice?) throws {
         if let micDevice {
             do {
-                let w = TrackWriter(url: micURL, gate: gate)
+                let w = TrackWriter(url: micURL, gate: gate, tap: tap(for: .me))
                 mic.onLost = { [weak self] in self?.control.async { self?.handleMicLost() } }
                 try mic.start(writer: w, device: micDevice)
                 writers.append(w)
@@ -162,7 +170,7 @@ final class CallRecorder {
             }
         }
         do {
-            let w = TrackWriter(url: systemURL, gate: gate)
+            let w = TrackWriter(url: systemURL, gate: gate, tap: tap(for: .them))
             system.onRoute = { [weak self] route, initial in self?.onRoute?(route, initial) }
             try system.start(writer: w)
             writers.append(w)

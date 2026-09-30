@@ -48,6 +48,9 @@ final class AppState: ObservableObject {
         @Published var hasMic = true
     }
 
+    /// Live transcript of the current recording, kept separate like the levels.
+    let live = LiveSession()
+
     private var levelTimer: Timer?
     private var glyphTimer: Timer?
 
@@ -146,7 +149,12 @@ final class AppState: ObservableObject {
             rec.onMicFallback = { lost, now in
                 DispatchQueue.main.async { AppState.shared.micLost(lost, now: now) }
             }
+            let liveEngine = AppSettings.liveEnabled ? AppSettings.liveEngine?.make() : nil
+            if let liveEngine { rec.liveTap = LiveSession.tap(into: liveEngine) }
             try rec.start(micURL: folder.micRawURL, systemURL: folder.systemRawURL, micDevice: micDevice)
+            if let liveEngine {
+                live.start(liveEngine, language: language) { AppState.shared.elapsed(at: Date()) }
+            }
             recorder = rec
             currentFolder = folder
             clock = RecordingClock(start: date)
@@ -179,6 +187,7 @@ final class AppState: ObservableObject {
     func discardRecording() {
         guard isRecording, let rec = recorder, let folder = currentFolder else { return }
         recorder = nil
+        live.cancel()
         stopTicker()
         stopLevelTimer()
         currentFolder = nil
@@ -221,6 +230,7 @@ final class AppState: ObservableObject {
                 rec.stop()
                 return Result { try AudioFinalizer.finalize(folder) }
             }.value
+            _ = await live.finish()
             currentFolder = nil
             clock = nil
             currentMic = nil
@@ -248,6 +258,7 @@ final class AppState: ObservableObject {
     func finalizeOnQuit() {
         guard isRecording, let rec = recorder, let folder = currentFolder else { return }
         rec.stop()
+        live.cancel()
         stopTicker()
         stopLevelTimer()
         let date = Date()

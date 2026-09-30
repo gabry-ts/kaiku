@@ -139,6 +139,9 @@ enum Keys {
     static let removeEcho = "removeEcho"
     static let popoverSections = "popoverSections"
     static let popoverRecentCount = "popoverRecentCount"
+    static let liveEnabled = "liveEnabled"
+    static let liveEngine = "liveEngine"
+    static let liveAfterCall = "liveAfterCall"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
 }
@@ -184,6 +187,9 @@ enum AppSettings {
             Keys.calendarIDs: [String](),
             Keys.removeEcho: true,
             Keys.popoverRecentCount: PopoverLayout.defaultRecentCount,
+            Keys.liveEnabled: false,
+            Keys.liveEngine: LiveEngineKind.apple.rawValue,
+            Keys.liveAfterCall: LiveAfterCall.preview.rawValue,
             Keys.summaryEnabled: false,
             Keys.summaryProvider: SummaryProviderKind.openAI.rawValue,
             Keys.summaryPrompt: SummaryAPI.defaultPrompt,
@@ -363,6 +369,19 @@ enum AppSettings {
 
     /// How many calls the popover lists under Recent.
     static var popoverRecentCount: Int { PopoverLayout.recentCount(defaults.integer(forKey: Keys.popoverRecentCount)) }
+
+    /// Live transcription while recording; always off where no engine can run.
+    static var liveEnabled: Bool { LiveTranscription.isSupported && defaults.bool(forKey: Keys.liveEnabled) }
+
+    /// The chosen live engine, or the first one this Mac can run.
+    static var liveEngine: LiveEngineKind? {
+        let saved = LiveEngineKind(rawValue: defaults.string(forKey: Keys.liveEngine) ?? "")
+        return saved.flatMap { $0.isAvailable ? $0 : nil } ?? LiveEngineKind.available.first
+    }
+
+    static var liveAfterCall: LiveAfterCall {
+        LiveAfterCall(rawValue: defaults.string(forKey: Keys.liveAfterCall) ?? "") ?? .preview
+    }
 
     static var lastRecordingFolder: URL? {
         get { defaults.string(forKey: Keys.lastRecordingFolder).map { URL(fileURLWithPath: $0, isDirectory: true) } }
