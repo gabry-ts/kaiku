@@ -1,3 +1,4 @@
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -20,20 +21,25 @@ struct WebhookSettings: View {
         return (s == "http" || s == "https") && u.host != nil
     }
 
+    private var bodyFooter: String {
+        bodyMode == "template"
+            ? "With a JSON content type, text values are escaped for you, so write \"{{title}}\" inside quotes. *_json and duration_seconds are inserted as raw JSON."
+            : "Title, date, duration, language, provider, tags, file paths, the full transcript in Markdown, every segment with speaker and timestamps, bookmarks, the summary (if any) and the estimated cost."
+    }
+
     var body: some View {
-        Form {
-            Section {
-                Toggle("Send a webhook when a transcript is ready", isOn: $enabled)
-            } footer: {
-                Text("Pushes the transcript to Zapier, Make, n8n, your own server or anything that accepts HTTP.")
+        KaikuPane(pane: .webhook, subtitle: "Send each transcript to another app or your own server.") {
+            SettingsGroup(footer: "Pushes the transcript to Zapier, Make, n8n, your own server or anything that accepts HTTP.") {
+                SwitchRow("Send a webhook when a transcript is ready", isOn: $enabled)
             }
 
-            Section("Request") {
-                LabeledContent("URL") {
-                    HStack(spacing: 6) {
+            SettingsGroup("Request") {
+                SettingsRow("URL") {
+                    HStack(spacing: PUI.Space.s) {
                         TextField("URL", text: $url, prompt: Text("https://example.com/hook"))
                             .labelsHidden().textFieldStyle(.roundedBorder)
                             .multilineTextAlignment(.leading)
+                            .frame(maxWidth: 320)
                         if !url.isEmpty {
                             Image(systemName: urlIsValid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                                 .foregroundStyle(urlIsValid ? .green : .orange)
@@ -41,122 +47,135 @@ struct WebhookSettings: View {
                         }
                     }
                 }
-                Picker("Method", selection: $method) {
-                    ForEach(["POST", "PUT", "PATCH"], id: \.self) { Text($0) }
+                SettingsRow("Method") {
+                    SegmentedPill(["POST", "PUT", "PATCH"].map { (value: $0, title: $0) }, selection: $method)
+                        .fixedSize()
                 }
-                .pickerStyle(.segmented)
             }
             .disabled(!enabled)
 
-            Section {
+            SettingsGroup("Headers") {
                 if headers.isEmpty {
-                    Text("No custom headers").foregroundStyle(.secondary)
+                    GroupRow { Text("No custom headers").font(PUI.Font.body).foregroundStyle(.secondary) }
                 }
                 ForEach($headers) { $h in
-                    HStack(spacing: 8) {
-                        TextField("Name", text: $h.name, prompt: Text("Authorization"))
-                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 170)
-                        SecureField("Value", text: $h.value, prompt: Text("Bearer …"))
-                            .labelsHidden().textFieldStyle(.roundedBorder)
-                        Button { withAnimation { headers.removeAll { $0.id == h.id } } } label: {
-                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                    GroupRow {
+                        HStack(spacing: PUI.Space.m) {
+                            TextField("Name", text: $h.name, prompt: Text("Authorization"))
+                                .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 170)
+                            SecureField("Value", text: $h.value, prompt: Text("Bearer …"))
+                                .labelsHidden().textFieldStyle(.roundedBorder)
+                            Button { withAnimation { headers.removeAll { $0.id == h.id } } } label: {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove header")
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Remove header")
                     }
                 }
-                HStack {
-                    Button { withAnimation { headers.append(Header(name: "", value: "")) } } label: {
-                        Label("Add Header", systemImage: "plus")
+                GroupRow {
+                    HStack {
+                        Button { withAnimation { headers.append(Header(name: "", value: "")) } } label: {
+                            Label("Add Header", systemImage: "plus").labelStyle(TightLabelStyle())
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                        Spacer()
+                        Label("Values are saved in your Keychain", systemImage: "lock.fill")
+                            .font(PUI.Font.caption).foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Label("Values are saved in your Keychain", systemImage: "lock.fill")
-                        .font(.caption).foregroundStyle(.secondary)
                 }
-            } header: {
-                Text("Headers")
             }
             .disabled(!enabled)
 
-            Section {
-                Picker("Body", selection: $bodyMode) {
-                    Text("Default JSON").tag("default")
-                    Text("Custom Template").tag("template")
+            SettingsGroup(Text("Body"), footer: Text(bodyFooter)) {
+                GroupRow {
+                    SegmentedPill([(value: "default", title: "Default JSON"), (value: "template", title: "Custom Template")],
+                                  selection: $bodyMode)
+                        .fixedSize()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 if bodyMode == "template" {
-                    TextField("Content-Type", text: $contentType, prompt: Text("application/json"))
-                    TextEditor(text: $template)
-                        .font(.system(.callout, design: .monospaced))
-                        .frame(minHeight: 130)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Click to insert").font(.caption).foregroundStyle(.secondary)
-                        FlowLayout(spacing: 6) {
-                            ForEach(WebhookTemplate.placeholders, id: \.self) { name in
-                                Button { template += "{{\(name)}}" } label: {
-                                    Text("{{\(name)}}").font(.caption.monospaced())
-                                        .padding(.horizontal, 7).padding(.vertical, 3)
-                                        .background(.quaternary, in: Capsule())
+                    SettingsRow("Content-Type") {
+                        TextField("Content-Type", text: $contentType, prompt: Text("application/json"))
+                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+                    }
+                    GroupRow {
+                        VStack(alignment: .leading, spacing: PUI.Space.m) {
+                            EditorField(text: $template)
+                            Text("Click to insert").font(PUI.Font.caption).foregroundStyle(.secondary)
+                            FlowLayout(spacing: PUI.Space.s) {
+                                ForEach(WebhookTemplate.placeholders, id: \.self) { name in
+                                    PlaceholderChip(name: name) { template += "{{\(name)}}" }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
-            } header: {
-                Text("Body")
-            } footer: {
-                if bodyMode == "template" {
-                    Text("With a JSON content type, text values are escaped for you, so write \"{{title}}\" inside quotes. *_json and duration_seconds are inserted as raw JSON.")
-                } else {
-                    Text("Title, date, duration, language, provider, tags, file paths, the full transcript in Markdown, every segment with speaker and timestamps, bookmarks, the summary (if any) and the estimated cost.")
-                }
             }
             .disabled(!enabled)
 
-            Section {
-                HStack(spacing: 10) {
-                    Button {
-                        testing = true
-                        testResult = nil
-                        Task {
-                            let text = await AppState.shared.testWebhook()
-                            withAnimation { testResult = (text.hasPrefix("HTTP 2"), text); testing = false }
+            SettingsGroup {
+                GroupRow {
+                    HStack(spacing: PUI.Space.m) {
+                        Button {
+                            testing = true
+                            testResult = nil
+                            Task {
+                                let text = await AppState.shared.testWebhook()
+                                withAnimation { testResult = (text.hasPrefix("HTTP 2"), text); testing = false }
+                            }
+                        } label: {
+                            Label("Send Test", systemImage: "paperplane").labelStyle(TightLabelStyle())
                         }
-                    } label: {
-                        Label("Send Test", systemImage: "paperplane")
+                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                        .disabled(testing || !urlIsValid)
+                        if testing { ProgressView().controlSize(.small) }
+                        Spacer()
+                        Text("Uses your last recording, or sample data.").font(PUI.Font.caption).foregroundStyle(.secondary)
                     }
-                    .disabled(testing || !urlIsValid)
-                    if testing { ProgressView().controlSize(.small) }
-                    Spacer()
-                    Text("Uses your last recording, or sample data.").font(.caption).foregroundStyle(.secondary)
                 }
                 if let testResult {
-                    VStack(alignment: .leading, spacing: 4) {
-                        StatusDot(kind: testResult.ok ? .ok : .error,
-                                  text: testResult.text.components(separatedBy: "\n").first ?? "")
-                        let rest = testResult.text.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
-                        if !rest.isEmpty {
-                            Text(rest).font(.caption.monospaced()).foregroundStyle(.secondary)
-                                .lineLimit(6).textSelection(.enabled)
+                    GroupRow {
+                        VStack(alignment: .leading, spacing: PUI.Space.xs) {
+                            StatusDot(kind: testResult.ok ? .ok : .error,
+                                      text: testResult.text.components(separatedBy: "\n").first ?? "")
+                            let rest = testResult.text.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
+                            if !rest.isEmpty {
+                                Text(rest).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                                    .lineLimit(6).textSelection(.enabled)
+                            }
                         }
                     }
                 }
             }
             .disabled(!enabled)
         }
-        .formStyle(.grouped)
         .onAppear {
             headers = AppSettings.webhookHeaders.map { Header(name: $0.name, value: $0.value) }
         }
         .onChange(of: headers.map { "\($0.name)\u{0}\($0.value)" }) { _, _ in
             AppSettings.webhookHeaders = headers.map { ($0.name, $0.value) }
         }
+    }
+}
+
+/// A template placeholder that inserts itself when clicked.
+private struct PlaceholderChip: View {
+    let name: String
+    let insert: () -> Void
+    @State private var hover = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let ink = Ink(scheme)
+        Button(action: insert) {
+            Text("{{\(name)}}")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(ink.primary)
+                .padding(.horizontal, PUI.Space.s + 1).padding(.vertical, 3)
+                .background(Capsule().fill(hover ? ink.strongFill : ink.fill))
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in withAnimation(PUI.Motion.hover) { hover = inside } }
     }
 }
 

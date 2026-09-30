@@ -1,4 +1,5 @@
 import AppKit
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -11,67 +12,70 @@ struct ShortcutSettings: View {
     @State private var monitor: Any?
 
     var body: some View {
-        Form {
-            Section {
+        KaikuPane(pane: .shortcuts, subtitle: "Keys that work from any app, and the ones the panel answers to.") {
+            SettingsGroup("Global Shortcuts", footer: "Work from any app, even when Kaiku is in the background. Click a shortcut and type a new one; Esc cancels, Delete clears it. A bookmark is added instantly; you can label it in the panel or later in the library.") {
                 ForEach(ShortcutAction.allCases) { action in
                     row(action)
                 }
-                HStack {
-                    Spacer()
-                    Button("Restore Defaults", action: restoreDefaults)
-                        .disabled(ShortcutAction.allCases.allSatisfy { combos[$0] == $0.defaultCombo })
+                GroupRow {
+                    HStack {
+                        Spacer()
+                        Button("Restore Defaults", action: restoreDefaults)
+                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                            .disabled(ShortcutAction.allCases.allSatisfy { combos[$0] == $0.defaultCombo })
+                    }
                 }
-            } header: {
-                Text("Global Shortcuts")
-            } footer: {
-                Text("Work from any app, even when Kaiku is in the background. Click a shortcut and type a new one; Esc cancels, Delete clears it. A bookmark is added instantly; you can label it in the panel or later in the library.")
             }
 
-            Section {
-                LabeledContent("Start Recording…", value: "⌘R")
-                LabeledContent("Pause or resume", value: "⌘P")
-                LabeledContent("Add bookmark", value: "⌘B")
-                LabeledContent("Stop recording", value: "⌘S")
-                LabeledContent("All recordings", value: "⌘L")
-                LabeledContent("Settings", value: "⌘,")
-                LabeledContent("Mute or unmute all microphones", value: "Option-click the menu bar icon")
-            } header: {
-                Text("In the Panel")
+            SettingsGroup("In the Panel") {
+                SettingsRow("Start Recording…") { ValueText("⌘R") }
+                SettingsRow("Pause or resume") { ValueText("⌘P") }
+                SettingsRow("Add bookmark") { ValueText("⌘B") }
+                SettingsRow("Stop recording") { ValueText("⌘S") }
+                SettingsRow("All recordings") { ValueText("⌘L") }
+                SettingsRow("Settings") { ValueText("⌘,") }
+                SettingsRow("Mute or unmute all microphones") { ValueText("Option-click the menu bar icon") }
             }
         }
-        .formStyle(.grouped)
         .onDisappear { stopRecording() }
     }
 
     private func row(_ action: ShortcutAction) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(action.title)
-                Spacer()
-                Button {
-                    recording == action ? stopRecording() : startRecording(action)
-                } label: {
-                    Text(label(for: action))
-                        .monospacedDigit()
-                        .foregroundStyle(recording == action ? Color.accentColor : combos[action] == nil ? .secondary : .primary)
-                        .frame(minWidth: 120)
+        GroupRow {
+            VStack(alignment: .leading, spacing: PUI.Space.s) {
+                HStack(spacing: PUI.Space.s) {
+                    Text(action.title).font(PUI.Font.body)
+                    Spacer(minLength: PUI.Space.l)
+                    Button {
+                        recording == action ? stopRecording() : startRecording(action)
+                    } label: {
+                        Text(label(for: action))
+                            .monospacedDigit()
+                            .foregroundStyle(recording == action ? AnyShapeStyle(AppAccent.kaiku.color)
+                                             : combos[action] == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                            .frame(minWidth: 120)
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                    .accessibilityLabel("\(action.title) shortcut")
+                    .accessibilityValue(combos[action]?.display ?? "None")
+                    .help("Click, then type the new shortcut")
+                    Button {
+                        reset(action)
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .disabled(combos[action] == action.defaultCombo)
+                    .help("Reset to \(action.defaultCombo?.display ?? "None")")
+                    .accessibilityLabel("Reset \(action.title) shortcut")
                 }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("\(action.title) shortcut")
-                .accessibilityValue(combos[action]?.display ?? "None")
-                .help("Click, then type the new shortcut")
-                Button {
-                    reset(action)
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
+                if let warning = warnings[action] {
+                    StatusDot(kind: .warning, text: warning)
                 }
-                .buttonStyle(.borderless)
-                .disabled(combos[action] == action.defaultCombo)
-                .help("Reset to \(action.defaultCombo?.display ?? "None")")
-                .accessibilityLabel("Reset \(action.title) shortcut")
-            }
-            if let warning = warnings[action] {
-                StatusDot(kind: .warning, text: warning)
             }
         }
     }

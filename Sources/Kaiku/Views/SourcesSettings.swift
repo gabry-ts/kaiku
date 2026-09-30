@@ -1,4 +1,5 @@
 import AppKit
+import PartitiUI
 import SwiftUI
 import UniformTypeIdentifiers
 import KaikuCore
@@ -16,74 +17,69 @@ struct SourcesSettings: View {
     @State private var message: String?
 
     var body: some View {
-        Form {
-            Section {
+        KaikuPane(pane: .sources, subtitle: "Which apps and websites can start a recording.") {
+            SettingsGroup("Sources", footer: "Always records (or asks to record) as usual. Never ignores the source. New records the first time, then asks whether to always record it. The same service is one source in its app and on the web, like WhatsApp and WhatsApp Web. Web calls are told apart by the browser window title, which needs the Accessibility permission.") {
                 ForEach(sources, id: \.self) { source in
-                    HStack(spacing: 10) {
-                        SourceIcon(source: source, custom: custom)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(source)
-                            Text(kind(of: source)).font(.caption).foregroundStyle(.secondary)
+                    GroupRow {
+                        HStack(spacing: PUI.Space.m + 2) {
+                            SourceIcon(source: source, custom: custom)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(source).font(PUI.Font.body)
+                                Text(kind(of: source)).font(PUI.Font.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: PUI.Space.l)
+                            Picker(source, selection: Binding(
+                                get: { rules.rule(for: source) },
+                                set: { rule in
+                                    rules.set(rule, for: source)
+                                    save()
+                                })) {
+                                Text("Always").tag(SourceRule.always)
+                                Text("Never").tag(SourceRule.never)
+                                Text("New (ask)").tag(SourceRule.new)
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                            Button { remove(source) } label: {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove \(source)")
+                            .accessibilityLabel("Remove \(source)")
                         }
-                        Spacer()
-                        Picker(source, selection: Binding(
-                            get: { rules.rule(for: source) },
-                            set: { rule in
-                                rules.set(rule, for: source)
-                                save()
-                            })) {
-                            Text("Always").tag(SourceRule.always)
-                            Text("Never").tag(SourceRule.never)
-                            Text("New (ask)").tag(SourceRule.new)
+                    }
+                }
+                GroupRow {
+                    HStack(spacing: PUI.Space.m) {
+                        Menu {
+                            Button("App…") { addApp() }
+                            Button("Website…") { message = nil; addingWebsite = true }
+                        } label: {
+                            Label("Add", systemImage: "plus")
                         }
-                        .labelsHidden()
                         .fixedSize()
-                        Button { remove(source) } label: {
-                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        if let message {
+                            Text(message).font(PUI.Font.callout).foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.borderless)
-                        .help("Remove \(source)")
-                        .accessibilityLabel("Remove \(source)")
                     }
                 }
-                HStack {
-                    Menu {
-                        Button("App…") { addApp() }
-                        Button("Website…") { message = nil; addingWebsite = true }
-                    } label: {
-                        Label("Add", systemImage: "plus")
-                    }
-                    .fixedSize()
-                    if let message {
-                        Text(message).font(.callout).foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Sources")
-            } footer: {
-                Text("Always records (or asks to record) as usual. Never ignores the source. New records the first time, then asks whether to always record it. The same service is one source in its app and on the web, like WhatsApp and WhatsApp Web. Web calls are told apart by the browser window title, which needs the Accessibility permission.")
             }
 
             if !removed.isEmpty {
-                Section {
+                SettingsGroup("Removed", footer: "Removed sources are ignored, like Never.") {
                     ForEach(removed, id: \.self) { source in
-                        HStack {
-                            Text(source).foregroundStyle(.secondary)
-                            Spacer()
+                        SettingsRow(source) {
                             Button("Restore") { restore(source) }
+                                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                         }
                     }
-                } header: {
-                    Text("Removed")
-                } footer: {
-                    Text("Removed sources are ignored, like Never.")
                 }
             }
         }
-        .formStyle(.grouped)
         .onAppear(perform: load)
         .sheet(isPresented: $addingWebsite) {
             AddWebsiteSheet(existing: sources + removed) { site in addWebsite(site) }
+                .puiAccent(.kaiku)
         }
     }
 

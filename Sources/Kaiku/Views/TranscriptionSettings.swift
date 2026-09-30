@@ -1,3 +1,4 @@
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -9,17 +10,13 @@ struct TranscriptionSettings: View {
     private var kind: ProviderKind { ProviderKind(rawValue: provider) ?? .whisperCpp }
 
     var body: some View {
-        Form {
-            Section {
+        KaikuPane(pane: .transcription, subtitle: "Who turns your calls into text, and with which model.") {
+            SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so the transcript knows who said what.") {
                 ForEach(ProviderKind.allCases) { p in
                     ProviderRow(kind: p, selected: p == kind, refresh: refresh) {
                         withAnimation(.snappy) { provider = p.rawValue }
                     }
                 }
-            } header: {
-                Text("Provider")
-            } footer: {
-                Text("Your microphone and the call audio are transcribed separately, so the transcript knows who said what.")
             }
 
             if kind == .whisperCpp {
@@ -34,7 +31,6 @@ struct TranscriptionSettings: View {
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
             SummarySettings()
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -44,35 +40,45 @@ private struct ProviderRow: View {
     let refresh: Int
     let select: () -> Void
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         let readiness = kind.readiness
+        let ink = Ink(scheme)
         Button(action: select) {
-            HStack(spacing: 12) {
-                Image(systemName: kind.symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(selected ? .white : .primary)
-                    .frame(width: 30, height: 30)
-                    .background(selected ? AnyShapeStyle(Brand.accent.gradient) : AnyShapeStyle(.quaternary),
-                                in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            HStack(spacing: PUI.Space.m + 2) {
+                IconTile(kind.symbol, color: kind.tileColor, size: 26)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(kind.displayName).font(.body.weight(.medium))
-                    Text(kind.tagline).font(.callout).foregroundStyle(.secondary)
+                    Text(kind.displayName).font(PUI.Font.body).foregroundStyle(ink.primary)
+                    Text(kind.tagline).font(PUI.Font.caption).foregroundStyle(ink.secondary)
                 }
-                Spacer()
-                HStack(spacing: 5) {
-                    Circle().fill(readiness == .ready ? Color.green : Color.orange).frame(width: 7, height: 7)
-                    Text(readiness.text).font(.callout).foregroundStyle(.secondary)
+                Spacer(minLength: PUI.Space.l)
+                HStack(spacing: PUI.Space.xs) {
+                    Circle().fill(readiness == .ready ? ink.green : ink.tertiary).frame(width: 6, height: 6)
+                    Text(readiness.text).font(PUI.Font.caption).foregroundStyle(ink.secondary)
                 }
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(selected ? Brand.accent : Color.secondary.opacity(0.5))
-                    .contentTransition(.symbolEffect(.replace))
+                CheckMark(selected)
+                    .padding(.leading, PUI.Space.m)
             }
+            .padding(.horizontal, PUI.Space.l)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel("\(kind.displayName), \(readiness.text)")
+    }
+}
+
+private extension ProviderKind {
+    /// The tile color of the provider in the list.
+    var tileColor: Color {
+        switch self {
+        case .whisperCpp: return .gray
+        case .elevenLabs: return .indigo
+        case .openAI: return .teal
+        case .groq: return .orange
+        }
     }
 }
 
@@ -85,41 +91,37 @@ private struct WhisperSettings: View {
     let onChange: () -> Void
 
     var body: some View {
-        Section {
+        SettingsGroup("Model", footer: "Models are downloaded from Hugging Face into ~/Library/Application Support/Kaiku/models. Larger models are more accurate but slower.") {
             ForEach(WhisperModel.catalog) { model in
                 ModelRow(model: model, active: whisperModel == model.localURL.path)
             }
-            HStack {
-                if !WhisperModel.catalog.contains(where: { whisperModel == $0.localURL.path }) && !whisperModel.isEmpty {
-                    Label((whisperModel as NSString).lastPathComponent, systemImage: "doc")
-                        .foregroundStyle(FileManager.default.fileExists(atPath: whisperModel) ? Color.primary : Color.red)
-                        .lineLimit(1).truncationMode(.middle)
+            GroupRow {
+                HStack(spacing: PUI.Space.s) {
+                    if !WhisperModel.catalog.contains(where: { whisperModel == $0.localURL.path }) && !whisperModel.isEmpty {
+                        Label((whisperModel as NSString).lastPathComponent, systemImage: "doc")
+                            .font(PUI.Font.callout)
+                            .foregroundStyle(FileManager.default.fileExists(atPath: whisperModel) ? Color.primary : Color.red)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer(minLength: PUI.Space.m)
+                    Button("Show Models Folder") {
+                        try? FileManager.default.createDirectory(at: WhisperModels.directory, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(WhisperModels.directory)
+                    }
+                    Button("Choose File…", action: chooseModel)
                 }
-                Spacer()
-                Button("Show Models Folder") {
-                    try? FileManager.default.createDirectory(at: WhisperModels.directory, withIntermediateDirectories: true)
-                    NSWorkspace.shared.open(WhisperModels.directory)
-                }
-                Button("Choose File…", action: chooseModel)
+                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
             }
-        } header: {
-            Text("Model")
-        } footer: {
-            Text("Models are downloaded from Hugging Face into ~/Library/Application Support/Kaiku/models. Larger models are more accurate but slower.")
         }
         .onChange(of: models.version) { _, _ in onChange() }
         .onChange(of: whisperModel) { _, _ in onChange() }
 
-        Section {
+        SettingsGroup("whisper.cpp", footer: "Leave empty to use the whisper-cli bundled with the app. Detect clears a custom path.") {
             PathField(label: "whisper-cli", path: $whisperPath, placeholder: "Automatic",
                       fallback: WhisperModels.detectWhisperCLI()) {
                 whisperPath = ""
             }
             .onChange(of: whisperPath) { _, _ in onChange() }
-        } header: {
-            Text("whisper.cpp")
-        } footer: {
-            Text("Leave empty to use the whisper-cli bundled with the app. Detect clears a custom path.")
         }
     }
 
@@ -138,43 +140,52 @@ private struct ModelRow: View {
     let active: Bool
     @ObservedObject private var models = WhisperModels.shared
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         let progress = models.progress[model.file]
         let installed = model.isInstalled
-        HStack(spacing: 10) {
+        let ink = Ink(scheme)
+        HStack(spacing: PUI.Space.m) {
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(model.name).font(.body.weight(active ? .semibold : .regular))
+                HStack(spacing: PUI.Space.s) {
+                    Text(model.name).font(PUI.Font.body).foregroundStyle(ink.primary)
                     if model == WhisperModel.recommended {
-                        Text("Recommended")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Brand.accent.opacity(0.15), in: Capsule())
-                            .foregroundStyle(Brand.accent)
+                        Badge("Recommended")
                     }
                 }
-                Text("\(model.size) · \(model.note)").font(.callout).foregroundStyle(.secondary)
+                Text("\(model.size) · \(model.note)").font(PUI.Font.caption).foregroundStyle(ink.secondary)
                 if let err = models.errors[model.file] {
-                    Text(err).font(.caption).foregroundStyle(.red)
+                    Text(err).font(PUI.Font.caption).foregroundStyle(ink.red)
                 }
             }
-            Spacer()
+            Spacer(minLength: PUI.Space.m)
             if let progress {
                 ProgressView(value: progress).frame(width: 110)
-                Text("\(Int(progress * 100))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
+                Text("\(Int(progress * 100))%").font(PUI.Font.caption).monospacedDigit().foregroundStyle(ink.secondary)
+                    .frame(width: 34, alignment: .trailing)
                 Button { models.cancel(model) } label: { Image(systemName: "xmark.circle.fill") }
-                    .buttonStyle(.borderless).foregroundStyle(.secondary)
+                    .buttonStyle(.plain).foregroundStyle(ink.secondary)
                     .help("Cancel download")
+                    .accessibilityLabel("Cancel download")
             } else if active && installed {
-                Label("In Use", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green).font(.callout.weight(.medium))
+                HStack(spacing: PUI.Space.xs) {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                    Text("In Use").font(PUI.Font.callout.weight(.medium))
+                }
+                .foregroundStyle(AppAccent.kaiku.legible(scheme))
             } else if installed {
                 Button("Use") { models.use(model) }
+                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
             } else {
-                Button { models.download(model) } label: { Label("Download", systemImage: "arrow.down.circle") }
+                Button { models.download(model) } label: {
+                    Label("Download", systemImage: "arrow.down.circle").labelStyle(TightLabelStyle())
+                }
+                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
             }
         }
-        .padding(.vertical, 1)
+        .padding(.horizontal, PUI.Space.l)
+        .frame(minHeight: 42)
     }
 }
 
@@ -189,9 +200,9 @@ private struct CloudProviderSettings: View {
     @State private var customModel = false
 
     var body: some View {
-        Section {
-            LabeledContent("API key") {
-                HStack(spacing: 6) {
+        SettingsGroup(Text(kind.displayName), footer: Text(modelHint)) {
+            SettingsRow("API key") {
+                HStack(spacing: PUI.Space.s) {
                     Group {
                         if reveal {
                             TextField("API key", text: $apiKey, prompt: Text("Paste your key"))
@@ -203,39 +214,46 @@ private struct CloudProviderSettings: View {
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.leading)
                     .font(.body.monospaced())
+                    .frame(maxWidth: 280)
                     Button { reveal.toggle() } label: {
                         Image(systemName: reveal ? "eye.slash" : "eye")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                     .help(reveal ? "Hide key" : "Show key")
                     .accessibilityLabel(reveal ? "Hide key" : "Show key")
                 }
             }
-            HStack {
-                Label("Saved in your Keychain", systemImage: "lock.fill")
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if let url = kind.keyURL {
-                    Link("Get an API key", destination: url).font(.caption)
+            GroupRow {
+                HStack {
+                    Label("Saved in your Keychain", systemImage: "lock.fill")
+                        .font(PUI.Font.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    if let url = kind.keyURL {
+                        Link("Get an API key", destination: url).font(PUI.Font.caption)
+                    }
                 }
             }
 
-            Picker("Model", selection: Binding(
-                get: { customModel ? "__custom" : model },
-                set: { v in
-                    if v == "__custom" { customModel = true } else { customModel = false; model = v }
-                })) {
-                ForEach(kind.modelPresets, id: \.self) { Text($0).tag($0) }
-                Divider()
-                Text("Custom…").tag("__custom")
+            SettingsRow("Model") {
+                Picker("Model", selection: Binding(
+                    get: { customModel ? "__custom" : model },
+                    set: { v in
+                        if v == "__custom" { customModel = true } else { customModel = false; model = v }
+                    })) {
+                    ForEach(kind.modelPresets, id: \.self) { Text($0).tag($0) }
+                    Divider()
+                    Text("Custom…").tag("__custom")
+                }
+                .labelsHidden()
+                .fixedSize()
             }
             if customModel {
-                TextField("Model ID", text: $model, prompt: Text(kind.defaultModel))
+                SettingsRow("Model ID") {
+                    TextField("Model ID", text: $model, prompt: Text(kind.defaultModel))
+                        .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+                }
             }
-        } header: {
-            Text(kind.displayName)
-        } footer: {
-            Text(modelHint)
         }
         .onAppear {
             apiKey = Keychain.get(kind.rawValue) ?? ""
@@ -272,31 +290,33 @@ private struct ProviderTestSection: View {
     @State private var result: (ok: Bool, message: String)?
 
     var body: some View {
-        Section {
-            HStack(spacing: 10) {
-                Button {
-                    running = true
-                    result = nil
-                    Task {
-                        let r = await ProviderTester.test(kind)
-                        withAnimation { result = r; running = false }
+        SettingsGroup(footer: kind == .whisperCpp ? "Runs locally, nothing leaves your Mac." : "Sends one second of audio. Costs a fraction of a cent.") {
+            GroupRow {
+                HStack(spacing: PUI.Space.m) {
+                    Button {
+                        running = true
+                        result = nil
+                        Task {
+                            let r = await ProviderTester.test(kind)
+                            withAnimation { result = r; running = false }
+                        }
+                    } label: {
+                        Label("Test \(kind == .whisperCpp ? "whisper.cpp" : kind.displayName)", systemImage: "checkmark.seal")
+                            .labelStyle(TightLabelStyle())
                     }
-                } label: {
-                    Label("Test \(kind == .whisperCpp ? "whisper.cpp" : kind.displayName)", systemImage: "checkmark.seal")
+                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                    .disabled(running)
+                    if running {
+                        ProgressView().controlSize(.small)
+                        Text("Transcribing a 1-second test sound…").font(PUI.Font.callout).foregroundStyle(.secondary)
+                    } else if let result {
+                        StatusDot(kind: result.ok ? .ok : .error, text: result.message)
+                            .lineLimit(3)
+                            .textSelection(.enabled)
+                    }
+                    Spacer()
                 }
-                .disabled(running)
-                if running {
-                    ProgressView().controlSize(.small)
-                    Text("Transcribing a 1-second test sound…").font(.callout).foregroundStyle(.secondary)
-                } else if let result {
-                    StatusDot(kind: result.ok ? .ok : .error, text: result.message)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
-                }
-                Spacer()
             }
-        } footer: {
-            Text(kind == .whisperCpp ? "Runs locally, nothing leaves your Mac." : "Sends one second of audio. Costs a fraction of a cent.")
         }
     }
 }
@@ -309,22 +329,28 @@ private struct SilenceTrimSection: View {
     @AppStorage(Keys.trimMinSilence) private var minSilence = 2.0
 
     var body: some View {
-        Section {
-            Picker("Skip long silences", selection: $mode) {
-                ForEach(TrimSilenceMode.allCases) { Text($0.displayName).tag($0.rawValue) }
+        SettingsGroup("Silence", footer: "Long pauses are cut from a temporary copy sent for transcription, so cloud providers bill fewer minutes. Your audio files are never changed and timestamps still match the recording.") {
+            SettingsRow("Skip long silences") {
+                Picker("Skip long silences", selection: $mode) {
+                    ForEach(TrimSilenceMode.allCases) { Text($0.displayName).tag($0.rawValue) }
+                }
+                .labelsHidden()
+                .fixedSize()
             }
             if mode != TrimSilenceMode.off.rawValue {
-                Stepper(value: $threshold, in: -70 ... -25, step: 5) {
-                    LabeledContent("Silence below", value: "\(Int(threshold)) dB")
+                SettingsRow("Silence below") {
+                    HStack(spacing: PUI.Space.s) {
+                        ValueText("\(Int(threshold)) dB")
+                        Stepper("Silence below", value: $threshold, in: -70 ... -25, step: 5).labelsHidden()
+                    }
                 }
-                Stepper(value: $minSilence, in: 1...10, step: 0.5) {
-                    LabeledContent("Lasting at least", value: String(format: "%.1f s", minSilence))
+                SettingsRow("Lasting at least") {
+                    HStack(spacing: PUI.Space.s) {
+                        ValueText(String(format: "%.1f s", minSilence))
+                        Stepper("Lasting at least", value: $minSilence, in: 1...10, step: 0.5).labelsHidden()
+                    }
                 }
             }
-        } header: {
-            Text("Silence")
-        } footer: {
-            Text("Long pauses are cut from a temporary copy sent for transcription, so cloud providers bill fewer minutes. Your audio files are never changed and timestamps still match the recording.")
         }
     }
 }
@@ -344,9 +370,9 @@ private struct PriceSection: View {
 
     var body: some View {
         if kind != .whisperCpp {
-            Section {
+            SettingsGroup("Cost Estimate", footer: "Used for the estimated cost shown in the library and sent with the webhook. Defaults are the providers' list prices from September 2026; check your plan, prices change. whisper.cpp is free.") {
                 ForEach(models, id: \.self) { model in
-                    LabeledContent(model) {
+                    SettingsRow(model) {
                         HStack(spacing: 4) {
                             Text("$").foregroundStyle(.secondary)
                             TextField(model, value: Binding(
@@ -365,19 +391,18 @@ private struct PriceSection: View {
                         }
                     }
                 }
-                HStack {
-                    Spacer()
-                    Button("Reset to List Prices") {
-                        var o = AppSettings.priceOverrides
-                        models.forEach { o[$0] = nil }
-                        AppSettings.priceOverrides = o
-                        prices = [:]
+                GroupRow {
+                    HStack {
+                        Spacer()
+                        Button("Reset to List Prices") {
+                            var o = AppSettings.priceOverrides
+                            models.forEach { o[$0] = nil }
+                            AppSettings.priceOverrides = o
+                            prices = [:]
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                     }
                 }
-            } header: {
-                Text("Cost Estimate")
-            } footer: {
-                Text("Used for the estimated cost shown in the library and sent with the webhook. Defaults are the providers' list prices from September 2026; check your plan, prices change. whisper.cpp is free.")
             }
             .onAppear { prices = AppSettings.priceOverrides }
         }
@@ -396,49 +421,52 @@ private struct SummarySettings: View {
     private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: provider) ?? .openAI }
 
     var body: some View {
-        Section {
-            Toggle("Summarize every call after transcription", isOn: $enabled)
-            Picker("Provider", selection: $provider) {
-                ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
+        SettingsGroup("Summary", footer: "Off by default. Sends the transcript to the provider you pick, with your own key, and saves summary.md in the call folder. You can also summarize any past call from the library.") {
+            SwitchRow("Summarize every call after transcription", isOn: $enabled)
+            SettingsRow("Provider") {
+                Picker("Provider", selection: $provider) {
+                    ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
+                }
+                .labelsHidden()
+                .fixedSize()
             }
-            TextField("Model", text: $model, prompt: Text(kind.defaultModel))
+            SettingsRow("Model") {
+                TextField("Model", text: $model, prompt: Text(kind.defaultModel))
+                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+            }
             if kind == .anthropic {
-                LabeledContent("API key") {
+                SettingsRow("API key") {
                     SecureField("API key", text: $anthropicKey, prompt: Text("Paste your key"))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .font(.body.monospaced())
+                        .frame(maxWidth: 280)
                 }
             }
-            HStack {
-                if kind.apiKey != nil || !anthropicKey.isEmpty {
-                    StatusDot(kind: .ok, text: kind == .anthropic ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
-                } else {
-                    StatusDot(kind: .warning, text: kind == .anthropic ? "API key missing" : "No \(kind.displayName) key yet. Select \(kind.displayName) under Provider to add one.")
-                }
-                Spacer()
-                if let url = kind.keyURL { Link("Get an API key", destination: url).font(.caption) }
-            }
-            VStack(alignment: .leading, spacing: 6) {
+            GroupRow {
                 HStack {
-                    Text("Prompt")
+                    if kind.apiKey != nil || !anthropicKey.isEmpty {
+                        StatusDot(kind: .ok, text: kind == .anthropic ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
+                    } else {
+                        StatusDot(kind: .warning, text: kind == .anthropic ? "API key missing" : "No \(kind.displayName) key yet. Select \(kind.displayName) under Provider to add one.")
+                    }
                     Spacer()
-                    Button("Reset") { prompt = SummaryAPI.defaultPrompt }
-                        .disabled(prompt == SummaryAPI.defaultPrompt)
+                    if let url = kind.keyURL { Link("Get an API key", destination: url).font(PUI.Font.caption) }
                 }
-                TextEditor(text: $prompt)
-                    .font(.system(.callout, design: .monospaced))
-                    .frame(minHeight: 140)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                Text("{{title}} and {{transcript}} are filled in for you.").font(.caption).foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Summary")
-        } footer: {
-            Text("Off by default. Sends the transcript to the provider you pick, with your own key, and saves summary.md in the call folder. You can also summarize any past call from the library.")
+            GroupRow {
+                VStack(alignment: .leading, spacing: PUI.Space.s) {
+                    HStack {
+                        Text("Prompt").font(PUI.Font.body)
+                        Spacer()
+                        Button("Reset") { prompt = SummaryAPI.defaultPrompt }
+                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                            .disabled(prompt == SummaryAPI.defaultPrompt)
+                    }
+                    EditorField(text: $prompt, minHeight: 140)
+                    Text("{{title}} and {{transcript}} are filled in for you.").font(PUI.Font.caption).foregroundStyle(.secondary)
+                }
+            }
         }
         .onAppear {
             model = AppSettings.summaryModel(for: kind)
@@ -465,19 +493,21 @@ struct PathField: View {
         let trimmed = path.trimmingCharacters(in: .whitespaces)
         let effective = trimmed.isEmpty ? (fallback ?? "") : (trimmed as NSString).expandingTildeInPath
         let ok = FileManager.default.isExecutableFile(atPath: effective)
-        LabeledContent(label) {
-            HStack(spacing: 6) {
+        SettingsRow(label) {
+            HStack(spacing: PUI.Space.s) {
                 TextField(label, text: $path, prompt: Text(placeholder))
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.leading)
                     .font(.body.monospaced())
+                    .frame(maxWidth: 300)
                 Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .foregroundStyle(ok ? .green : .red)
                     .help(ok ? "Found" : "Not found or not executable")
                     .accessibilityLabel(ok ? "Found" : "Not found")
                 if let detect {
                     Button("Detect", action: detect)
+                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                 }
             }
         }
