@@ -1,11 +1,13 @@
 import AppKit
+import PartitiUI
 import SwiftUI
 
 /// Brand colors and small shared visual pieces.
 enum Brand {
-    /// Warm coral red. Used sparingly: primary actions and the recording state.
-    static let accent = Color(red: 0.949, green: 0.341, blue: 0.294)
-    static let nsAccent = NSColor(red: 0.949, green: 0.341, blue: 0.294, alpha: 1)
+    /// Kaiku's red from Partiti UI. Used sparingly: primary actions and the recording state.
+    static let accent = AppAccent.kaiku.color
+    /// The same red for the status item, drawn in AppKit.
+    static let nsAccent = NSColor(AppAccent.kaiku.color)
 
     private static let speakerPalette: [Color] = [.teal, .indigo, .orange, .green, .purple, .pink, .blue, .brown]
 
@@ -149,8 +151,9 @@ enum MenuBarGlyph {
         return image
     }
 
-    /// Non-template red pill with a white dot and the elapsed time; a crossed-out mic
-    /// at the end when all microphones are muted.
+    /// Non-template red pill with a white dot and the elapsed time, drawn like Partiti UI's
+    /// `MenuBarPill` (16 pt, 11.5 semibold monospaced digits); a crossed-out mic at the end
+    /// when all microphones are muted.
     static func recording(elapsed: String, muted: Bool = false) -> NSImage {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
