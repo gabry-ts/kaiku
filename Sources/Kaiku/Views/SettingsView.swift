@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, webhook, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return "Sources"
         case .transcription: return "Transcription"
         case .webhook: return "Webhook"
+        case .notifications: return "Notifications"
         case .permissions: return "Permissions"
         case .about: return "About"
         }
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return "dot.radiowaves.left.and.right"
         case .transcription: return "text.quote"
         case .webhook: return "paperplane.fill"
+        case .notifications: return "bell.badge.fill"
         case .permissions: return "lock.shield.fill"
         case .about: return "info"
         }
@@ -43,6 +45,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return .teal
         case .transcription: return .blue
         case .webhook: return .purple
+        case .notifications: return .red
         case .permissions: return .green
         case .about: return .teal
         }
@@ -69,6 +72,7 @@ struct SettingsView: View {
             case .sources: SourcesSettings()
             case .transcription: TranscriptionSettings()
             case .webhook: WebhookSettings()
+            case .notifications: NotificationSettings()
             case .permissions: PermissionsSettings()
             case .about: AboutSettings()
             }
@@ -89,7 +93,6 @@ struct SettingsView: View {
 struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
     @AppStorage(Keys.language) private var language = "auto"
-    @AppStorage(Keys.notificationsEnabled) private var notificationsEnabled = true
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
@@ -115,7 +118,7 @@ struct GeneralSettings: View {
 
             if LiveTranscription.isSupported { LiveSettingsSection() }
 
-            SettingsGroup("Startup and Notifications") {
+            SettingsGroup("Startup") {
                 SwitchRow("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLogin))
                 if LoginItem.needsApproval {
                     SettingsRow(Text("Needs approval in System Settings")) {
@@ -126,7 +129,6 @@ struct GeneralSettings: View {
                 if let loginError {
                     GroupRow { StatusDot(kind: .error, text: loginError) }
                 }
-                SwitchRow("Notify me when a transcript is ready", isOn: $notificationsEnabled)
             }
 
             StorageSection()
@@ -400,15 +402,13 @@ struct MuteSection: View {
 struct CallDetectionSection: View {
     @AppStorage(Keys.detectCalls) private var detect = true
     @AppStorage(Keys.detectAutoStart) private var autoStart = false
-    @AppStorage(Keys.detectEndNotify) private var endNotify = true
     @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
 
     var body: some View {
-        SettingsGroup("Call Detection", footer: "Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources.") {
+        SettingsGroup("Call Detection", footer: "Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources, and which notifications you get in Notifications.") {
             SwitchRow("Notice when a call starts", isOn: $detect)
             if detect {
                 SwitchRow("Start recording automatically", isOn: $autoStart)
-                SwitchRow("Ask to stop when the call ends", isOn: $endNotify)
                 SettingsRow("Stop automatically after the call ends") {
                     Picker("Stop automatically after the call ends", selection: $autoStop) {
                         Text("Never").tag(0)
@@ -507,7 +507,7 @@ struct PermissionsSettings: View {
                     action: "Open Settings…",
                     perform: { Permissions.open(.systemAudio) })
                 PermissionRow(
-                    symbol: "bell.badge.fill", tint: .orange, title: "Notifications",
+                    symbol: "bell.badge.fill", tint: .red, title: "Notifications",
                     detail: "Tells you when a transcript is ready or a call starts.",
                     state: permissions.notifications,
                     action: permissions.notifications == .notAsked ? "Allow…" : "Open Settings…",

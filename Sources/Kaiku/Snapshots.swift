@@ -82,6 +82,12 @@ enum Snapshots {
             LiveSettingsSection.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveEnabled: false])
         }
+        // Notifications with some switched off and some silenced.
+        let quiet: [String: Any] = [NotificationKind.recordingStarted.showKey: false, NotificationKind.cleanup.showKey: false,
+                                    NotificationKind.transcriptReady.soundKey: false, NotificationKind.deviceChanged.soundKey: false]
+        defaults.register(defaults: quiet)
+        for dark in [false, true] { settings("settings-notifications-mixed-\(dark ? "dark" : "light")", .notifications, dark: dark) }
+        defaults.register(defaults: quiet.mapValues { _ in true })
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
         for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }
         defaults.register(defaults: [Keys.provider: ProviderKind.whisperCpp.rawValue, Keys.webhookBodyMode: "template"])
