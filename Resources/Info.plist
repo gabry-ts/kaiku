@@ -2,41 +2,41 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key>
-	<string>Kaiku</string>
 	<key>CFBundleDisplayName</key>
 	<string>Kaiku</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.gabrielepartiti.kaiku</string>
 	<key>CFBundleExecutable</key>
 	<string>Kaiku</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.gabrielepartiti.kaiku</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Kaiku</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.3</string>
+	<string>1.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>7</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
+	<string>8</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.2</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://github.com/gabry-ts/kaiku/releases/latest/download/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>N5xghnPP9eMLGnoojUNdhkwtEprucWINb2hP7brHeZc=</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Kaiku records system audio (the other people on the call) so it can be transcribed.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>Kaiku records system audio (the other people on the call) so it can be transcribed.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/gabry-ts/kaiku/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>N5xghnPP9eMLGnoojUNdhkwtEprucWINb2hP7brHeZc=</string>
 </dict>
 </plist>
