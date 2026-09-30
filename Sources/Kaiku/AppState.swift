@@ -230,7 +230,7 @@ final class AppState: ObservableObject {
                 rec.stop()
                 return Result { try AudioFinalizer.finalize(folder) }
             }.value
-            _ = await live.finish()
+            let heard = await live.finish()
             WindowManager.shared.close("live")
             currentFolder = nil
             clock = nil
@@ -242,7 +242,9 @@ final class AppState: ObservableObject {
             switch result {
             case .success:
                 folder.updateMeta { $0.durationSeconds = duration }
-                transcribe(folder: folder, provider: AppSettings.provider)
+                // The live text is only kept when asked for and when none of it is missing.
+                let keep = AppSettings.liveAfterCall == .transcript && heard.complete && !heard.transcript.finals.isEmpty
+                transcribe(folder: folder, provider: AppSettings.provider, live: keep ? heard.transcript : nil)
             case .failure(let error):
                 folder.updateMeta {
                     $0.durationSeconds = duration
@@ -409,7 +411,9 @@ final class AppState: ObservableObject {
         transcribe(folder: folder, provider: AppSettings.provider)
     }
 
-    func transcribe(folder: RecordingFolder, provider: ProviderKind) {
+    /// - Parameter live: the text heard while recording, saved as the transcript instead
+    ///   of running the provider. If saving it fails, the provider runs as usual.
+    func transcribe(folder: RecordingFolder, provider: ProviderKind, live: LiveTranscript? = nil) {
         guard !busyFolders.contains(folder.key) else { return }
         let title = folder.loadMeta()?.title ?? folder.url.lastPathComponent
         busyFolders.insert(folder.key)
@@ -420,8 +424,20 @@ final class AppState: ObservableObject {
 
         Task {
             do {
-                try await TranscriptionJob.run(folder: folder, providerKind: provider) { [weak self] stage in
-                    self?.busyStage[folder.key] = stage
+                var saved = false
+                if let live, let engine = AppSettings.liveEngine {
+                    busyStage[folder.key] = "Saving the live transcript…"
+                    do {
+                        try await TranscriptionJob.saveLive(live, folder: folder, engine: engine)
+                        saved = true
+                    } catch {
+                        Log.transcription.error("Live transcript not saved, transcribing instead: \(error.diagnosticDescription, privacy: .public)")
+                    }
+                }
+                if !saved {
+                    try await TranscriptionJob.run(folder: folder, providerKind: provider) { [weak self] stage in
+                        self?.busyStage[folder.key] = stage
+                    }
                 }
                 recoveredFolders.removeAll { $0.key == folder.key }
                 if AppSettings.summaryEnabled {
