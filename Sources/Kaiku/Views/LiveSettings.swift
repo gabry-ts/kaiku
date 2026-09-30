@@ -39,6 +39,15 @@ struct LiveSettingsSection: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                if let notice = kind.notice {
+                    GroupRow {
+                        if kind.keyProvider == nil {
+                            Text(notice).font(PUI.Font.callout).foregroundStyle(.secondary)
+                        } else {
+                            StatusDot(kind: .warning, text: notice)
+                        }
+                    }
+                }
                 SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set above.")) {
                     ValueText(languageText)
                 }
@@ -66,11 +75,11 @@ struct LiveSettingsSection: View {
             GroupRow {
                 HStack(spacing: PUI.Space.m) {
                     ProgressView().controlSize(.small)
-                    Text("Checking the speech model…").font(PUI.Font.callout).foregroundStyle(.secondary)
+                    Text("Checking…").font(PUI.Font.callout).foregroundStyle(.secondary)
                 }
             }
         case .ready:
-            GroupRow { StatusDot(kind: .ok, text: "Ready. The speech model is on this Mac.") }
+            GroupRow { StatusDot(kind: .ok, text: kind.readyText) }
         case .needsDownload(let what):
             GroupRow {
                 HStack(spacing: PUI.Space.l) {

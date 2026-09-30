@@ -83,6 +83,29 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What choosing the engine costs, shown under the picker. Nil when there is nothing to say.
+    var notice: String? {
+        switch self {
+        case .apple:
+            return nil
+        case .whisper:
+            return "whisper.cpp transcribes about ten seconds at a time: the text shows some ten seconds after it is said, and the processor is kept busy during the call."
+        case .openAI, .elevenLabs:
+            let name = keyProvider == .openAI ? "OpenAI" : "ElevenLabs"
+            return "During the call the audio of both tracks, your microphone and the other people, is sent to \(name) as two streams. \(name) bills both to your account."
+        }
+    }
+
+    /// The status line when the engine can run.
+    var readyText: String {
+        switch self {
+        case .apple: return "Ready. The speech model is on this Mac."
+        case .whisper: return "Ready. whisper-cli and its model are on this Mac."
+        case .openAI: return "Ready. Uses your OpenAI API key."
+        case .elevenLabs: return "Ready. Uses your ElevenLabs API key."
+        }
+    }
+
     /// The transcription provider whose API key a cloud engine uses, nil on device.
     var keyProvider: ProviderKind? {
         switch self {

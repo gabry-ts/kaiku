@@ -80,7 +80,15 @@ enum Snapshots {
             LiveSettingsSection.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
             settings("settings-general-live-download-light", .general, dark: false)
             LiveSettingsSection.previewReadiness = .ready
-            defaults.register(defaults: [Keys.liveEnabled: false])
+            // Every other engine, and a cloud one without its API key.
+            for kind in LiveEngineKind.allCases where kind != .apple {
+                defaults.register(defaults: [Keys.liveEngine: kind.rawValue])
+                settings("settings-general-live-\(kind.rawValue)-light", .general, dark: false)
+            }
+            LiveSettingsSection.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Transcription.")
+            settings("settings-general-live-elevenlabs-nokey-light", .general, dark: false)
+            LiveSettingsSection.previewReadiness = .ready
+            defaults.register(defaults: [Keys.liveEngine: LiveEngineKind.apple.rawValue, Keys.liveEnabled: false])
         }
         // Notifications with some switched off and some silenced.
         let quiet: [String: Any] = [NotificationKind.recordingStarted.showKey: false, NotificationKind.cleanup.showKey: false,
