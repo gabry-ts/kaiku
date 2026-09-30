@@ -1,3 +1,4 @@
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -98,7 +99,7 @@ struct TagField: View {
                             Text(tag)
                                 .font(.caption)
                                 .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(i == highlight ? AnyShapeStyle(Brand.accent.opacity(0.2)) : AnyShapeStyle(.quaternary.opacity(0.6)),
+                                .background(i == highlight ? AnyShapeStyle(AppAccent.kaiku.color.opacity(0.2)) : AnyShapeStyle(.quaternary.opacity(0.6)),
                                             in: Capsule())
                         }
                         .buttonStyle(.plain)

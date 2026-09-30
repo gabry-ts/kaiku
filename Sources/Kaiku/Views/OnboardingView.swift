@@ -1,3 +1,4 @@
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -33,7 +34,7 @@ struct OnboardingView: View {
                 HStack(spacing: 6) {
                     ForEach(0..<(steps > 1 ? steps : 0), id: \.self) { i in
                         Circle()
-                            .fill(i == step ? Brand.accent : Color.secondary.opacity(0.3))
+                            .fill(i == step ? AppAccent.kaiku.color : Color.secondary.opacity(0.3))
                             .frame(width: 7, height: 7)
                     }
                 }
@@ -42,6 +43,7 @@ struct OnboardingView: View {
                 Spacer()
                 if step > 0 && step < steps - 1 {
                     Button("Back") { withAnimation(.snappy) { step -= 1 } }
+                        .buttonStyle(SecondaryButtonStyle())
                 }
                 Button(accessibilityOnly ? "Done" : step == steps - 1 ? "Start Using Kaiku" : "Continue") {
                     if step == steps - 1 {
@@ -53,7 +55,7 @@ struct OnboardingView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.primary)
+                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .controlSize(.large)
             .padding(.horizontal, 24)
@@ -61,6 +63,7 @@ struct OnboardingView: View {
         }
         .frame(width: 600, height: 540)
         .defaultAppStorage(AppSettings.defaults)
+        .puiAccent(.kaiku)
     }
 }
 
@@ -74,7 +77,7 @@ private struct StepHeader: View {
             if let symbol {
                 Image(systemName: symbol)
                     .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(Brand.accent.gradient)
+                    .foregroundStyle(AppAccent.kaiku.color.gradient)
                     .padding(.bottom, 2)
             }
             Text(title).font(.system(size: 24, weight: .bold))
@@ -109,7 +112,7 @@ private struct WelcomeStep: View {
         let text: String
         var body: some View {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: symbol).font(.title2).foregroundStyle(Brand.accent).frame(width: 30)
+                Image(systemName: symbol).font(.title2).foregroundStyle(AppAccent.kaiku.color).frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body.weight(.semibold))
                     Text(text).font(.callout).foregroundStyle(.secondary)
@@ -126,30 +129,25 @@ private struct PermissionsStep: View {
         VStack(spacing: 22) {
             StepHeader(symbol: "lock.shield", title: "A few permissions",
                        subtitle: "Kaiku only listens while you're recording.")
-            VStack(spacing: 12) {
-                PermissionRow(symbol: "mic.fill", tint: Brand.accent, title: "Microphone",
+            SettingsGroup {
+                PermissionRow(symbol: "mic.fill", tint: AppAccent.kaiku.color, title: "Microphone",
                               detail: "To record your side of the call.", state: permissions.microphone,
                               action: permissions.microphone == .notAsked ? "Allow" : "Open Settings…",
                               perform: { permissions.requestMicrophone() })
-                Divider()
                 PermissionRow(symbol: "speaker.wave.2.fill", tint: .blue, title: "System Audio Recording",
                               detail: "To hear the other people. macOS asks on your first recording.",
                               state: .unknown, action: "Open Settings…",
                               perform: { Permissions.open(.systemAudio) })
-                Divider()
                 PermissionRow(symbol: "bell.badge.fill", tint: .orange, title: "Notifications",
                               detail: "To tell you when a transcript is ready.", state: permissions.notifications,
                               action: permissions.notifications == .notAsked ? "Allow" : "Open Settings…",
                               perform: { permissions.requestNotifications() })
-                Divider()
                 PermissionRow(symbol: "calendar", tint: .red, title: "Calendar (optional)",
                               detail: "To name recordings after the meeting you're in.", state: permissions.calendar,
                               action: permissions.calendar == .notAsked ? "Allow" : "Open Settings…",
                               perform: { permissions.requestCalendar() })
-                Divider()
                 AccessibilityRow(permissions: permissions)
             }
-            .card()
             .frame(maxWidth: 480)
         }
         .padding(28)
@@ -179,9 +177,10 @@ private struct AccessibilityStep: View {
         VStack(spacing: 22) {
             StepHeader(symbol: "macwindow.on.rectangle", title: "Choose what gets recorded",
                        subtitle: "Kaiku can now tell apart calls from the same browser, so WhatsApp Web doesn't count as Google Meet. It reads only the title of the window in front.")
-            AccessibilityRow(permissions: permissions)
-                .card()
-                .frame(maxWidth: 480)
+            SettingsGroup {
+                AccessibilityRow(permissions: permissions)
+            }
+            .frame(maxWidth: 480)
             Text("You can decide which sources to record in Settings > Sources.")
                 .font(.callout).foregroundStyle(.secondary)
         }
@@ -218,7 +217,7 @@ private struct ProviderStep: View {
                 if kind == .whisperCpp {
                     let model = WhisperModel.recommended
                     HStack(spacing: 12) {
-                        Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(Brand.accent).frame(width: 30)
+                        Image(systemName: "desktopcomputer").font(.title2).foregroundStyle(AppAccent.kaiku.color).frame(width: 30)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Private and free").font(.body.weight(.semibold))
                             Text("Uses whisper.cpp with the \(model.name) model (\(model.size)).")
@@ -231,8 +230,10 @@ private struct ProviderStep: View {
                             Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                         } else if model.isInstalled {
                             Button("Use") { models.use(model) }
+                                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                         } else {
                             Button("Download") { models.download(model) }
+                                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                         }
                     }
                     if !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) {
@@ -250,7 +251,7 @@ private struct ProviderStep: View {
                     }
                 }
             }
-            .card()
+            .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
             .frame(maxWidth: 480)
             .onChange(of: provider) { _, _ in apiKey = Keychain.get(kind.rawValue) ?? "" }
             .onAppear { apiKey = Keychain.get(kind.rawValue) ?? "" }

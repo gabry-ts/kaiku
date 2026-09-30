@@ -1,3 +1,4 @@
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -31,7 +32,7 @@ struct TitlePromptView: View {
             HStack(spacing: 10) {
                 Image(systemName: "record.circle.fill")
                     .font(.system(size: 22))
-                    .foregroundStyle(Brand.accent)
+                    .foregroundStyle(AppAccent.kaiku.color)
                     .symbolEffect(.pulse, options: .repeating)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("New Recording").font(.headline)
@@ -45,7 +46,7 @@ struct TitlePromptView: View {
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(focused ? Brand.accent.opacity(0.7) : Color.secondary.opacity(0.25), lineWidth: focused ? 2 : 1))
+                    .strokeBorder(focused ? AppAccent.kaiku.color.opacity(0.7) : Color.secondary.opacity(0.25), lineWidth: focused ? 2 : 1))
                 .focused($focused)
                 .onSubmit(start)
                 .accessibilityLabel("Call title")
@@ -107,16 +108,18 @@ struct TitlePromptView: View {
                 Spacer()
                 Button("Cancel", role: .cancel, action: onDone)
                     .keyboardShortcut(.cancelAction)
+                    .buttonStyle(SecondaryButtonStyle())
                 Button(action: start) {
                     Label("Start Recording", systemImage: "record.circle")
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.primary)
+                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .controlSize(.large)
         }
         .padding(20)
         .frame(width: 460)
+        .puiAccent(.kaiku)
         .onAppear {
             knownTags = state.knownTags()
             DispatchQueue.main.async { focused = true }

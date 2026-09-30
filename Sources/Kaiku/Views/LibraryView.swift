@@ -1,4 +1,5 @@
 import AVFoundation
+import PartitiUI
 import SwiftUI
 import KaikuCore
 
@@ -136,7 +137,7 @@ struct LibraryView: View {
                          ?? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath).")
                 } actions: {
                     Button("Start Recording") { state.requestStart() }
-                        .buttonStyle(.primary)
+                        .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                 }
             } else {
                 ContentUnavailableView("Select a Recording", systemImage: "text.bubble",
@@ -145,6 +146,7 @@ struct LibraryView: View {
         }
         .navigationTitle("Recordings")
         .frame(minWidth: 820, minHeight: 520)
+        .puiAccent(.kaiku)
         .onAppear {
             reload()
             if let sel = state.librarySelection { selection = [sel] }
@@ -215,8 +217,8 @@ struct LibraryView: View {
             Text(title)
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(selected ? AnyShapeStyle(Brand.accent.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.7)), in: Capsule())
-                .foregroundStyle(selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary))
+                .background(selected ? AnyShapeStyle(AppAccent.kaiku.color.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.7)), in: Capsule())
+                .foregroundStyle(selected ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.primary))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -327,7 +329,7 @@ private struct MultiSelectionView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "square.stack.3d.up.fill")
-                .font(.system(size: 40)).foregroundStyle(Brand.accent.gradient)
+                .font(.system(size: 40)).foregroundStyle(AppAccent.kaiku.color.gradient)
             Text("\(items.count) calls selected").font(.title2.weight(.bold))
             HStack(spacing: 18) {
                 Label(TranscriptFormatter.timestamp(duration), systemImage: "clock")
@@ -380,7 +382,7 @@ private struct AddTagSheet: View {
                     tags.forEach(add)
                     dismiss()
                 }
-                .buttonStyle(.primary)
+                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                 .disabled(tags.isEmpty)
             }
         }
@@ -569,7 +571,7 @@ private struct RecordingDetail: View {
                 Text(summaryError ?? "Summaries use your own API key and never run unless you turn them on or ask here.")
             } actions: {
                 Button("Generate Summary") { generateSummary() }
-                    .buttonStyle(.primary)
+                    .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                     .disabled(!item.folder.hasTranscript || summarizing)
             }
             .frame(maxWidth: .infinity)
@@ -697,7 +699,7 @@ private struct RecordingDetail: View {
                 }
                 Spacer()
             }
-            .card()
+            .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
         } else if item.meta.status == .recovered {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(.blue).font(.title3)
@@ -707,10 +709,10 @@ private struct RecordingDetail: View {
                 }
                 Spacer()
                 Button("Transcribe") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
-                    .buttonStyle(.primary)
+                    .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                     .disabled(!hasAudio)
             }
-            .card()
+            .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
         } else if item.meta.status == .error {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
@@ -724,7 +726,7 @@ private struct RecordingDetail: View {
                         withAnimation(.snappy) { showErrorDetails.toggle() }
                     }
                     Button("Try Again") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
-                        .buttonStyle(.primary)
+                        .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                         .disabled(!hasAudio)
                 }
                 if showErrorDetails, let err = item.meta.error {
@@ -732,7 +734,7 @@ private struct RecordingDetail: View {
                         .transition(.opacity)
                 }
             }
-            .card()
+            .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
         }
         if let webhookStatus {
             StatusDot(kind: webhookStatus.ok ? .ok : .error, text: webhookStatus.text)
@@ -854,7 +856,7 @@ private struct TranscriptBlockView: View {
                     Image(systemName: "play.fill").font(.system(size: 7)).opacity(hover && canSeek ? 1 : 0)
                 }
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(hover && canSeek ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(hover && canSeek ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
             .onHover { hover = $0 }
@@ -954,7 +956,7 @@ private struct PlayerCard: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
-                    .background(Brand.accent.gradient, in: Circle())
+                    .background(AppAccent.kaiku.color.gradient, in: Circle())
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -969,7 +971,7 @@ private struct PlayerCard: View {
                 if !editing { player.seek(to: player.time, play: player.isPlaying) }
             }
             .controlSize(.small)
-            .tint(Brand.accent)
+            .tint(AppAccent.kaiku.color)
             .accessibilityLabel("Position")
             .overlay(alignment: .bottom) {
                 if !bookmarks.isEmpty && player.duration > 0 { markers.offset(y: 9) }
@@ -994,7 +996,7 @@ private struct PlayerCard: View {
             .fixedSize()
             .help("Playback speed")
         }
-        .card()
+        .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
     }
 
     /// Bookmark ticks under the scrubber; click one to jump there.
@@ -1006,7 +1008,7 @@ private struct PlayerCard: View {
                 Button { player.seek(to: b.time, play: true) } label: {
                     Image(systemName: "bookmark.fill")
                         .font(.system(size: 7))
-                        .foregroundStyle(Brand.accent)
+                        .foregroundStyle(AppAccent.kaiku.color)
                         .frame(width: 12, height: 10)
                         .contentShape(Rectangle())
                 }
@@ -1036,7 +1038,7 @@ private struct BookmarksSection: View {
                             remove: { state.updateBookmark(folder, id: b.id, label: nil) })
             }
         }
-        .card()
+        .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
     }
 }
 
@@ -1053,7 +1055,7 @@ private struct BookmarkRow: View {
         HStack(spacing: 10) {
             Button(action: seek) {
                 HStack(spacing: 4) {
-                    Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(Brand.accent)
+                    Image(systemName: "bookmark.fill").font(.caption2).foregroundStyle(AppAccent.kaiku.color)
                     Text(TranscriptFormatter.timestamp(bookmark.time)).font(.callout.monospacedDigit())
                 }
             }
@@ -1176,7 +1178,7 @@ struct SpeakerRenameSheet: View {
                     catch { self.error = error.localizedDescription }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.primary)
+                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .padding(20)
         }
