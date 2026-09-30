@@ -298,7 +298,7 @@ struct BulkActions: View {
         .disabled(!items.contains { $0.folder.hasTranscript })
         Button("Add Tag…") { request(.addTag(folders)) }
         Menu("Transcribe Again") {
-            ForEach(ProviderKind.allCases) { kind in
+            ForEach(ProviderKind.available) { kind in
                 Button(kind.displayName + (kind == AppSettings.provider ? " (default)" : "")) {
                     for f in folders where !state.isBusy(f) && f.loadMeta()?.audioDeleted != true && !f.audioURLs.isEmpty {
                         state.transcribe(folder: f, provider: kind)
@@ -773,7 +773,7 @@ private struct RecordingDetail: View {
             }
             .help("Show in Finder")
             Menu {
-                ForEach(ProviderKind.allCases) { kind in
+                ForEach(ProviderKind.available) { kind in
                     Button {
                         state.transcribe(folder: item.folder, provider: kind)
                     } label: {

@@ -7,12 +7,12 @@ struct TranscriptionSettings: View {
     /// Bumped to re-evaluate readiness after keys or models change.
     @State private var refresh = 0
 
-    private var kind: ProviderKind { ProviderKind(rawValue: provider) ?? .whisperCpp }
+    private var kind: ProviderKind { AppSettings.provider(saved: provider) }
 
     var body: some View {
         KaikuPane(pane: .transcription, subtitle: "Who turns your calls into text, and with which model.") {
             SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so the transcript knows who said what.") {
-                ForEach(ProviderKind.allCases) { p in
+                ForEach(ProviderKind.available) { p in
                     ProviderRow(kind: p, selected: p == kind, refresh: refresh) {
                         withAnimation(.snappy) { provider = p.rawValue }
                     }
@@ -21,7 +21,7 @@ struct TranscriptionSettings: View {
 
             if kind == .whisperCpp {
                 WhisperSettings(onChange: { refresh += 1 })
-            } else {
+            } else if kind.isCloud {
                 CloudProviderSettings(kind: kind, onChange: { refresh += 1 }).id(kind)
             }
 
@@ -75,9 +75,19 @@ private extension ProviderKind {
     var tileColor: Color {
         switch self {
         case .whisperCpp: return .gray
+        case .apple: return .blue
         case .elevenLabs: return .indigo
         case .openAI: return .teal
         case .groq: return .orange
+        }
+    }
+
+    /// The provider's name on its test button.
+    var testName: String {
+        switch self {
+        case .whisperCpp: return "whisper.cpp"
+        case .apple: return "Apple"
+        default: return displayName
         }
     }
 }
@@ -277,7 +287,7 @@ private struct CloudProviderSettings: View {
             default: return "gpt-4o models return text without timestamps, so audio is sent in 1-minute parts to keep the timeline."
             }
         case .groq: return "Groq runs Whisper with timestamps, very fast and cheap."
-        case .whisperCpp: return ""
+        case .whisperCpp, .apple: return ""
         }
     }
 }
@@ -290,7 +300,7 @@ private struct ProviderTestSection: View {
     @State private var result: (ok: Bool, message: String)?
 
     var body: some View {
-        SettingsGroup(footer: kind == .whisperCpp ? "Runs locally, nothing leaves your Mac." : "Sends one second of audio. Costs a fraction of a cent.") {
+        SettingsGroup(footer: !kind.isCloud ? "Runs locally, nothing leaves your Mac." : "Sends one second of audio. Costs a fraction of a cent.") {
             GroupRow {
                 HStack(spacing: PUI.Space.m) {
                     Button {
@@ -301,7 +311,7 @@ private struct ProviderTestSection: View {
                             withAnimation { result = r; running = false }
                         }
                     } label: {
-                        Label("Test \(kind == .whisperCpp ? "whisper.cpp" : kind.displayName)", systemImage: "checkmark.seal")
+                        Label("Test \(kind.testName)", systemImage: "checkmark.seal")
                             .labelStyle(TightLabelStyle())
                     }
                     .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
@@ -369,8 +379,8 @@ private struct PriceSection: View {
     }
 
     var body: some View {
-        if kind != .whisperCpp {
-            SettingsGroup("Cost Estimate", footer: "Used for the estimated cost shown in the library and sent with the webhook. Defaults are the providers' list prices from September 2026; check your plan, prices change. whisper.cpp is free.") {
+        if kind.isCloud {
+            SettingsGroup("Cost Estimate", footer: "Used for the estimated cost shown in the library and sent with the webhook. Defaults are the providers' list prices from September 2026; check your plan, prices change. Transcribing on this Mac is free.") {
                 ForEach(models, id: \.self) { model in
                     SettingsRow(model) {
                         HStack(spacing: 4) {

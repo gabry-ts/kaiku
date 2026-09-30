@@ -197,7 +197,7 @@ private struct ProviderStep: View {
     @ObservedObject private var models = WhisperModels.shared
     @State private var apiKey = ""
 
-    private var kind: ProviderKind { ProviderKind(rawValue: provider) ?? .whisperCpp }
+    private var kind: ProviderKind { AppSettings.provider(saved: provider) }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -239,6 +239,10 @@ private struct ProviderStep: View {
                     if !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) {
                         StatusDot(kind: .warning, text: "whisper-cli not found. Set its path in Settings.")
                     }
+                } else if kind == .apple {
+                    Text("Private and free").font(.body.weight(.semibold))
+                    Text("Uses the speech recognizer built into macOS. Check its speech model in Settings > Transcription.")
+                        .font(.callout).foregroundStyle(.secondary)
                 } else {
                     Text("Paste your \(kind.displayName) API key").font(.body.weight(.semibold))
                     SecureField("API key", text: $apiKey, prompt: Text("API key"))

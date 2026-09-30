@@ -48,6 +48,12 @@ struct KaikuApp: App {
             exit(SelfTest.runLive(file: URL(fileURLWithPath: args[i + 1]), language: language, engine: engine,
                                   download: args.contains("--download")))
         }
+        if let i = args.firstIndex(of: "--transcribe-selftest"), args.indices.contains(i + 1) {
+            let language = args.indices.contains(i + 2) && !args[i + 2].hasPrefix("--") ? args[i + 2] : "auto"
+            let provider = args.firstIndex(of: "--provider").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+            exit(SelfTest.runTranscribe(file: URL(fileURLWithPath: args[i + 1]), language: language, provider: provider,
+                                        download: args.contains("--download")))
+        }
         if let i = args.firstIndex(of: "--render-snapshots"), args.indices.contains(i + 1) {
             exit(MainActor.assumeIsolated { Snapshots.render(to: URL(fileURLWithPath: args[i + 1])) })
         }

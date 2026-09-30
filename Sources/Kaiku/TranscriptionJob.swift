@@ -85,7 +85,7 @@ enum TranscriptionJob {
         meta.provider = providerKind.displayName
         meta.model = provider.name
         meta.detectedLanguage = uniqueDetected.isEmpty ? nil : uniqueDetected.joined(separator: ", ")
-        let modelID = providerKind == .whisperCpp ? nil : AppSettings.model(for: providerKind)
+        let modelID = providerKind.isCloud ? AppSettings.model(for: providerKind) : nil
         meta.modelID = modelID
         meta.transcribedSeconds = sentSeconds
         if let modelID {

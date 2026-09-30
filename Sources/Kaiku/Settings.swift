@@ -4,12 +4,13 @@ import PartitiUI
 import Security
 
 enum ProviderKind: String, CaseIterable, Identifiable, Codable {
-    case whisperCpp, elevenLabs, openAI, groq
+    case whisperCpp, apple, elevenLabs, openAI, groq
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .whisperCpp: return "whisper.cpp (local)"
+        case .apple: return "Apple (on this Mac)"
         case .elevenLabs: return "ElevenLabs Scribe"
         case .openAI: return "OpenAI"
         case .groq: return "Groq"
@@ -18,15 +19,27 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
 
     var defaultModel: String {
         switch self {
-        case .whisperCpp: return ""
+        case .whisperCpp, .apple: return ""
         case .elevenLabs: return "scribe_v2"
         case .openAI: return "gpt-4o-mini-transcribe"
         case .groq: return "whisper-large-v3-turbo"
         }
     }
 
-    var needsAPIKey: Bool { self != .whisperCpp }
-    var isCloud: Bool { self != .whisperCpp }
+    var needsAPIKey: Bool { isCloud }
+    var isCloud: Bool { self != .whisperCpp && self != .apple }
+
+    /// The providers that can run on this version of macOS.
+    static var available: [ProviderKind] {
+        allCases.filter(\.isAvailable)
+    }
+
+    /// The system speech recognizer needs macOS 26.
+    var isAvailable: Bool {
+        guard self == .apple else { return true }
+        if #available(macOS 26, *) { return true }
+        return false
+    }
 }
 
 /// Where the optional summary is generated.
@@ -229,8 +242,11 @@ enum AppSettings {
         return path.isEmpty ? defaultBaseFolder : URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
 
-    static var provider: ProviderKind {
-        ProviderKind(rawValue: defaults.string(forKey: Keys.provider) ?? "") ?? .whisperCpp
+    /// The chosen provider; whisper.cpp when nothing is saved or the saved one can't run here.
+    static var provider: ProviderKind { provider(saved: defaults.string(forKey: Keys.provider)) }
+
+    static func provider(saved: String?) -> ProviderKind {
+        ProviderKind(rawValue: saved ?? "").flatMap { $0.isAvailable ? $0 : nil } ?? .whisperCpp
     }
 
     /// "auto" or an ISO language code.

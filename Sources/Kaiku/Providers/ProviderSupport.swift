@@ -8,6 +8,7 @@ enum ProviderReadiness: Equatable {
     case needsKey
     case needsModel
     case needsBinary
+    case unavailable
 
     var text: String {
         switch self {
@@ -15,6 +16,7 @@ enum ProviderReadiness: Equatable {
         case .needsKey: return "API key missing"
         case .needsModel: return "Model missing"
         case .needsBinary: return "whisper-cli not found"
+        case .unavailable: return "Not available"
         }
     }
 }
@@ -26,6 +28,10 @@ extension ProviderKind {
             if !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) { return .needsBinary }
             if !FileManager.default.fileExists(atPath: AppSettings.whisperModel) { return .needsModel }
             return .ready
+        case .apple:
+            // Whether the speech model is installed is only known by asking the system,
+            // which Settings does; a transcription without it fails saying so.
+            return isAvailable ? .ready : .unavailable
         default:
             return Keychain.apiKey(for: self) == nil ? .needsKey : .ready
         }
@@ -34,6 +40,7 @@ extension ProviderKind {
     var symbol: String {
         switch self {
         case .whisperCpp: return "desktopcomputer"
+        case .apple: return "apple.logo"
         case .elevenLabs: return "waveform"
         case .openAI: return "sparkles"
         case .groq: return "bolt.fill"
@@ -43,6 +50,7 @@ extension ProviderKind {
     var tagline: String {
         switch self {
         case .whisperCpp: return "Private and free. Runs on this Mac."
+        case .apple: return "Private and free. The speech recognizer of macOS 26."
         case .elevenLabs: return "Scribe, with speaker detection."
         case .openAI: return "gpt-4o-transcribe and Whisper."
         case .groq: return "Very fast Whisper in the cloud."
@@ -52,7 +60,7 @@ extension ProviderKind {
     /// Suggested model ids for the model picker.
     var modelPresets: [String] {
         switch self {
-        case .whisperCpp: return []
+        case .whisperCpp, .apple: return []
         case .elevenLabs: return ["scribe_v2", "scribe_v1"]
         case .openAI: return ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-4o-transcribe-diarize", "whisper-1"]
         case .groq: return ["whisper-large-v3-turbo", "whisper-large-v3"]
@@ -61,7 +69,7 @@ extension ProviderKind {
 
     var keyURL: URL? {
         switch self {
-        case .whisperCpp: return nil
+        case .whisperCpp, .apple: return nil
         case .elevenLabs: return URL(string: "https://elevenlabs.io/app/settings/api-keys")
         case .openAI: return URL(string: "https://platform.openai.com/api-keys")
         case .groq: return URL(string: "https://console.groq.com/keys")

@@ -1,4 +1,6 @@
 import AVFoundation
+import CoreMedia
+import KaikuCore
 import Speech
 
 /// Languages and models of the speech recognizer built into macOS 26.
@@ -21,6 +23,21 @@ enum AppleSpeech {
     /// Volatile results give the text as it is spoken; final ones replace them.
     static func transcriber(_ locale: Locale) -> SpeechTranscriber {
         SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
+    }
+
+    /// For a recorded file: final results only, with the time of every word.
+    static func fileTranscriber(_ locale: Locale) -> SpeechTranscriber {
+        SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange])
+    }
+
+    /// A result as plain values, its text split where the recognizer timed it.
+    static func recognized(_ result: SpeechTranscriber.Result) -> RecognizedSpeech {
+        let text = result.text
+        let runs = text.runs.map { run -> RecognizedSpeech.Run in
+            let range = run.audioTimeRange
+            return RecognizedSpeech.Run(String(text[run.range].characters), start: range?.start.seconds, end: range?.end.seconds)
+        }
+        return RecognizedSpeech(start: result.range.start.seconds, end: result.range.end.seconds, runs: runs)
     }
 
     /// e.g. "Italian (Italy)".

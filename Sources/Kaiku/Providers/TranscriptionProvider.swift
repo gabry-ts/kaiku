@@ -28,6 +28,11 @@ enum ProviderFactory {
         switch kind {
         case .whisperCpp:
             return WhisperCppProvider(binary: AppSettings.whisperPath, model: AppSettings.whisperModel)
+        case .apple:
+            guard #available(macOS 26, *) else {
+                throw ProviderError(message: "The system speech recognizer needs macOS 26 or later.")
+            }
+            return AppleSpeechProvider()
         case .elevenLabs:
             return ElevenLabsProvider(apiKey: try key(), model: model)
         case .openAI:
