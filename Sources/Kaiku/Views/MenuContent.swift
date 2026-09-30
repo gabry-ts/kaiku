@@ -46,6 +46,8 @@ struct MenuPanel: View {
                 .keyboardShortcut("r", modifiers: .command)
             }
 
+            MuteCard(muter: muter)
+
             statusSection
 
             ForEach(state.recoveredFolders, id: \.key) { folder in
@@ -75,7 +77,6 @@ struct MenuPanel: View {
                 }
             }
 
-            MuteCard(muter: muter)
         } footer: {
             PopoverFooter(
                 actions: [.init("Recordings", symbol: "list.bullet.rectangle") { openRecordings() }],
