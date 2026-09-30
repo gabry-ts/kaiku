@@ -36,6 +36,8 @@ enum Snapshots {
             ProviderKind.openAI.rawValue: "sk-demo-1234567890abcdef",
             "webhook.headers": #"{"Authorization":"Bearer demo-token"}"#,
         ]
+        // The speech model is never looked up or downloaded while rendering.
+        LiveSettingsSection.previewReadiness = .ready
         let folders = Fixtures.make(in: library)
         folders[0].updateMeta {
             $0.tags = ["Roadmap", "Design"]
@@ -71,6 +73,14 @@ enum Snapshots {
         }
         for pane in SettingsPane.allCases {
             for dark in [false, true] { settings("settings-\(pane.rawValue)-\(dark ? "dark" : "light")", pane, dark: dark) }
+        }
+        if LiveTranscription.isSupported {
+            defaults.register(defaults: [Keys.liveEnabled: true])
+            for dark in [false, true] { settings("settings-general-live-\(dark ? "dark" : "light")", .general, dark: dark) }
+            LiveSettingsSection.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
+            settings("settings-general-live-download-light", .general, dark: false)
+            LiveSettingsSection.previewReadiness = .ready
+            defaults.register(defaults: [Keys.liveEnabled: false])
         }
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
         for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }

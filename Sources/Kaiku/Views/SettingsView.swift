@@ -94,7 +94,9 @@ struct GeneralSettings: View {
     @State private var loginError: String?
 
     var body: some View {
-        KaikuPane(pane: .general, subtitle: "Where calls are saved, their language, startup and storage.") {
+        KaikuPane(pane: .general, subtitle: LiveTranscription.isSupported
+                  ? "Where calls are saved, their language, live transcription, startup and storage."
+                  : "Where calls are saved, their language, startup and storage.") {
             SettingsGroup("Recordings", footer: "Every call gets its own folder with the audio, transcript.md and meta.json.") {
                 SettingsRow(Text("Save recordings in"),
                             subtitle: Text(AppSettings.displayBaseFolderOverride ?? (baseFolder as NSString).abbreviatingWithTildeInPath)) {
@@ -110,6 +112,8 @@ struct GeneralSettings: View {
             SettingsGroup("Language", footer: "Auto-detect handles most calls, including mixed languages. Choosing one can improve accuracy. You can also change it per call.") {
                 LanguagePicker(language: $language, label: "Default for new calls")
             }
+
+            if LiveTranscription.isSupported { LiveSettingsSection() }
 
             SettingsGroup("Startup and Notifications") {
                 SwitchRow("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLogin))
