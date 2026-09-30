@@ -78,10 +78,13 @@ enum Snapshots {
         settings("settings-webhook-template-light", .webhook, dark: false)
         defaults.register(defaults: [Keys.webhookBodyMode: "default"])
 
-        // Menu bar panel. The popover's own glass comes from NSPopover, so it's painted in here.
+        // Menu bar panel. The popover's own glass comes from NSPopover, so it's painted in
+        // here, over the window background the popover material would show.
+        let popover = RoundedRectangle(cornerRadius: PUI.Radius.popover, style: .continuous)
         let panel: () -> AnyView = {
             AnyView(MenuPanel(closePanel: {}).environmentObject(state).defaultAppStorage(defaults)
-                .puiGlass(RoundedRectangle(cornerRadius: PUI.Radius.popover, style: .continuous)))
+                .puiGlass(popover)
+                .background(Color(nsColor: .windowBackgroundColor), in: popover))
         }
         state.setPreview(phase: .idle)
         both("panel-idle", size: nil, chrome: false, panel)
