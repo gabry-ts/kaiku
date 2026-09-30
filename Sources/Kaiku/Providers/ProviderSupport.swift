@@ -50,7 +50,7 @@ extension ProviderKind {
     var tagline: String {
         switch self {
         case .whisperCpp: return "Private and free. Runs on this Mac."
-        case .apple: return "Private and free. The speech recognizer of macOS 26."
+        case .apple: return "Private and free. Built into macOS 26."
         case .elevenLabs: return "Scribe, with speaker detection."
         case .openAI: return "gpt-4o-transcribe and Whisper."
         case .groq: return "Very fast Whisper in the cloud."

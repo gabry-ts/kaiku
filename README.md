@@ -23,7 +23,7 @@
 ## Features
 
 - Records mic and system audio on separate tracks, no virtual driver
-- Transcribes with whisper.cpp locally, or ElevenLabs, OpenAI, Groq
+- Transcribes locally with whisper.cpp or the macOS 26 speech recognizer, or with ElevenLabs, OpenAI, Groq
 - "Me" vs "Others" split, speaker diarization, rename speakers
 - Library with search, tags, inline player and bookmarks
 - Export to Markdown, TXT, SRT, VTT and DOCX
@@ -50,7 +50,7 @@ open build/Kaiku.app
 
 ## Privacy
 
-Everything is stored locally; audio leaves your Mac only with the cloud provider you pick, and not at all with whisper.cpp.
+Everything is stored locally; audio leaves your Mac only with the cloud provider you pick, and not at all with whisper.cpp or the macOS speech recognizer.
 
 ## License
 

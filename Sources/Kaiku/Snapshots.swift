@@ -38,6 +38,7 @@ enum Snapshots {
         ]
         // The speech model is never looked up or downloaded while rendering.
         LiveSettingsSection.previewReadiness = .ready
+        TranscriptionSettings.previewSpeechReadiness = .ready
         let folders = Fixtures.make(in: library)
         folders[0].updateMeta {
             $0.tags = ["Roadmap", "Design"]
@@ -103,6 +104,15 @@ enum Snapshots {
         defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.standard.rawValue, NotificationKind.callEnded.showKey: true])
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
         for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }
+        if ProviderKind.apple.isAvailable {
+            // The system recognizer, with its speech model installed and still to download.
+            defaults.register(defaults: [Keys.provider: ProviderKind.apple.rawValue])
+            TranscriptionSettings.previewSpeechReadiness = .ready
+            for dark in [false, true] { settings("settings-transcription-apple-\(dark ? "dark" : "light")", .transcription, dark: dark) }
+            TranscriptionSettings.previewSpeechReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
+            settings("settings-transcription-apple-download-light", .transcription, dark: false)
+            TranscriptionSettings.previewSpeechReadiness = .ready
+        }
         defaults.register(defaults: [Keys.provider: ProviderKind.whisperCpp.rawValue, Keys.webhookBodyMode: "template"])
         settings("settings-webhook-template-light", .webhook, dark: false)
         defaults.register(defaults: [Keys.webhookBodyMode: "default"])

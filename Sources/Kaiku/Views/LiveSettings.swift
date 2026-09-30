@@ -19,12 +19,6 @@ struct LiveSettingsSection: View {
         "What is being said shows in the popover and in a floating window, as Me and Them. \(kind.privacyNote) Preview only transcribes the call as usual when it ends. Use as the transcript keeps the live text instead; you can still transcribe the call again from the library."
     }
 
-    private var languageText: String {
-        guard AppSettings.normalizedLanguage(language) == "auto" else { return LanguagePicker.displayName(language) }
-        let system = Locale.current.language.languageCode.flatMap { Locale.current.localizedString(forLanguageCode: $0.identifier) }
-        return system.map { "Your Mac's language (\($0))" } ?? "Your Mac's language"
-    }
-
     var body: some View {
         SettingsGroup(Text("Live Transcription"), footer: Text(footer)) {
             SwitchRow("Show the transcript while recording", isOn: $enabled)
@@ -46,7 +40,7 @@ struct LiveSettingsSection: View {
                     }
                 }
                 SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set above.")) {
-                    ValueText(languageText)
+                    ValueText(LanguagePicker.recognizerName(language))
                 }
                 SpeechModelStatusRow(readiness: model.readiness, readyText: kind.readyText,
                                      downloadNote: "Live transcription starts once it is downloaded.") {

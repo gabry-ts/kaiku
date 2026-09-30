@@ -54,6 +54,14 @@ struct LanguagePicker: View {
         if value != language { language = value }
     }
 
+    /// The language the system speech recognizer uses for a setting: it can't detect one,
+    /// so "auto" is the Mac's language.
+    static func recognizerName(_ code: String) -> String {
+        guard AppSettings.normalizedLanguage(code) == "auto" else { return displayName(code) }
+        let system = Locale.current.language.languageCode.flatMap { Locale.current.localizedString(forLanguageCode: $0.identifier) }
+        return system.map { "Your Mac's language (\($0))" } ?? "Your Mac's language"
+    }
+
     /// Short display name for a language setting.
     static func displayName(_ code: String) -> String {
         switch code {

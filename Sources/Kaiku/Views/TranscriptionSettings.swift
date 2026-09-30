@@ -6,6 +6,12 @@ struct TranscriptionSettings: View {
     @AppStorage(Keys.provider) private var provider = ProviderKind.whisperCpp.rawValue
     /// Bumped to re-evaluate readiness after keys or models change.
     @State private var refresh = 0
+    @AppStorage(Keys.language) private var language = "auto"
+    /// The system recognizer's speech model for the default language.
+    @StateObject private var speech = SpeechModelStatus()
+
+    /// Snapshot rendering only: shown instead of asking the system.
+    static var previewSpeechReadiness: LiveReadiness?
 
     private var kind: ProviderKind { AppSettings.provider(saved: provider) }
 
@@ -13,7 +19,7 @@ struct TranscriptionSettings: View {
         KaikuPane(pane: .transcription, subtitle: "Who turns your calls into text, and with which model.") {
             SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so the transcript knows who said what.") {
                 ForEach(ProviderKind.available) { p in
-                    ProviderRow(kind: p, selected: p == kind, refresh: refresh) {
+                    ProviderRow(kind: p, selected: p == kind, status: status(of: p), refresh: refresh) {
                         withAnimation(.snappy) { provider = p.rawValue }
                     }
                 }
@@ -21,7 +27,9 @@ struct TranscriptionSettings: View {
 
             if kind == .whisperCpp {
                 WhisperSettings(onChange: { refresh += 1 })
-            } else if kind.isCloud {
+            } else if kind == .apple {
+                AppleSettings(speech: speech, language: language) { Task { await downloadSpeechModel() } }
+            } else {
                 CloudProviderSettings(kind: kind, onChange: { refresh += 1 }).id(kind)
             }
 
@@ -31,19 +39,52 @@ struct TranscriptionSettings: View {
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
             SummarySettings()
         }
+        .task(id: language) { await refreshSpeechModel() }
+    }
+
+    /// A provider's state in the list. Apple's is the state of its speech model.
+    private func status(of provider: ProviderKind) -> (ready: Bool, text: String) {
+        guard provider == .apple else {
+            let readiness = provider.readiness
+            return (readiness == .ready, readiness.text)
+        }
+        switch speech.readiness {
+        case nil: return (false, "Checking…")
+        case .ready: return (true, ProviderReadiness.ready.text)
+        case .needsDownload: return (false, ProviderReadiness.needsModel.text)
+        case .downloading: return (false, "Downloading…")
+        case .unavailable: return (false, ProviderReadiness.unavailable.text)
+        }
+    }
+
+    /// Only asks the system what is installed; nothing is downloaded.
+    private func refreshSpeechModel() async {
+        guard ProviderKind.apple.isAvailable else { return }
+        if let preview = Self.previewSpeechReadiness {
+            speech.show(preview)
+            return
+        }
+        let language = AppSettings.normalizedLanguage(self.language)
+        await speech.refresh { await LiveEngineKind.apple.readiness(language: language) }
+    }
+
+    private func downloadSpeechModel() async {
+        let language = AppSettings.normalizedLanguage(self.language)
+        await speech.download({ try await LiveEngineKind.apple.download(language: language, progress: $0) },
+                              check: { await LiveEngineKind.apple.readiness(language: language) })
     }
 }
 
 private struct ProviderRow: View {
     let kind: ProviderKind
     let selected: Bool
+    let status: (ready: Bool, text: String)
     let refresh: Int
     let select: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let readiness = kind.readiness
         let ink = Ink(scheme)
         Button(action: select) {
             HStack(spacing: PUI.Space.m + 2) {
@@ -54,8 +95,8 @@ private struct ProviderRow: View {
                 }
                 Spacer(minLength: PUI.Space.l)
                 HStack(spacing: PUI.Space.xs) {
-                    Circle().fill(readiness == .ready ? ink.green : ink.tertiary).frame(width: 6, height: 6)
-                    Text(readiness.text).font(PUI.Font.caption).foregroundStyle(ink.secondary)
+                    Circle().fill(status.ready ? ink.green : ink.tertiary).frame(width: 6, height: 6)
+                    Text(status.text).font(PUI.Font.caption).foregroundStyle(ink.secondary)
                 }
                 CheckMark(selected)
                     .padding(.leading, PUI.Space.m)
@@ -66,7 +107,7 @@ private struct ProviderRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityLabel("\(kind.displayName), \(readiness.text)")
+        .accessibilityLabel("\(kind.displayName), \(status.text)")
     }
 }
 
@@ -196,6 +237,33 @@ private struct ModelRow: View {
         }
         .padding(.horizontal, PUI.Space.l)
         .frame(minHeight: 42)
+    }
+}
+
+// MARK: - Apple
+
+private struct AppleSettings: View {
+    @ObservedObject var speech: SpeechModelStatus
+    let language: String
+    let download: () -> Void
+
+    var body: some View {
+        SettingsGroup(Text(ProviderKind.apple.displayName), footer: Text("The speech recognizer built into macOS 26. Free and private: audio is transcribed on this Mac and never leaves it. There is no API key and no model to choose.")) {
+            SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set in General.")) {
+                ValueText(LanguagePicker.recognizerName(language))
+            }
+            if AppSettings.normalizedLanguage(language) == "auto" {
+                GroupRow {
+                    Text("The recognizer can't detect the language, so Auto-detect transcribes in your Mac's language.")
+                        .font(PUI.Font.callout).foregroundStyle(.secondary)
+                }
+            }
+            SpeechModelStatusRow(readiness: speech.readiness, readyText: "Ready. The speech model is on this Mac.",
+                                 downloadNote: "Calls are transcribed once it is downloaded.", download: download)
+            if let error = speech.downloadError {
+                GroupRow { StatusDot(kind: .error, text: error) }
+            }
+        }
     }
 }
 
