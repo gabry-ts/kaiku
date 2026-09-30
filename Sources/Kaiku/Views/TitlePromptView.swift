@@ -113,7 +113,7 @@ struct TitlePromptView: View {
                     Label("Start Recording", systemImage: "record.circle")
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .controlSize(.large)
         }

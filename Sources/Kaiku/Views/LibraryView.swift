@@ -137,7 +137,7 @@ struct LibraryView: View {
                          ?? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath).")
                 } actions: {
                     Button("Start Recording") { state.requestStart() }
-                        .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                        .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                 }
             } else {
                 ContentUnavailableView("Select a Recording", systemImage: "text.bubble",
@@ -382,7 +382,7 @@ private struct AddTagSheet: View {
                     tags.forEach(add)
                     dismiss()
                 }
-                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                 .disabled(tags.isEmpty)
             }
         }
@@ -571,7 +571,7 @@ private struct RecordingDetail: View {
                 Text(summaryError ?? "Summaries use your own API key and never run unless you turn them on or ask here.")
             } actions: {
                 Button("Generate Summary") { generateSummary() }
-                    .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                    .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                     .disabled(!item.folder.hasTranscript || summarizing)
             }
             .frame(maxWidth: .infinity)
@@ -709,7 +709,7 @@ private struct RecordingDetail: View {
                 }
                 Spacer()
                 Button("Transcribe") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
-                    .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                    .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                     .disabled(!hasAudio)
             }
             .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
@@ -726,7 +726,7 @@ private struct RecordingDetail: View {
                         withAnimation(.snappy) { showErrorDetails.toggle() }
                     }
                     Button("Try Again") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
-                        .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                        .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                         .disabled(!hasAudio)
                 }
                 if showErrorDetails, let err = item.meta.error {
@@ -1178,7 +1178,7 @@ struct SpeakerRenameSheet: View {
                     catch { self.error = error.localizedDescription }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .padding(20)
         }

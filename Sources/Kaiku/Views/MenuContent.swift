@@ -42,7 +42,7 @@ struct MenuPanel: View {
                             .font(PUI.Font.callout.monospaced()).opacity(0.75)
                     }
                 }
-                .buttonStyle(PartitiUI.PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut("r", modifiers: .command)
             }
 
@@ -296,7 +296,7 @@ private struct RecordingCard: View {
                     Label("Stop Recording", systemImage: "stop.fill")
                         .labelStyle(TightLabelStyle(spacing: PUI.Space.s))
                 }
-                .buttonStyle(PartitiUI.PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut("s", modifiers: .command)
             }
         }
@@ -341,7 +341,7 @@ private struct MutedBanner: View {
                     StatusText("Microphones muted", detail: "Others hear silence, even if your call app shows you unmuted.")
                     Spacer(minLength: 0)
                     Button("Unmute", action: unmute)
-                        .buttonStyle(PartitiUI.PrimaryButtonStyle(height: PUI.Control.small, fullWidth: false))
+                        .buttonStyle(PrimaryButtonStyle(height: PUI.Control.small, fullWidth: false))
                 }
                 if !unsupported.isEmpty {
                     Label("\(unsupported.count) microphone\(unsupported.count == 1 ? " can't" : "s can't") be muted: \(unsupported.joined(separator: ", "))",

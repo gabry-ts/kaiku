@@ -2,7 +2,7 @@ import AppKit
 import PartitiUI
 import SwiftUI
 
-/// Brand colors and small shared visual pieces.
+/// Kaiku's accent and the speaker palette of transcripts.
 enum Brand {
     /// Kaiku's red from Partiti UI. Used sparingly: primary actions and the recording state.
     static let accent = AppAccent.kaiku.color
@@ -241,52 +241,4 @@ enum MenuBarGlyph {
         image.isTemplate = true
         return image
     }
-}
-
-// MARK: - Shared small views
-
-/// Filled accent button used for the one primary action on a screen. Looks the
-/// same in key and non-key windows (the menu bar panel is often non-key).
-struct PrimaryButtonStyle: ButtonStyle {
-    var tint: Color = Brand.accent
-    var large = false
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(large ? .body.weight(.semibold) : .body.weight(.medium))
-            .foregroundStyle(.white)
-            .padding(.horizontal, large ? 14 : 12)
-            .padding(.vertical, large ? 9 : 5)
-            .background(
-                RoundedRectangle(cornerRadius: large ? 10 : 7, style: .continuous)
-                    .fill(tint.gradient)
-                    .brightness(configuration.isPressed ? -0.08 : 0)
-            )
-            .overlay(RoundedRectangle(cornerRadius: large ? 10 : 7, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
-            .shadow(color: tint.opacity(0.25), radius: configuration.isPressed ? 1 : 3, y: 1)
-            .opacity(isEnabled ? 1 : 0.5)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .contentShape(Rectangle())
-    }
-}
-
-extension ButtonStyle where Self == PrimaryButtonStyle {
-    static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
-    static var primaryLarge: PrimaryButtonStyle { PrimaryButtonStyle(large: true) }
-}
-
-/// Rounded "card" background used for grouped content outside of Forms.
-struct CardBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(12)
-            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-    }
-}
-
-extension View {
-    func card() -> some View { modifier(CardBackground()) }
 }
