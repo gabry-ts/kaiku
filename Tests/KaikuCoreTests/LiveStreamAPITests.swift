@@ -55,4 +55,31 @@ final class LiveStreamAPITests: XCTestCase {
         XCTAssertEqual(OpenAIRealtime.parse(#"{"type":"session.updated"}"#), .ignored)
         XCTAssertEqual(OpenAIRealtime.parse("not json"), .ignored)
     }
+
+    func testElevenLabsSocketURL() {
+        XCTAssertEqual(ElevenLabsRealtime.url(language: nil).absoluteString,
+                       "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&audio_format=pcm_16000&commit_strategy=vad")
+        XCTAssertTrue(ElevenLabsRealtime.url(language: "it").absoluteString.hasSuffix("&commit_strategy=vad&language_code=it"))
+    }
+
+    func testElevenLabsAudioChunk() {
+        let message = object(ElevenLabsRealtime.chunk(Data([1, 0, 255, 127])))
+        XCTAssertEqual(message["message_type"] as? String, "input_audio_chunk")
+        XCTAssertEqual(message["audio_base_64"] as? String, "AQD/fw==")
+        XCTAssertEqual(message["commit"] as? Bool, false)
+        XCTAssertEqual(message["sample_rate"] as? Int, 16_000)
+        XCTAssertEqual(object(ElevenLabsRealtime.lastChunk)["commit"] as? Bool, true)
+    }
+
+    func testElevenLabsMessages() {
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"session_started","session_id":"s","config":{}}"#), .ignored)
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"partial_transcript","text":"Good mor"}"#), .partial("Good mor"))
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"committed_transcript","text":"Good morning."}"#),
+                       .final(item: nil, text: "Good morning."))
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"committed_transcript_with_timestamps","text":"Good morning.","words":[]}"#), .ignored)
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"auth_error","error":"Invalid API key"}"#), .error("Invalid API key"))
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"quota_exceeded","error":""}"#), .error("quota_exceeded"))
+        XCTAssertEqual(ElevenLabsRealtime.parse(#"{"message_type":"commit_throttled","error":"Too many commits"}"#), .ignored)
+        XCTAssertEqual(ElevenLabsRealtime.parse("not json"), .ignored)
+    }
 }

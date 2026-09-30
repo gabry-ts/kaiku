@@ -101,3 +101,51 @@ public enum OpenAIRealtime {
         return String(decoding: data, as: UTF8.self)
     }
 }
+
+/// ElevenLabs Scribe realtime speech-to-text: the messages sent and received.
+public enum ElevenLabsRealtime {
+    public static let model = "scribe_v2_realtime"
+    public static let sampleRate = 16_000
+
+    /// The socket of a session where the server ends each utterance at the pauses.
+    /// - Parameter language: ISO 639-1 code, or nil to let the model detect it.
+    public static func url(language: String?) -> URL {
+        var parts = URLComponents(string: "wss://api.elevenlabs.io/v1/speech-to-text/realtime")!
+        parts.queryItems = [
+            URLQueryItem(name: "model_id", value: model),
+            URLQueryItem(name: "audio_format", value: "pcm_\(sampleRate)"),
+            URLQueryItem(name: "commit_strategy", value: "vad"),
+        ] + (language.map { [URLQueryItem(name: "language_code", value: $0)] } ?? [])
+        return parts.url!
+    }
+
+    /// - Parameters:
+    ///   - pcm: 16-bit little-endian mono samples at `sampleRate`.
+    ///   - commit: true to end the utterance with this chunk.
+    public static func chunk(_ pcm: Data, commit: Bool = false) -> String {
+        #"{"message_type":"input_audio_chunk","audio_base_64":"\#(pcm.base64EncodedString())","commit":\#(commit),"sample_rate":\#(sampleRate)}"#
+    }
+
+    /// A moment of silence that ends the utterance being spoken when the recording stops.
+    public static var lastChunk: String {
+        chunk(Data(count: sampleRate / 5), commit: true)
+    }
+
+    /// Notices that don't end the session.
+    private static let harmless: Set<String> = ["warning", "commit_throttled", "insufficient_audio_activity"]
+
+    public static func parse(_ text: String) -> LiveStreamMessage {
+        guard let message = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              let type = message["message_type"] as? String else { return .ignored }
+        switch type {
+        case "partial_transcript":
+            return .partial(message["text"] as? String ?? "")
+        case "committed_transcript":
+            return .final(item: nil, text: message["text"] as? String ?? "")
+        default:
+            // Every error has its own type and says what happened in `error`.
+            guard let error = message["error"] as? String, !harmless.contains(type) else { return .ignored }
+            return .error(error.isEmpty ? type : error)
+        }
+    }
+}

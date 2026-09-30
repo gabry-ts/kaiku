@@ -104,8 +104,8 @@ final class StreamingLiveEngine: LiveEngine, @unchecked Sendable {
                 if let broken = link, let why = broken.failure {
                     broken.close()
                     link = nil
-                    // One new try after a failure; a socket that gave text earns another.
-                    if broken.gotText { failures = 0 }
+                    // One new try after a failure; a socket that worked earns another.
+                    if broken.worked { failures = 0 }
                     failures += 1
                     guard failures <= 1 else {
                         fail(track, why)
@@ -170,6 +170,7 @@ final class StreamingLiveEngine: LiveEngine, @unchecked Sendable {
         private let report: AsyncStream<LiveEvent>.Continuation
         private let state = OSAllocatedUnfairLock(initialState: State())
         private var receiver: Task<Void, Never>?
+        private let opened = Date()
 
         init(api: LiveStreamAPI, request: URLRequest, track: LiveTrack, report: AsyncStream<LiveEvent>.Continuation) {
             self.api = api
@@ -180,8 +181,9 @@ final class StreamingLiveEngine: LiveEngine, @unchecked Sendable {
 
         /// Why the socket can't be used any more, nil while it works.
         var failure: String? { state.withLock { $0.failure } }
-        /// True once the socket has given a finished line.
-        var gotText: Bool { state.withLock { $0.gotText } }
+        /// True once the socket has given a finished line or stayed open for a while, so
+        /// its end is an interruption and not a sign that the API can't be used.
+        var worked: Bool { state.withLock { $0.gotText } || Date().timeIntervalSince(opened) >= 30 }
 
         func open(_ messages: [String]) async {
             task.resume()
@@ -203,11 +205,13 @@ final class StreamingLiveEngine: LiveEngine, @unchecked Sendable {
 
         /// Waits a few seconds at most for the text of what was said last, then closes.
         func finish(_ closing: [String]) async {
+            // From here on an error only means the last words may be missing.
+            state.withLock { $0.closing = true }
             for message in closing { await send(message) }
             let began = Date()
             while !Task.isCancelled, Date().timeIntervalSince(began) < 3 {
-                let (waiting, failed) = state.withLock { (!$0.open.isEmpty || $0.lineStart != nil, $0.failure != nil) }
-                if failed || (!waiting && Date().timeIntervalSince(began) >= 0.8) { break }
+                let waiting = state.withLock { !$0.open.isEmpty || $0.lineStart != nil }
+                if task.state != .running || (!waiting && Date().timeIntervalSince(began) >= 0.8) { break }
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             close()
@@ -273,7 +277,7 @@ final class StreamingLiveEngine: LiveEngine, @unchecked Sendable {
                     s.texts[item, default: ""] += text
                     events.append(.partial(track, inFlight()))
                 case .partial(let text):
-                    if s.lineStart == nil { s.lineStart = s.sentUntil }
+                    if s.lineStart == nil, !text.isEmpty { s.lineStart = s.sentUntil }
                     events.append(.partial(track, text))
                 case .final(let item, let text):
                     let start = item.flatMap { s.starts[$0] } ?? s.lineStart ?? s.sentUntil
@@ -318,5 +322,20 @@ extension LiveStreamAPI {
             audio: { OpenAIRealtime.append($0) },
             closing: [OpenAIRealtime.commit],
             parse: { OpenAIRealtime.parse($0) })
+    }
+
+    /// ElevenLabs Scribe realtime.
+    static var elevenLabs: LiveStreamAPI {
+        LiveStreamAPI(
+            name: "ElevenLabs", sampleRate: ElevenLabsRealtime.sampleRate,
+            request: { key, language in
+                var request = URLRequest(url: ElevenLabsRealtime.url(language: language == "auto" ? nil : language), timeoutInterval: 20)
+                request.setValue(key, forHTTPHeaderField: "xi-api-key")
+                return request
+            },
+            opening: { _ in [] },
+            audio: { ElevenLabsRealtime.chunk($0) },
+            closing: [ElevenLabsRealtime.lastChunk],
+            parse: { ElevenLabsRealtime.parse($0) })
     }
 }
