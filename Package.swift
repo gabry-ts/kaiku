@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS("14.2")],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
-        .package(url: "https://github.com/gabry-ts/partiti-ui", from: "0.2.0"),
+        .package(url: "https://github.com/gabry-ts/partiti-ui", from: "0.3.0"),
     ],
     targets: [
         .target(
