@@ -57,18 +57,21 @@ enum LiveReadiness: Equatable {
 enum LiveEngineKind: String, CaseIterable, Identifiable {
     /// The speech recognizer built into macOS, on device.
     case apple
+    /// whisper.cpp on device, in chunks of a few seconds.
+    case whisper
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .apple: return "Apple (on device)"
+        case .whisper: return "whisper.cpp (on device)"
         }
     }
 
     /// What the engine does with the audio, for the settings footer.
     var privacyNote: String {
         switch self {
-        case .apple: return "Audio is transcribed on this Mac and never leaves it."
+        case .apple, .whisper: return "Audio is transcribed on this Mac and never leaves it."
         }
     }
 
@@ -77,12 +80,10 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         allCases.filter(\.isAvailable)
     }
 
+    /// The live transcript itself needs macOS 26, whatever the engine.
     var isAvailable: Bool {
-        switch self {
-        case .apple:
-            if #available(macOS 26, *) { return true }
-            return false
-        }
+        if #available(macOS 26, *) { return true }
+        return false
     }
 
     /// A new engine for one recording, or nil when it can't run on this Mac.
@@ -91,6 +92,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         case .apple:
             if #available(macOS 26, *) { return AppleLiveEngine() }
             return nil
+        case .whisper:
+            return WhisperLiveEngine()
         }
     }
 
@@ -100,6 +103,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         case .apple:
             if #available(macOS 26, *) { return await AppleSpeech.readiness(language: language) }
             return .unavailable("Needs macOS 26 or later.")
+        case .whisper:
+            return WhisperLiveEngine.readiness
         }
     }
 
@@ -109,6 +114,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         case .apple:
             guard #available(macOS 26, *) else { throw LiveEngineError("Needs macOS 26 or later.") }
             try await AppleSpeech.download(language: language, progress: progress)
+        case .whisper:
+            throw LiveEngineError("whisper.cpp models are downloaded in Settings > Transcription.")
         }
     }
 }

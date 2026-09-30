@@ -2,16 +2,22 @@ import AVFoundation
 import KaikuCore
 
 extension SelfTest {
-    /// `Kaiku --live-selftest <audio file> [language] [--download]`: feeds the file to the
-    /// live engine as the microphone track and prints what it reports. The language is
-    /// "auto" (the system language) or an ISO code. A missing speech model is only
+    /// `Kaiku --live-selftest <audio file> [language] [--engine <name>] [--download]`: feeds
+    /// the file to a live engine as the microphone track and prints what it reports. The
+    /// language is "auto" (the system language) or an ISO code; the engine is one of the
+    /// `LiveEngineKind` names, Apple's when left out. A missing speech model is only
     /// downloaded with `--download`.
-    static func runLive(file: URL, language: String, download: Bool) -> Int32 {
+    static func runLive(file: URL, language: String, engine name: String?, download: Bool) -> Int32 {
         setvbuf(stdout, nil, _IONBF, 0)
         print("Kaiku live transcription self-test")
         print("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
-        guard let kind = LiveEngineKind.available.first, let engine = kind.make() else {
-            print("FAIL: no live engine can run on this version of macOS")
+        let names = LiveEngineKind.allCases.map(\.rawValue).joined(separator: ", ")
+        guard let kind = name.map({ LiveEngineKind(rawValue: $0) }) ?? LiveEngineKind.available.first else {
+            print("FAIL: unknown engine \(name ?? ""). Engines: \(names)")
+            return 1
+        }
+        guard kind.isAvailable, let engine = kind.make() else {
+            print("FAIL: \(kind.displayName) can't run on this version of macOS")
             return 1
         }
         print("Engine: \(kind.displayName), language: \(language)")
@@ -77,8 +83,9 @@ extension SelfTest {
                 if buffer.frameLength == 0 { break }
                 engine.feed(buffer, track: .me, at: Double(fed) / format.sampleRate)
                 fed += AVAudioFramePosition(buffer.frameLength)
-                // A little faster than real time, so partial results show as they would live.
-                try await Task.sleep(nanoseconds: 20_000_000)
+                // Apple's recognizer is fed a little faster than real time; the others in
+                // real time, as they depend on how fast the audio comes.
+                try await Task.sleep(nanoseconds: kind == .apple ? 20_000_000 : 100_000_000)
             }
         } catch {
             print("FAIL: \(error.localizedDescription)")
