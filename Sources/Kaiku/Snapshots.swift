@@ -88,6 +88,11 @@ enum Snapshots {
         defaults.register(defaults: quiet)
         for dark in [false, true] { settings("settings-notifications-mixed-\(dark ? "dark" : "light")", .notifications, dark: dark) }
         defaults.register(defaults: quiet.mapValues { _ in true })
+        // Ask every time, with the notification it needs switched off.
+        defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.ask.rawValue, NotificationKind.callEnded.showKey: false])
+        settings("settings-recording-ask-fallback-light", .recording, dark: false)
+        settings("settings-notifications-ask-fallback-light", .notifications, dark: false)
+        defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.standard.rawValue, NotificationKind.callEnded.showKey: true])
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
         for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }
         defaults.register(defaults: [Keys.provider: ProviderKind.whisperCpp.rawValue, Keys.webhookBodyMode: "template"])

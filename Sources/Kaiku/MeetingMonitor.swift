@@ -56,8 +56,11 @@ final class MeetingMonitor {
             calls[source] = DetectedCall(source: source, app: users[key]!.appName)
             owners[source] = users[key]!
         }
-        detector.autoStopAfter = Double(AppSettings.detectAutoStopSeconds)
         let state = AppState.shared
+        // Asking depends on notifications being allowed, which can change during the call.
+        if state.isRecording, AppSettings.callEndMode == .ask { Permissions.shared.refreshNotifications() }
+        let callEnd = AppSettings.callEndBehavior
+        detector.autoStopAfter = Double(callEnd.autoStopSeconds(delay: AppSettings.detectAutoStopSeconds))
         let now = Date()
         for event in detector.update(active: Set(calls.keys), isRecording: state.isRecording, now: now) {
             switch event {
@@ -67,7 +70,7 @@ final class MeetingMonitor {
                 if state.meetingStarted(call, rule: rules.rule(for: source)) {
                     retitle = (source, owner, now.addingTimeInterval(30))
                 }
-            case .ended(let source): state.meetingEnded(app: source)
+            case .ended(let source): state.meetingEnded(app: source, behavior: callEnd)
             case .autoStop: state.meetingAutoStop()
             }
         }

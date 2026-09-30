@@ -403,26 +403,67 @@ struct CallDetectionSection: View {
     @AppStorage(Keys.detectCalls) private var detect = true
     @AppStorage(Keys.detectAutoStart) private var autoStart = false
     @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
+    @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
+    @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
+    @ObservedObject private var permissions = Permissions.shared
+
+    private var mode: CallEndMode { CallEndMode(saved: callEnd) }
+    private var behavior: CallEndBehavior {
+        mode.behavior(notificationsAllowed: permissions.notificationsAllowed, callEndedNotificationEnabled: callEndedShown)
+    }
+    /// Ask every time was chosen, but the question can't be shown.
+    private var fallsBack: Bool { mode == .ask && behavior != .ask }
+
+    private var fallbackNote: String {
+        let why = permissions.notificationsAllowed
+            ? "The Call ended notification is switched off in Notifications"
+            : "macOS doesn't allow notifications from Kaiku"
+        let then = autoStop > 0
+            ? "the recording stops after the delay below instead."
+            : "the recording goes on until you stop it. Choose a delay below to have it stop by itself."
+        return "\(why), so Kaiku can't ask: \(then)"
+    }
+
+    private var modeDetail: String {
+        switch mode {
+        case .stopAfterDelay: return "A notification lets you stop right away; otherwise the recording stops after the delay."
+        case .ask: return "A notification asks whether to stop. The recording goes on until you answer."
+        case .nothing: return "No notification. The recording goes on until you stop it."
+        }
+    }
 
     var body: some View {
         SettingsGroup("Call Detection", footer: "Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources, and which notifications you get in Notifications.") {
             SwitchRow("Notice when a call starts", isOn: $detect)
             if detect {
                 SwitchRow("Start recording automatically", isOn: $autoStart)
-                SettingsRow("Stop automatically after the call ends") {
-                    Picker("Stop automatically after the call ends", selection: $autoStop) {
-                        Text("Never").tag(0)
-                        Text("After 30 seconds").tag(30)
-                        Text("After 1 minute").tag(60)
-                        Text("After 2 minutes").tag(120)
-                        Text("After 5 minutes").tag(300)
+                SettingsRow(Text("When a call ends"), subtitle: Text(modeDetail)) {
+                    Picker("When a call ends", selection: $callEnd) {
+                        ForEach(CallEndMode.allCases) { Text($0.title).tag($0.rawValue) }
                     }
                     .labelsHidden()
                     .fixedSize()
                 }
+                if fallsBack {
+                    GroupRow { StatusDot(kind: .warning, text: fallbackNote) }
+                }
+                if behavior == .stopAfterDelay {
+                    SettingsRow("Stop automatically after the call ends") {
+                        Picker("Stop automatically after the call ends", selection: $autoStop) {
+                            Text("Never").tag(0)
+                            Text("After 30 seconds").tag(30)
+                            Text("After 1 minute").tag(60)
+                            Text("After 2 minutes").tag(120)
+                            Text("After 5 minutes").tag(300)
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
             }
         }
         .onChange(of: detect) { _, _ in MeetingMonitor.shared.apply() }
+        .onAppear { permissions.refreshNotifications() }
     }
 }
 

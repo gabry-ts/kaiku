@@ -13,6 +13,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private static let recoveredCategory = "recovered"
     private static let callDetectedCategory = "callDetected"
     private static let callEndedCategory = "callEnded"
+    private static let callEndedAskCategory = "callEndedAsk"
     private static let callDetectedNewCategory = "callDetectedNew"
     private static let newSourceCategory = "newSource"
     private static let openAction = "open"
@@ -21,6 +22,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private static let recordAction = "record"
     private static let dismissAction = "dismiss"
     private static let stopAction = "stop"
+    private static let keepAction = "keep"
     private static let alwaysAction = "always"
     private static let neverAction = "never"
 
@@ -33,6 +35,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let record = UNNotificationAction(identifier: Self.recordAction, title: "Record", options: [.foreground])
         let dismiss = UNNotificationAction(identifier: Self.dismissAction, title: "Dismiss", options: [])
         let stop = UNNotificationAction(identifier: Self.stopAction, title: "Stop Recording", options: [])
+        let keep = UNNotificationAction(identifier: Self.keepAction, title: "Keep Recording", options: [])
         let always = UNNotificationAction(identifier: Self.alwaysAction, title: "Always Record", options: [])
         let never = UNNotificationAction(identifier: Self.neverAction, title: "Never", options: [.destructive])
         center.setNotificationCategories([
@@ -40,6 +43,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             UNNotificationCategory(identifier: Self.recoveredCategory, actions: [transcribe, open], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.callDetectedCategory, actions: [record, dismiss], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.callEndedCategory, actions: [stop, dismiss], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Self.callEndedAskCategory, actions: [stop, keep], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.callDetectedNewCategory, actions: [record, always, never], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.newSourceCategory, actions: [always, never], intentIdentifiers: []),
         ])
@@ -79,12 +83,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
              category: Self.newSourceCategory, id: "newSource")
     }
 
-    func postCallEnded(app: String, autoStopSeconds: Int) {
+    /// - Parameter asks: the recording goes on until answered: Stop Recording / Keep Recording.
+    func postCallEnded(app: String, asks: Bool, autoStopSeconds: Int) {
         let body = autoStopSeconds > 0
             ? "\(app) stopped using the microphone. Recording stops in \(autoStopSeconds) s unless the call resumes."
             : "\(app) stopped using the microphone. Stop recording?"
         send(.callEnded, title: "Call seems to have ended", body: body, userInfo: ["kind": "callEnded"],
-             category: Self.callEndedCategory, id: "callEnded")
+             category: asks ? Self.callEndedAskCategory : Self.callEndedCategory, id: "callEnded")
     }
 
     /// The one place a notification is posted from: a kind that is switched off is never

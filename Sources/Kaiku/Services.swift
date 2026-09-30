@@ -167,6 +167,15 @@ final class Permissions: ObservableObject {
         calendar = CalendarService.shared.state
         accessibility = accessibilityGranted ? .granted
             : AppSettings.defaults.bool(forKey: Keys.accessibilityAsked) ? .denied : .notAsked
+        refreshNotifications()
+        objectWillChange.send()
+    }
+
+    /// True once macOS is known to let Kaiku post notifications.
+    var notificationsAllowed: Bool { notifications == .granted }
+
+    /// Asks macOS again whether notifications are allowed; it can change at any time.
+    func refreshNotifications() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let state: PermissionState
             switch settings.authorizationStatus {
@@ -174,9 +183,10 @@ final class Permissions: ObservableObject {
             case .notDetermined: state = .notAsked
             default: state = .denied
             }
-            Task { @MainActor in Permissions.shared.notifications = state }
+            Task { @MainActor in
+                if Permissions.shared.notifications != state { Permissions.shared.notifications = state }
+            }
         }
-        objectWillChange.send()
     }
 
     func requestMicrophone() {

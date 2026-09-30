@@ -6,6 +6,9 @@ import SwiftUI
 /// with a switch for showing it and one for its sound.
 struct NotificationSettings: View {
     @ObservedObject private var permissions = Permissions.shared
+    @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
+    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
+    @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
 
     private static let calls: [NotificationKind] = [.callDetected, .newSource, .recordingStarted, .callEnded, .recordingStopped]
     private static let transcripts: [NotificationKind] = [.transcriptReady, .recovered, .cleanup]
@@ -27,6 +30,9 @@ struct NotificationSettings: View {
 
             SettingsGroup("Calls", footer: "With Call detected off, a call that needs your answer isn't recorded, as if you had dismissed the notification. With New source off, the recording goes on and the source is asked about again next time.") {
                 ForEach(Self.calls) { NotificationRow(kind: $0) }
+                if CallEndMode(saved: callEnd) == .ask, !callEndedShown {
+                    GroupRow { StatusDot(kind: .warning, text: askNote) }
+                }
             }
 
             SettingsGroup("Transcripts and Recordings", footer: "With Recovered recording off, saved recordings still show in the popover, where you can transcribe them.") {
@@ -41,6 +47,12 @@ struct NotificationSettings: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refresh()
         }
+    }
+
+    /// "Ask every time" needs the Call ended notification, which is off.
+    private var askNote: String {
+        let then = autoStop > 0 ? "the recording stops after the delay instead" : "the recording goes on until you stop it"
+        return "When a call ends is set to Ask every time in Recording, which needs Call ended. While it is off, \(then)."
     }
 
     private var systemDetail: String {

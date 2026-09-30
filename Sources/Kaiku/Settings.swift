@@ -126,6 +126,7 @@ enum Keys {
     /// (read to carry it over).
     static let detectEndNotify = "detectEndNotify"
     static let detectAutoStopSeconds = "detectAutoStopSeconds"
+    static let detectCallEndMode = "detectCallEndMode"
     static let detectSourceRules = "detectSourceRules"
     static let detectSeenSources = "detectSeenSources"
     static let detectCustomApps = "detectCustomApps"
@@ -193,6 +194,7 @@ enum AppSettings {
             Keys.detectDisabledApps: [String](),
             Keys.detectAutoStart: false,
             Keys.detectAutoStopSeconds: 0,
+            Keys.detectCallEndMode: CallEndMode.standard.rawValue,
             Keys.calendarEnabled: true,
             Keys.calendarIDs: [String](),
             Keys.removeEcho: true,
@@ -321,6 +323,13 @@ enum AppSettings {
     static var detectDisabledApps: [String] { defaults.stringArray(forKey: Keys.detectDisabledApps) ?? [] }
     static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
     static var detectAutoStopSeconds: Int { defaults.integer(forKey: Keys.detectAutoStopSeconds) }
+    static var callEndMode: CallEndMode { CallEndMode(saved: defaults.string(forKey: Keys.detectCallEndMode)) }
+
+    /// What happens when a call ends: the chosen mode, unless its question can't be shown.
+    @MainActor static var callEndBehavior: CallEndBehavior {
+        callEndMode.behavior(notificationsAllowed: Permissions.shared.notificationsAllowed,
+                             callEndedNotificationEnabled: notificationShown(.callEnded))
+    }
 
     /// Always/Never choice per call source.
     static var sourceRules: SourceRules {
