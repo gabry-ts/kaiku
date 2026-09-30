@@ -31,6 +31,16 @@ SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 ditto "$BIN_DIR/Sparkle.framework" "$SPARKLE"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/$EXEC_NAME"
 
+# Partiti UI's built-in strings live in its SwiftPM resource bundle, which lands next to the
+# binary. The library looks for it in Contents/Resources, where codesign accepts it; it holds
+# no code and is sealed with the app's own signature.
+PARTITI_BUNDLE="$BIN_DIR/PartitiUI_PartitiUI.bundle"
+if [[ ! -d "$PARTITI_BUNDLE" ]]; then
+    echo "error: PartitiUI_PartitiUI.bundle not found in $BIN_DIR" >&2
+    exit 1
+fi
+ditto "$PARTITI_BUNDLE" "$APP/Contents/Resources/PartitiUI_PartitiUI.bundle"
+
 # Bundled whisper.cpp command line tool and its license notice.
 cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
 {
