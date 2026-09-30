@@ -88,20 +88,28 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
     /// A new engine for one recording, or nil when it can't run on this Mac.
     func make() -> LiveEngine? {
         switch self {
-        case .apple: return nil
+        case .apple:
+            if #available(macOS 26, *) { return AppleLiveEngine() }
+            return nil
         }
     }
 
     /// Whether the engine is ready to transcribe `language` ("auto" or an ISO code).
     func readiness(language: String) async -> LiveReadiness {
         switch self {
-        case .apple: return .unavailable("Needs macOS 26 or later.")
+        case .apple:
+            if #available(macOS 26, *) { return await AppleSpeech.readiness(language: language) }
+            return .unavailable("Needs macOS 26 or later.")
         }
     }
 
     /// Downloads what `readiness` said is missing. Only ever called from Settings.
     func download(language: String, progress: @escaping @Sendable (Double) -> Void) async throws {
-        throw LiveEngineError("\(displayName) has nothing to download.")
+        switch self {
+        case .apple:
+            guard #available(macOS 26, *) else { throw LiveEngineError("Needs macOS 26 or later.") }
+            try await AppleSpeech.download(language: language, progress: progress)
+        }
     }
 }
 

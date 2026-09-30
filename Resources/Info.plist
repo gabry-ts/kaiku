@@ -34,6 +34,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Kaiku shows what is being said during a call with the speech recognizer on this Mac.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/gabry-ts/kaiku/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
