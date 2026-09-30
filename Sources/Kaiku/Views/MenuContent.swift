@@ -226,7 +226,9 @@ private struct RecordingCard: View {
                         Text(title).font(PUI.Font.headline).foregroundStyle(ink.primary).lineLimit(2)
                     }
                     Spacer(minLength: PUI.Space.m)
-                    BigNumber(TranscriptFormatter.timestamp(elapsed))
+                    BigNumber(MenuBarGlyph.shortTime(elapsed))
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.top, -3)
                         .accessibilityLabel("Recorded time")
                 }
