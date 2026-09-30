@@ -7,7 +7,16 @@ import Sparkle
 final class UpdaterManager {
     static let shared = UpdaterManager()
 
-    private let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    /// The offscreen render harness builds ordinary views, including the About pane,
+    /// with sample data; starting Sparkle there would reach the network and could show
+    /// its own permission alert, so it stays unstarted then.
+    nonisolated private static var isRenderHarness: Bool {
+        let args = CommandLine.arguments
+        return args.contains("--render-snapshots") || args.contains("--render-icon")
+    }
+
+    private let controller = SPUStandardUpdaterController(startingUpdater: !UpdaterManager.isRenderHarness,
+                                                          updaterDelegate: nil, userDriverDelegate: nil)
 
     var automaticallyChecksForUpdates: Bool {
         get { controller.updater.automaticallyChecksForUpdates }
