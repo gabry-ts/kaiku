@@ -8,10 +8,7 @@ struct LiveSettingsSection: View {
     @AppStorage(Keys.liveEngine) private var engine = LiveEngineKind.apple.rawValue
     @AppStorage(Keys.liveAfterCall) private var afterCall = LiveAfterCall.preview.rawValue
     @AppStorage(Keys.language) private var language = "auto"
-    @State private var readiness: LiveReadiness?
-    @State private var downloadError: String?
-    /// True while this pane's own download runs, so a status check doesn't replace its progress.
-    @State private var downloading = false
+    @StateObject private var model = SpeechModelStatus()
 
     /// Snapshot rendering only: shown instead of asking the system.
     static var previewReadiness: LiveReadiness?
@@ -51,8 +48,11 @@ struct LiveSettingsSection: View {
                 SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set above.")) {
                     ValueText(languageText)
                 }
-                statusRow
-                if let downloadError {
+                SpeechModelStatusRow(readiness: model.readiness, readyText: kind.readyText,
+                                     downloadNote: "Live transcription starts once it is downloaded.") {
+                    Task { await download() }
+                }
+                if let downloadError = model.downloadError {
                     GroupRow { StatusDot(kind: .error, text: downloadError) }
                 }
                 SettingsRow("After the call") {
@@ -66,72 +66,24 @@ struct LiveSettingsSection: View {
         }
         .task(id: "\(enabled) \(engine) \(language)") { await refresh() }
         // The model is fetched when the feature is switched on, never during a call.
-        .onChange(of: enabled) { _, on in if on { Task { await refresh(); if case .needsDownload = readiness { await download() } } } }
-    }
-
-    @ViewBuilder private var statusRow: some View {
-        switch readiness {
-        case nil:
-            GroupRow {
-                HStack(spacing: PUI.Space.m) {
-                    ProgressView().controlSize(.small)
-                    Text("Checking…").font(PUI.Font.callout).foregroundStyle(.secondary)
-                }
-            }
-        case .ready:
-            GroupRow { StatusDot(kind: .ok, text: kind.readyText) }
-        case .needsDownload(let what):
-            GroupRow {
-                HStack(spacing: PUI.Space.l) {
-                    StatusDot(kind: .warning, text: "\(what) Live transcription starts once it is downloaded.")
-                    Spacer(minLength: 0)
-                    Button("Download") { Task { await download() } }
-                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                }
-            }
-        case .downloading(let progress):
-            GroupRow {
-                HStack(spacing: PUI.Space.l) {
-                    Text("Downloading the speech model… \(Int(progress * 100))%")
-                        .font(PUI.Font.callout).monospacedDigit().foregroundStyle(.secondary)
-                    ProgressView(value: min(max(progress, 0), 1)).controlSize(.small)
-                }
-            }
-        case .unavailable(let why):
-            GroupRow { StatusDot(kind: .error, text: why) }
-        }
+        .onChange(of: enabled) { _, on in if on { Task { await refresh(); if case .needsDownload = model.readiness { await download() } } } }
     }
 
     private func refresh() async {
         guard enabled else { return }
         if let preview = Self.previewReadiness {
-            readiness = preview
+            model.show(preview)
             return
         }
-        guard !downloading else { return }
-        let state = await kind.readiness(language: AppSettings.normalizedLanguage(language))
-        guard !downloading else { return }
-        readiness = state
+        let kind = self.kind
+        let language = AppSettings.normalizedLanguage(self.language)
+        await model.refresh { await kind.readiness(language: language) }
     }
 
     private func download() async {
-        guard !downloading else { return }
-        downloading = true
-        defer { downloading = false }
         let kind = self.kind
         let language = AppSettings.normalizedLanguage(self.language)
-        downloadError = nil
-        readiness = .downloading(0)
-        do {
-            try await kind.download(language: language) { fraction in
-                Task { @MainActor in
-                    if downloading { readiness = .downloading(fraction) }
-                }
-            }
-            readiness = await kind.readiness(language: language)
-        } catch {
-            downloadError = "Couldn't download the speech model: \(error.localizedDescription)"
-            readiness = await kind.readiness(language: language)
-        }
+        await model.download({ try await kind.download(language: language, progress: $0) },
+                             check: { await kind.readiness(language: language) })
     }
 }
