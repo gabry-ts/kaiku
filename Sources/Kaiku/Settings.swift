@@ -107,6 +107,7 @@ enum Keys {
     static let webhookBodyMode = "webhookBodyMode"
     static let webhookTemplate = "webhookTemplate"
     static let webhookContentType = "webhookContentType"
+    /// The one notifications switch used before each kind had its own (read to carry it over).
     static let notificationsEnabled = "notificationsEnabled"
     static let lastRecordingFolder = "lastRecordingFolder"
     static let bookmarkHotKey = "bookmarkHotKey"
@@ -121,6 +122,8 @@ enum Keys {
     static let detectCalls = "detectCalls"
     static let detectDisabledApps = "detectDisabledApps"
     static let detectAutoStart = "detectAutoStart"
+    /// "Ask to stop when the call ends", before notifications had their own switches
+    /// (read to carry it over).
     static let detectEndNotify = "detectEndNotify"
     static let detectAutoStopSeconds = "detectAutoStopSeconds"
     static let detectSourceRules = "detectSourceRules"
@@ -151,6 +154,15 @@ enum AppSettings {
     static var defaults: UserDefaults = .standard
 
     static func registerDefaults() {
+        // Read before registering anything: only what was really saved carries over.
+        let legacyInformational = defaults.object(forKey: Keys.notificationsEnabled) as? Bool
+        let legacyCallEnded = defaults.object(forKey: Keys.detectEndNotify) as? Bool
+        for kind in NotificationKind.allCases {
+            defaults.register(defaults: [
+                kind.showKey: kind.defaultShown(legacyInformational: legacyInformational, legacyCallEnded: legacyCallEnded),
+                kind.soundKey: kind.defaultSound,
+            ])
+        }
         defaults.register(defaults: [
             Keys.baseFolder: defaultBaseFolder.path,
             Keys.provider: ProviderKind.whisperCpp.rawValue,
@@ -169,7 +181,6 @@ enum AppSettings {
             Keys.webhookBodyMode: "default",
             Keys.webhookTemplate: "{\n  \"title\": \"{{title}}\",\n  \"text\": \"{{transcript_markdown}}\"\n}",
             Keys.webhookContentType: "application/json",
-            Keys.notificationsEnabled: true,
             Keys.model(.elevenLabs): ProviderKind.elevenLabs.defaultModel,
             Keys.model(.openAI): ProviderKind.openAI.defaultModel,
             Keys.model(.groq): ProviderKind.groq.defaultModel,
@@ -181,7 +192,6 @@ enum AppSettings {
             Keys.detectCalls: true,
             Keys.detectDisabledApps: [String](),
             Keys.detectAutoStart: false,
-            Keys.detectEndNotify: true,
             Keys.detectAutoStopSeconds: 0,
             Keys.calendarEnabled: true,
             Keys.calendarIDs: [String](),
@@ -264,7 +274,10 @@ enum AppSettings {
         }
     }
 
-    static var notificationsEnabled: Bool { defaults.bool(forKey: Keys.notificationsEnabled) }
+    /// Whether this kind of notification is posted at all.
+    static func notificationShown(_ kind: NotificationKind) -> Bool { defaults.bool(forKey: kind.showKey) }
+    /// Whether this kind of notification plays a sound.
+    static func notificationSound(_ kind: NotificationKind) -> Bool { defaults.bool(forKey: kind.soundKey) }
 
     static func model(for p: ProviderKind) -> String {
         nonEmpty(defaults.string(forKey: Keys.model(p)), p.defaultModel)
@@ -307,7 +320,6 @@ enum AppSettings {
     static var detectCalls: Bool { defaults.bool(forKey: Keys.detectCalls) }
     static var detectDisabledApps: [String] { defaults.stringArray(forKey: Keys.detectDisabledApps) ?? [] }
     static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
-    static var detectEndNotify: Bool { defaults.bool(forKey: Keys.detectEndNotify) }
     static var detectAutoStopSeconds: Int { defaults.integer(forKey: Keys.detectAutoStopSeconds) }
 
     /// Always/Never choice per call source.

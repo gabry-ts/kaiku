@@ -176,7 +176,7 @@ final class AppState: ObservableObject {
             if !rec.warnings.isEmpty {
                 let detail = rec.warnings.joined(separator: "\n")
                 lastErrorDetail = "Recording started with problems:\n\n\(detail)"
-                Notifier.shared.post(title: "Recording one track only", body: detail, folderPath: nil)
+                Notifier.shared.post(.problem, title: "Recording one track only", body: detail, folderPath: nil)
             }
         } catch {
             fail("Could not start recording. \(error.diagnosticDescription)", folderPath: nil)
@@ -302,7 +302,7 @@ final class AppState: ObservableObject {
         folder.updateMeta { $0.outputRoutes = all }
         Log.app.info("Output route: \(route.name, privacy: .public) (headphones: \(route.isHeadphones))")
         if !initial {
-            Notifier.shared.post(title: "Audio output changed", body: "Still recording, now from \(route.name).", folderPath: nil, force: true)
+            Notifier.shared.post(.deviceChanged, title: "Audio output changed", body: "Still recording, now from \(route.name).", folderPath: nil)
         }
     }
 
@@ -310,11 +310,11 @@ final class AppState: ObservableObject {
         guard isRecording else { return }
         currentMic = now
         if let now {
-            Notifier.shared.post(title: "Microphone disconnected", body: "Switched to \(now.name). Still recording.", folderPath: nil, force: true)
+            Notifier.shared.post(.deviceChanged, title: "Microphone disconnected", body: "Switched to \(now.name). Still recording.", folderPath: nil)
         } else {
             levels.hasMic = false
             lastErrorDetail = "\(lost) was disconnected and no other microphone is available. Only the call audio is being recorded."
-            Notifier.shared.post(title: "Microphone disconnected", body: "No other microphone found. Recording the call audio only.", folderPath: nil, force: true)
+            Notifier.shared.post(.deviceChanged, title: "Microphone disconnected", body: "No other microphone found. Recording the call audio only.", folderPath: nil)
         }
     }
 
@@ -444,7 +444,7 @@ final class AppState: ObservableObject {
                     busyStage[folder.key] = "Writing summary…"
                     do { try await SummaryJob.run(folder: folder) } catch {
                         lastErrorDetail = error.localizedDescription
-                        Notifier.shared.post(title: "Summary failed", body: error.localizedDescription, folderPath: folder.url.path)
+                        Notifier.shared.post(.problem, title: "Summary failed", body: error.localizedDescription, folderPath: folder.url.path)
                     }
                 }
                 finishBusy(folder)
@@ -509,7 +509,7 @@ final class AppState: ObservableObject {
         let (count, bytes) = cleanUpAudio(targets)
         Log.app.info("Auto cleanup moved audio of \(count) calls to the Trash")
         if count > 0 {
-            Notifier.shared.post(title: "Old audio moved to the Trash",
+            Notifier.shared.post(.cleanup, title: "Old audio moved to the Trash",
                                  body: "\(count) call\(count == 1 ? "" : "s"), \(Storage.format(bytes)). Transcripts are kept.", folderPath: nil)
         }
     }
@@ -562,7 +562,7 @@ final class AppState: ObservableObject {
             if rule == .new {
                 Notifier.shared.postNewSource(call)
             } else {
-                Notifier.shared.post(title: "Recording started", body: "Call detected in \(call.source).", folderPath: nil)
+                Notifier.shared.post(.recordingStarted, title: "Recording started", body: "Call detected in \(call.source).", folderPath: nil)
             }
         } else {
             Notifier.shared.postCallDetected(call, isNew: rule == .new)
@@ -594,14 +594,14 @@ final class AppState: ObservableObject {
     }
 
     func meetingEnded(app: String) {
-        guard isRecording, AppSettings.detectEndNotify else { return }
+        guard isRecording else { return }
         Notifier.shared.postCallEnded(app: app, autoStopSeconds: AppSettings.detectAutoStopSeconds)
     }
 
     func meetingAutoStop() {
         guard isRecording else { return }
         stopRecording()
-        Notifier.shared.post(title: "Recording stopped", body: "The call seems to have ended.", folderPath: nil)
+        Notifier.shared.post(.recordingStopped, title: "Recording stopped", body: "The call seems to have ended.", folderPath: nil)
     }
 
     // MARK: Tags
@@ -673,7 +673,7 @@ final class AppState: ObservableObject {
             Log.app.info("Webhook sent, HTTP \(result.statusCode)")
         } catch {
             lastErrorDetail = error.localizedDescription
-            Notifier.shared.post(title: "Webhook failed", body: error.localizedDescription, folderPath: folder.url.path)
+            Notifier.shared.post(.problem, title: "Webhook failed", body: error.localizedDescription, folderPath: folder.url.path)
         }
     }
 
@@ -751,7 +751,7 @@ final class AppState: ObservableObject {
         Log.app.error("\(message, privacy: .public)")
         lastErrorDetail = message
         if !isRecording { phase = .error(message) }
-        Notifier.shared.post(title: "Kaiku error", body: message, folderPath: folderPath)
+        Notifier.shared.post(.problem, title: "Kaiku error", body: message, folderPath: folderPath)
     }
 
     private func makeFolder(date: Date, title: String) throws -> RecordingFolder {

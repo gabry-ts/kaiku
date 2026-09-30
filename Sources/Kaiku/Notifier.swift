@@ -4,7 +4,8 @@ import KaikuCore
 
 /// Local notifications. Clicking one that belongs to a recording (`userInfo["folder"]`)
 /// opens the Library with that recording selected. "Transcript ready" notifications
-/// also offer Open Transcript / Copy Transcript actions.
+/// also offer Open Transcript / Copy Transcript actions. Every notification has a kind,
+/// which Settings > Notifications can switch off or silence.
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let shared = Notifier()
 
@@ -48,53 +49,53 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// - Parameter folderPath: recording folder to show in the Library when clicked.
-    func post(title: String, body: String, folderPath: String?, force: Bool = false) {
-        send(title: title, body: body, userInfo: folderPath.map { ["folder": $0] } ?? [:], category: nil, force: force)
+    func post(_ kind: NotificationKind, title: String, body: String, folderPath: String?) {
+        send(kind, title: title, body: body, userInfo: folderPath.map { ["folder": $0] } ?? [:], category: nil)
     }
 
     func postTranscriptReady(title: String, folderPath: String) {
         let folder = (folderPath as NSString).abbreviatingWithTildeInPath
-        send(title: "Transcript ready", body: "\(title)\nSaved in \(folder)",
+        send(.transcriptReady, title: "Transcript ready", body: "\(title)\nSaved in \(folder)",
              userInfo: ["folder": folderPath], category: Self.transcriptCategory)
     }
 
     func postRecovered(title: String, folderPath: String) {
-        send(title: "Recovered call \"\(title)\"", body: "The recording was interrupted, but the audio is safe. Transcribe it now?",
-             userInfo: ["folder": folderPath], category: Self.recoveredCategory, force: true)
+        send(.recovered, title: "Recovered call \"\(title)\"", body: "The recording was interrupted, but the audio is safe. Transcribe it now?",
+             userInfo: ["folder": folderPath], category: Self.recoveredCategory)
     }
 
     /// "Call detected in Zoom. Record?" Clicking or Record opens the title prompt.
     /// A new source also offers Always Record / Never.
     func postCallDetected(_ call: DetectedCall, isNew: Bool) {
-        send(title: isNew ? "New source: \(call.source)" : "Call detected in \(call.source)", body: "Record it?",
+        send(.callDetected, title: isNew ? "New source: \(call.source)" : "Call detected in \(call.source)", body: "Record it?",
              userInfo: ["kind": "callDetected", "source": call.source, "app": call.app, "windowTitle": call.windowTitle ?? ""],
-             category: isNew ? Self.callDetectedNewCategory : Self.callDetectedCategory, force: true, id: "callDetected")
+             category: isNew ? Self.callDetectedNewCategory : Self.callDetectedCategory, id: "callDetected")
     }
 
     /// Recording already started for a source never seen before: keep recording it, or never.
     func postNewSource(_ call: DetectedCall) {
-        send(title: "New source: \(call.source)", body: "Recording started. Always record calls from \(call.source)?",
+        send(.newSource, title: "New source: \(call.source)", body: "Recording started. Always record calls from \(call.source)?",
              userInfo: ["kind": "newSource", "source": call.source, "app": call.app],
-             category: Self.newSourceCategory, force: true, id: "newSource")
+             category: Self.newSourceCategory, id: "newSource")
     }
 
     func postCallEnded(app: String, autoStopSeconds: Int) {
         let body = autoStopSeconds > 0
             ? "\(app) stopped using the microphone. Recording stops in \(autoStopSeconds) s unless the call resumes."
             : "\(app) stopped using the microphone. Stop recording?"
-        send(title: "Call seems to have ended", body: body, userInfo: ["kind": "callEnded"],
-             category: Self.callEndedCategory, force: true, id: "callEnded")
+        send(.callEnded, title: "Call seems to have ended", body: body, userInfo: ["kind": "callEnded"],
+             category: Self.callEndedCategory, id: "callEnded")
     }
 
-    /// - Parameter force: sent even when "notify when a transcript is ready" is off,
-    ///   because the notification asks for a decision.
-    private func send(title: String, body: String, userInfo: [String: String], category: String?,
-                      force: Bool = false, id: String = UUID().uuidString) {
-        guard AppSettings.notificationsEnabled || force else { return }
+    /// The one place a notification is posted from: a kind that is switched off is never
+    /// posted, one with its sound off is posted silently.
+    private func send(_ kind: NotificationKind, title: String, body: String, userInfo: [String: String],
+                      category: String?, id: String = UUID().uuidString) {
+        guard AppSettings.notificationShown(kind) else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
+        if AppSettings.notificationSound(kind) { content.sound = .default }
         content.userInfo = userInfo
         if let category { content.categoryIdentifier = category }
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
