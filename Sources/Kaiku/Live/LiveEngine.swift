@@ -59,12 +59,15 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
     case apple
     /// whisper.cpp on device, in chunks of a few seconds.
     case whisper
+    /// OpenAI's Realtime API, streamed to the cloud.
+    case openAI = "openai"
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .apple: return "Apple (on device)"
         case .whisper: return "whisper.cpp (on device)"
+        case .openAI: return "OpenAI Realtime"
         }
     }
 
@@ -72,7 +75,21 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
     var privacyNote: String {
         switch self {
         case .apple, .whisper: return "Audio is transcribed on this Mac and never leaves it."
+        case .openAI: return "Audio is sent to OpenAI while you record."
         }
+    }
+
+    /// The transcription provider whose API key a cloud engine uses, nil on device.
+    var keyProvider: ProviderKind? {
+        switch self {
+        case .apple, .whisper: return nil
+        case .openAI: return .openAI
+        }
+    }
+
+    /// What to do when the key of a cloud engine is missing.
+    private var keyHint: String {
+        "Add \(self == .openAI ? "an OpenAI" : "an") API key in Settings > Transcription."
     }
 
     /// The engines that can run on this version of macOS.
@@ -94,6 +111,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
             return nil
         case .whisper:
             return WhisperLiveEngine()
+        case .openAI:
+            return StreamingLiveEngine(api: .openAI, key: Keychain.apiKey(for: .openAI), keyHint: keyHint)
         }
     }
 
@@ -105,6 +124,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
             return .unavailable("Needs macOS 26 or later.")
         case .whisper:
             return WhisperLiveEngine.readiness
+        case .openAI:
+            return Keychain.apiKey(for: .openAI) == nil ? .unavailable(keyHint) : .ready
         }
     }
 
@@ -116,6 +137,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
             try await AppleSpeech.download(language: language, progress: progress)
         case .whisper:
             throw LiveEngineError("whisper.cpp models are downloaded in Settings > Transcription.")
+        case .openAI:
+            throw LiveEngineError("There is nothing to download for \(displayName).")
         }
     }
 }
