@@ -274,62 +274,6 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
     static var primaryLarge: PrimaryButtonStyle { PrimaryButtonStyle(large: true) }
 }
 
-/// Horizontal level meter, 0...1.
-struct LevelMeter: View {
-    var level: Float
-    var tint: Color = .green
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary)
-                Capsule()
-                    .fill(LinearGradient(colors: [tint.opacity(0.75), tint], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: geo.size.width * CGFloat(min(max(level, 0), 1)))
-                    .animation(.linear(duration: 0.08), value: level)
-            }
-        }
-        .frame(height: 6)
-        .accessibilityElement()
-        .accessibilityLabel("Level")
-        .accessibilityValue("\(Int(level * 100)) percent")
-    }
-}
-
-/// Small colored dot + label, used for status.
-struct StatusDot: View {
-    enum Kind { case ok, warning, error, neutral }
-    let kind: Kind
-    let text: String
-
-    var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: symbol).foregroundStyle(color)
-        }
-        .font(.callout)
-    }
-
-    private var symbol: String {
-        switch kind {
-        case .ok: return "checkmark.circle.fill"
-        case .warning: return "exclamationmark.circle.fill"
-        case .error: return "xmark.circle.fill"
-        case .neutral: return "circle.dashed"
-        }
-    }
-
-    private var color: Color {
-        switch kind {
-        case .ok: return .green
-        case .warning: return .orange
-        case .error: return .red
-        case .neutral: return .secondary
-        }
-    }
-}
-
 /// Rounded "card" background used for grouped content outside of Forms.
 struct CardBackground: ViewModifier {
     func body(content: Content) -> some View {

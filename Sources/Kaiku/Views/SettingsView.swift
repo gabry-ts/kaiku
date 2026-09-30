@@ -276,7 +276,7 @@ struct RecordingSettings: View {
                             if monitor.running { monitor.stop() } else if let d = resolved { monitor.start(device: d) }
                         }
                         .disabled(resolved == nil)
-                        LevelMeter(level: monitor.level, tint: Brand.accent)
+                        LevelMeter(level: monitor.level)
                             .opacity(monitor.running ? 1 : 0.4)
                     }
                     if let error = monitor.error {
