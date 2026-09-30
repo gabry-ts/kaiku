@@ -1,5 +1,6 @@
 import AppKit
 import KaikuCore
+import PartitiUI
 import SwiftUI
 
 /// Opens AppKit windows hosting SwiftUI views. A menubar-only app has to
@@ -25,10 +26,16 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     func showSettings(_ pane: SettingsPane = .general) {
         let view = SettingsView(pane: pane).environmentObject(AppState.shared)
-        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+        // A full-size content view under a clear title bar, so Partiti UI's floating
+        // sidebar runs under the traffic lights and each pane carries its own header.
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: PUI.Window.settings),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.toolbarStyle = .unified
-        present(id: "settings", window: window, view: view, title: "Settings", recreate: false, bridgeToolbar: true)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.minSize = PUI.Window.settingsMin
+        present(id: "settings", window: window, view: view, title: "Settings", recreate: false,
+                size: PUI.Window.settings)
     }
 
     func showLibrary() {
@@ -67,7 +74,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
 
     private func present<V: View>(id: String, window: NSWindow, view: V, title: String,
-                                  recreate: Bool, bridgeToolbar: Bool = false) {
+                                  recreate: Bool, bridgeToolbar: Bool = false, size: NSSize? = nil) {
         if let existing = windows[id], !recreate {
             NSApp.activate(ignoringOtherApps: true)
             existing.makeKeyAndOrderFront(nil)
@@ -81,6 +88,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.identifier = NSUserInterfaceItemIdentifier(id)
+        if let size { window.setContentSize(size) }
         window.center()
         windows[id] = window
         NSApp.activate(ignoringOtherApps: true)

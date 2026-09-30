@@ -68,3 +68,77 @@ struct StatusDot: View {
         }
     }
 }
+
+// MARK: - Settings
+
+/// A scrolling settings pane that opens with Partiti UI's header for `pane`.
+struct KaikuPane<Content: View>: View {
+    let pane: SettingsPane
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            PartitiUI.SettingsPane {
+                PaneHeader(Text(pane.title), subtitle: Text(subtitle), symbol: pane.symbol, color: pane.tint)
+            } content: {
+                content
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+}
+
+/// A row of a `SettingsGroup` with free content, padded like `SettingsRow`.
+struct GroupRow<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(.horizontal, PUI.Space.l)
+            .padding(.vertical, PUI.Space.m)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+    }
+}
+
+/// A settings row with a switch on the right; the title also names the switch for VoiceOver.
+struct SwitchRow: View {
+    let title: String
+    var subtitle: String?
+    @Binding var isOn: Bool
+
+    init(_ title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        SettingsRow(Text(title), subtitle: subtitle.map { Text($0) }) {
+            Toggle(isOn: $isOn) { Text(title) }
+                .toggleStyle(PUISwitchStyle(showsLabel: false))
+        }
+    }
+}
+
+/// A multi-line text editor drawn like a Partiti UI field.
+struct EditorField: View {
+    @Binding var text: String
+    var minHeight: CGFloat = 130
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        TextEditor(text: $text)
+            .font(.system(size: 12, design: .monospaced))
+            .frame(minHeight: minHeight)
+            .scrollContentBackground(.hidden)
+            .padding(PUI.Space.s)
+            .background {
+                ZStack {
+                    shape.fill(scheme == .dark ? Color.white.opacity(0.06) : Color.white)
+                    shape.strokeBorder(Color.black.opacity(scheme == .dark ? 0.3 : 0.12), lineWidth: 0.5)
+                }
+            }
+    }
+}

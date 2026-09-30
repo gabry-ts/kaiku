@@ -1,7 +1,8 @@
+import PartitiUI
 import SwiftUI
 
 /// Auto / Italian / English / Other (free ISO code), bound to one string:
-/// "auto", "it", "en" or any other code.
+/// "auto", "it", "en" or any other code. Drawn as rows of a settings group.
 struct LanguagePicker: View {
     @Binding var language: String
     var label = "Language"
@@ -12,15 +13,24 @@ struct LanguagePicker: View {
 
     var body: some View {
         Group {
-            Picker(label, selection: $choice) {
-                Text("Auto-detect").tag("auto")
-                Text("Italian").tag("it")
-                Text("English").tag("en")
-                Divider()
-                Text("Other…").tag("other")
+            SettingsRow(Text(label)) {
+                Picker(label, selection: $choice) {
+                    Text("Auto-detect").tag("auto")
+                    Text("Italian").tag("it")
+                    Text("English").tag("en")
+                    Divider()
+                    Text("Other…").tag("other")
+                }
+                .labelsHidden()
+                .fixedSize()
             }
             if choice == "other" {
-                TextField("Language code", text: $custom, prompt: Text("e.g. de, fr, es"))
+                SettingsRow("Language code") {
+                    TextField("Language code", text: $custom, prompt: Text("e.g. de, fr, es"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                }
             }
         }
         .onAppear(perform: load)
