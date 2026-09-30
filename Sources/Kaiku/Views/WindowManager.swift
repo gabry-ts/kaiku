@@ -31,8 +31,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: PUI.Window.settings),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
+        window.puiConfigureForSettings()
         window.minSize = PUI.Window.settingsMin
         present(id: "settings", window: window, view: view, title: "Settings", recreate: false,
                 size: PUI.Window.settings)
