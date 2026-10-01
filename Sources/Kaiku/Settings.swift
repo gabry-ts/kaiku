@@ -182,8 +182,11 @@ enum Keys {
     static let liveEngine = "liveEngine"
     static let liveAfterCall = "liveAfterCall"
     static let alibabaRegion = "alibabaRegion"
+    static let liveAssistEnabled = "liveAssistEnabled"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
+    static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
+    static func liveAskModel(_ p: SummaryProviderKind) -> String { "liveAskModel.\(p.rawValue)" }
 }
 
 enum AppSettings {
@@ -246,7 +249,11 @@ enum AppSettings {
             Keys.summaryModel(.openAI): SummaryProviderKind.openAI.defaultModel,
             Keys.summaryModel(.anthropic): SummaryProviderKind.anthropic.defaultModel,
             Keys.summaryModel(.groq): SummaryProviderKind.groq.defaultModel,
+            Keys.liveAssistEnabled: false,
         ])
+        for p in SummaryProviderKind.allCases {
+            defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel])
+        }
     }
 
     static var defaultBaseFolder: URL {
@@ -359,6 +366,15 @@ enum AppSettings {
         nonEmpty(defaults.string(forKey: Keys.summaryModel(p)), p.defaultModel)
     }
     static var summaryPrompt: String { defaults.string(forKey: Keys.summaryPrompt) ?? SummaryAPI.defaultPrompt }
+
+    /// The live window's Summary and Ask tabs, with the summary provider and key.
+    static var liveAssistEnabled: Bool { liveEnabled && defaults.bool(forKey: Keys.liveAssistEnabled) }
+    static func liveSummaryModel(for p: SummaryProviderKind) -> String {
+        nonEmpty(defaults.string(forKey: Keys.liveSummaryModel(p)), p.defaultModel)
+    }
+    static func liveAskModel(for p: SummaryProviderKind) -> String {
+        nonEmpty(defaults.string(forKey: Keys.liveAskModel(p)), p.defaultModel)
+    }
 
     static var calendarEnabled: Bool { defaults.bool(forKey: Keys.calendarEnabled) }
     /// Calendar identifiers to use; empty means all.

@@ -8,15 +8,24 @@ struct LiveSettingsSection: View {
     @AppStorage(Keys.liveEngine) private var engine = LiveEngineKind.apple.rawValue
     @AppStorage(Keys.liveAfterCall) private var afterCall = LiveAfterCall.preview.rawValue
     @AppStorage(Keys.language) private var language = "auto"
+    @AppStorage(Keys.liveAssistEnabled) private var assist = false
+    @AppStorage(Keys.summaryProvider) private var summaryProvider = SummaryProviderKind.openAI.rawValue
+    @State private var summaryModel = ""
+    @State private var askModel = ""
     @StateObject private var model = SpeechModelStatus()
 
     /// Snapshot rendering only: shown instead of asking the system.
     static var previewReadiness: LiveReadiness?
 
     private var kind: LiveEngineKind { AppSettings.liveEngine ?? .apple }
+    private var assistKind: SummaryProviderKind { SummaryProviderKind(rawValue: summaryProvider) ?? .openAI }
 
     private var footer: String {
-        "What is being said shows in the popover and in a floating window, as Me and Them. \(kind.privacyNote) Preview only transcribes the call as usual when it ends. Use as the transcript keeps the live text instead; you can still transcribe the call again from the library."
+        var text = "What is being said shows in the popover and in a floating window, as Me and Them. \(kind.privacyNote) Preview only transcribes the call as usual when it ends. Use as the transcript keeps the live text instead; you can still transcribe the call again from the library."
+        if assist {
+            text += " Summary and Ask send the transcript to the summary provider while you talk, even when the engine runs on this Mac. The live summary is saved as live-summary.md in the call folder."
+        }
+        return text
     }
 
     var body: some View {
@@ -56,11 +65,42 @@ struct LiveSettingsSection: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                SwitchRow("Summarize and answer questions during the call", isOn: $assist)
+                if assist {
+                    SettingsRow(Text("Summary model"), subtitle: Text("Updates the summary every minute or so.")) {
+                        TextField("Summary model", text: $summaryModel, prompt: Text(assistKind.defaultModel))
+                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+                    }
+                    SettingsRow(Text("Ask model"), subtitle: Text("Answers your questions; a fast one keeps them quick.")) {
+                        TextField("Ask model", text: $askModel, prompt: Text(assistKind.defaultModel))
+                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+                    }
+                    GroupRow {
+                        if assistKind.apiKey != nil {
+                            StatusDot(kind: .ok, text: "Uses \(assistKind.displayName), the provider chosen in Transcription > Summary")
+                        } else {
+                            StatusDot(kind: .warning, text: "No \(assistKind.displayName) key yet. Add it in Settings > Transcription > Summary.")
+                        }
+                    }
+                }
             }
+        }
+        .onAppear(perform: loadModels)
+        .onChange(of: summaryProvider) { _, _ in loadModels() }
+        .onChange(of: summaryModel) { _, v in
+            AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.liveSummaryModel(assistKind))
+        }
+        .onChange(of: askModel) { _, v in
+            AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.liveAskModel(assistKind))
         }
         .task(id: "\(enabled) \(engine) \(language)") { await refresh() }
         // The model is fetched when the feature is switched on, never during a call.
         .onChange(of: enabled) { _, on in if on { Task { await refresh(); if case .needsDownload = model.readiness { await download() } } } }
+    }
+
+    private func loadModels() {
+        summaryModel = AppSettings.liveSummaryModel(for: assistKind)
+        askModel = AppSettings.liveAskModel(for: assistKind)
     }
 
     private func refresh() async {
