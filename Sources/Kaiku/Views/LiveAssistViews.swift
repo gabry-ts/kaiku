@@ -139,7 +139,7 @@ private struct MissingKeyNote: View {
         VStack(alignment: .leading, spacing: PUI.Space.m) {
             Text("Summary and Ask use \(provider.displayName). \(provider.problem ?? "")")
                 .font(PUI.Font.callout).foregroundStyle(Ink(scheme).secondary)
-            Button("Open Settings") { WindowManager.shared.showSettings(.general) }
+            Button("Open Settings") { WindowManager.shared.showSettings(.live) }
                 .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
         }
     }

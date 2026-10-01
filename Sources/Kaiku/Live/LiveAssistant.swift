@@ -82,7 +82,7 @@ final class LiveAssistant: ObservableObject {
                                                   sinceLast: Date().timeIntervalSince(lastRun)) else { return }
         let kind = AppSettings.liveProvider
         if let problem = kind.problem {
-            summaryError = "\(problem) Check Settings > General > Live Transcription."
+            summaryError = "\(problem) Check Settings > Live."
             return
         }
         let model = AppSettings.liveSummaryModel(for: kind)
@@ -123,7 +123,7 @@ final class LiveAssistant: ObservableObject {
         guard isEnabled, askTask == nil, !question.isEmpty else { return }
         let kind = AppSettings.liveProvider
         if let problem = kind.problem {
-            askError = "\(problem) Check Settings > General > Live Transcription."
+            askError = "\(problem) Check Settings > Live."
             return
         }
         let model = AppSettings.liveAskModel(for: kind)
