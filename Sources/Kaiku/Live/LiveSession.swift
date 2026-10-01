@@ -11,6 +11,8 @@ final class LiveSession: ObservableObject {
     @Published private(set) var isRunning = false
     /// Why the live transcription stopped early, shown in the recording card.
     @Published private(set) var notice: String?
+    /// The Summary and Ask tabs of the live window.
+    let assistant = LiveAssistant()
 
     private var engine: LiveEngine?
     private var listener: Task<Void, Never>?
@@ -35,6 +37,7 @@ final class LiveSession: ObservableObject {
         transcript = LiveTranscript()
         notice = nil
         isRunning = true
+        assistant.start { [weak self] in self?.transcript ?? LiveTranscript() }
         listener = Task { [weak self] in
             for await event in engine.events {
                 guard let self, self.engine === engine else { return }
@@ -59,6 +62,8 @@ final class LiveSession: ObservableObject {
         let transcript: LiveTranscript
         /// False when the engine failed or didn't finish in time, so text is missing.
         let complete: Bool
+        /// The live summary as Markdown, if one was written.
+        var summary: String?
     }
 
     /// Stops with the recording and returns everything heard, the last words included.
@@ -66,8 +71,9 @@ final class LiveSession: ObservableObject {
     func finish() async -> Outcome {
         guard let engine, isRunning else {
             let heard = transcript
+            let summary = assistant.summaryMarkdown
             reset()
-            return Outcome(transcript: heard, complete: false)
+            return Outcome(transcript: heard, complete: false, summary: summary)
         }
         let listener = self.listener
         let stopping = Task { await engine.stop() }
@@ -84,8 +90,9 @@ final class LiveSession: ObservableObject {
         let complete = isRunning && Date().timeIntervalSince(began) < Self.stopTimeout
         transcript.finalizePartials()
         let heard = transcript
+        let summary = assistant.summaryMarkdown
         reset()
-        return Outcome(transcript: heard, complete: complete)
+        return Outcome(transcript: heard, complete: complete, summary: summary)
     }
 
     /// Stops without keeping anything (recording discarded, or the app is quitting).
@@ -101,6 +108,7 @@ final class LiveSession: ObservableObject {
         isRunning = false
         transcript = LiveTranscript()
         notice = nil
+        assistant.reset()
     }
 
     private func handle(_ event: LiveEvent) {

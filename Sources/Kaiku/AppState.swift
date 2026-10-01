@@ -232,6 +232,10 @@ final class AppState: ObservableObject {
             }.value
             let heard = await live.finish()
             WindowManager.shared.close("live")
+            if let summary = heard.summary {
+                // Kept apart from summary.md, which is written after transcription.
+                try? ("## Live summary\n\n" + summary + "\n").write(to: folder.liveSummaryURL, atomically: true, encoding: .utf8)
+            }
             currentFolder = nil
             clock = nil
             currentMic = nil

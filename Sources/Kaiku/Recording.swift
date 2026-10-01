@@ -62,6 +62,8 @@ struct RecordingFolder: Identifiable, Hashable {
     static let mixedName = "mixed.m4a"
     static let segmentsName = "segments.json"
     static let summaryName = "summary.md"
+    /// Bullets written by the live window's Summary tab during the call.
+    static let liveSummaryName = "live-summary.md"
     /// Crash-safe files written while recording, converted to .m4a on stop.
     static let micRawName = "mic.caf"
     static let systemRawName = "system.caf"
@@ -76,6 +78,7 @@ struct RecordingFolder: Identifiable, Hashable {
     var mixedURL: URL { url.appendingPathComponent(Self.mixedName) }
     var segmentsURL: URL { url.appendingPathComponent(Self.segmentsName) }
     var summaryURL: URL { url.appendingPathComponent(Self.summaryName) }
+    var liveSummaryURL: URL { url.appendingPathComponent(Self.liveSummaryName) }
     var micRawURL: URL { url.appendingPathComponent(Self.micRawName) }
     var systemRawURL: URL { url.appendingPathComponent(Self.systemRawName) }
     var micPartialURL: URL { url.appendingPathComponent(Self.micPartialName) }
