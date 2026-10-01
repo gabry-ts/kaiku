@@ -47,7 +47,7 @@ final class CLICompletionTests: XCTestCase {
     func testOpenCodeModelsKeepProviderModelLines() {
         let out = "\u{1B}[0mopencode/big-pickle\nanthropic/claude-x\n\nSome notice here\n"
         XCTAssertEqual(CLITool.parseOpenCodeModels(out), ["opencode/big-pickle", "anthropic/claude-x"])
-        XCTAssertEqual(CLITool.claude.modelSuggestions, ["fable", "opus", "sonnet"])
+        XCTAssertEqual(CLITool.claude.modelSuggestions, ["fable", "opus", "sonnet", "haiku"])
         XCTAssertTrue(CLITool.codex.modelSuggestions.isEmpty)
     }
 

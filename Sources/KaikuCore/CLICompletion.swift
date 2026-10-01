@@ -13,7 +13,7 @@ public enum CLITool: String, CaseIterable, Sendable {
     /// Model names the tool documents; anything else can still be typed.
     public var modelSuggestions: [String] {
         switch self {
-        case .claude: return ["fable", "opus", "sonnet"]
+        case .claude: return ["fable", "opus", "sonnet", "haiku"]
         case .codex, .opencode: return []
         }
     }
