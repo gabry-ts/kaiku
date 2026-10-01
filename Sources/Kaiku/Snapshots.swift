@@ -77,7 +77,7 @@ enum Snapshots {
         }
         if LiveTranscription.isSupported {
             defaults.register(defaults: [Keys.liveEnabled: true])
-            for dark in [false, true] { settings("settings-live-\(dark ? "dark" : "light")", .live, dark: dark) }
+            for dark in [false, true] { settings("settings-live-on-\(dark ? "dark" : "light")", .live, dark: dark) }
             LiveSettings.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
             settings("settings-live-download-light", .live, dark: false)
             LiveSettings.previewReadiness = .ready
