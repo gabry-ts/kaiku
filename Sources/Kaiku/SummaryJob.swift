@@ -8,21 +8,23 @@ enum SummaryJob {
         guard let transcript = try? String(contentsOf: folder.transcriptURL, encoding: .utf8) else {
             throw ProviderError(message: "This call has no transcript yet.")
         }
-        guard let key = kind.apiKey else {
-            throw ProviderError(message: "Missing API key for \(kind.displayName). Add it in Settings > Transcription > Summary.")
+        if let problem = kind.problem {
+            throw ProviderError(message: "\(problem) Check Settings > Transcription > Summary.")
         }
         let meta = folder.loadMeta()
         let model = AppSettings.summaryModel(for: kind)
         let prompt = SummaryAPI.renderPrompt(template: AppSettings.summaryPrompt, title: meta?.title ?? "", transcript: transcript)
 
-        let text = try await complete(kind: kind, key: key, model: model, prompt: prompt)
+        let text = try await complete(kind: kind, model: model, prompt: prompt)
         try (text + "\n").write(to: folder.summaryURL, atomically: true, encoding: .utf8)
         folder.updateMeta { $0.summaryModel = "\(kind.displayName) (\(model))" }
     }
 
     /// Sends one prompt to the provider and returns the text of its answer.
-    static func complete(kind: SummaryProviderKind, key: String, model: String, prompt: String,
+    static func complete(kind: SummaryProviderKind, model: String, prompt: String,
                          maxTokens: Int = 4096, timeout: TimeInterval = 300) async throws -> String {
+        if let problem = kind.problem { throw ProviderError(message: problem) }
+        let key = kind.apiKey ?? ""
         switch kind {
         case .anthropic:
             let data = try await HTTP.postJSON(

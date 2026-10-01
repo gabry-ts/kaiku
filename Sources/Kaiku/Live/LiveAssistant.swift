@@ -32,10 +32,10 @@ final class LiveAssistant: ObservableObject {
     /// The summary as Markdown, nil while it's empty.
     var summaryMarkdown: String? { bullets.isEmpty ? nil : LiveAssist.markdown(bullets) }
 
-    /// The provider in use when its key is missing, for the empty state.
+    /// The provider in use when it can't run yet, for the empty state.
     var missingKeyProvider: SummaryProviderKind? {
         let kind = AppSettings.summaryProvider
-        return kind.apiKey == nil ? kind : nil
+        return kind.problem == nil ? nil : kind
     }
 
     /// Starts with a recording when the feature is on.
@@ -81,8 +81,8 @@ final class LiveAssistant: ObservableObject {
         guard force || LiveAssist.shouldSummarize(pendingWords: LiveAssist.wordCount(lines),
                                                   sinceLast: Date().timeIntervalSince(lastRun)) else { return }
         let kind = AppSettings.summaryProvider
-        guard let key = kind.apiKey else {
-            summaryError = "Add a \(kind.displayName) API key in Settings > Transcription > Summary."
+        if let problem = kind.problem {
+            summaryError = "\(problem) Check Settings > Transcription > Summary."
             return
         }
         let model = AppSettings.liveSummaryModel(for: kind)
@@ -93,7 +93,7 @@ final class LiveAssistant: ObservableObject {
         summaryTask = Task { [weak self] in
             let reply: Result<String, Error>
             do {
-                reply = .success(try await SummaryJob.complete(kind: kind, key: key, model: model, prompt: prompt,
+                reply = .success(try await SummaryJob.complete(kind: kind, model: model, prompt: prompt,
                                                                maxTokens: 1024, timeout: 60))
             } catch {
                 reply = .failure(error)
@@ -122,8 +122,8 @@ final class LiveAssistant: ObservableObject {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isEnabled, askTask == nil, !question.isEmpty else { return }
         let kind = AppSettings.summaryProvider
-        guard let key = kind.apiKey else {
-            askError = "Add a \(kind.displayName) API key in Settings > Transcription > Summary."
+        if let problem = kind.problem {
+            askError = "\(problem) Check Settings > Transcription > Summary."
             return
         }
         let model = AppSettings.liveAskModel(for: kind)
@@ -136,7 +136,7 @@ final class LiveAssistant: ObservableObject {
         askTask = Task { [weak self] in
             let reply: Result<String, Error>
             do {
-                reply = .success(try await SummaryJob.complete(kind: kind, key: key, model: model, prompt: prompt,
+                reply = .success(try await SummaryJob.complete(kind: kind, model: model, prompt: prompt,
                                                                maxTokens: 400, timeout: 30))
             } catch {
                 reply = .failure(error)

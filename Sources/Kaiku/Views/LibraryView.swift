@@ -545,9 +545,8 @@ private struct RecordingDetail: View {
             }
             .buttonStyle(.bordered)
             .disabled(!item.folder.hasTranscript || busy || summarizing)
-            .help(AppSettings.summaryProvider.apiKey == nil
-                  ? "Add an API key in Settings > Transcription > Summary"
-                  : "Summarize with \(AppSettings.summaryProvider.displayName) (\(AppSettings.summaryModel(for: AppSettings.summaryProvider)))")
+            .help(AppSettings.summaryProvider.problem.map { "\($0) Check Settings > Transcription > Summary" }
+                  ?? "Summarize with \(AppSettings.summaryProvider.displayName) (\(AppSettings.summaryModel(for: AppSettings.summaryProvider)))")
             if summarizing { ProgressView().controlSize(.small) }
             Spacer()
         }

@@ -86,6 +86,11 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         guard let v = Keychain.get(keyAccount)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty else { return nil }
         return v
     }
+
+    /// What is missing before it can be used, nil when ready.
+    var problem: String? {
+        apiKey == nil ? "No \(displayName) API key yet." : nil
+    }
 }
 
 /// When silence is cut before transcription.
