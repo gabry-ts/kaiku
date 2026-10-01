@@ -15,24 +15,29 @@ enum SummaryJob {
         let model = AppSettings.summaryModel(for: kind)
         let prompt = SummaryAPI.renderPrompt(template: AppSettings.summaryPrompt, title: meta?.title ?? "", transcript: transcript)
 
-        let text: String
+        let text = try await complete(kind: kind, key: key, model: model, prompt: prompt)
+        try (text + "\n").write(to: folder.summaryURL, atomically: true, encoding: .utf8)
+        folder.updateMeta { $0.summaryModel = "\(kind.displayName) (\(model))" }
+    }
+
+    /// Sends one prompt to the provider and returns the text of its answer.
+    static func complete(kind: SummaryProviderKind, key: String, model: String, prompt: String,
+                         maxTokens: Int = 4096, timeout: TimeInterval = 300) async throws -> String {
         switch kind {
         case .anthropic:
             let data = try await HTTP.postJSON(
                 URL(string: "https://api.anthropic.com/v1/messages")!,
-                body: try SummaryAPI.anthropicBody(model: model, prompt: prompt),
-                headers: ["x-api-key": key, "anthropic-version": "2023-06-01"])
-            text = try SummaryAPI.parseAnthropic(data)
+                body: try SummaryAPI.anthropicBody(model: model, prompt: prompt, maxTokens: maxTokens),
+                headers: ["x-api-key": key, "anthropic-version": "2023-06-01"], timeout: timeout)
+            return try SummaryAPI.parseAnthropic(data)
         case .openAI, .groq:
             let base = kind == .openAI ? "https://api.openai.com/v1" : "https://api.groq.com/openai/v1"
             let data = try await HTTP.postJSON(
                 URL(string: base + "/chat/completions")!,
                 body: try SummaryAPI.chatCompletionsBody(model: model, prompt: prompt),
-                headers: ["Authorization": "Bearer \(key)"])
-            text = try SummaryAPI.parseChatCompletions(data)
+                headers: ["Authorization": "Bearer \(key)"], timeout: timeout)
+            return try SummaryAPI.parseChatCompletions(data)
         }
-        try (text + "\n").write(to: folder.summaryURL, atomically: true, encoding: .utf8)
-        folder.updateMeta { $0.summaryModel = "\(kind.displayName) (\(model))" }
     }
 }
 
