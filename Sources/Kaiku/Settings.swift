@@ -84,6 +84,26 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
     /// True when an empty model can't be sent.
     var requiresModel: Bool { self == .openRouter }
 
+    /// Shown in the model field when it's empty.
+    var modelPlaceholder: String {
+        if !defaultModel.isEmpty { return defaultModel }
+        return cli == nil ? "Required" : "CLI default"
+    }
+
+    /// What an empty model means and what to type, for providers without a default.
+    var modelHint: String? {
+        switch self {
+        case .openRouter: return "Required, as provider/model."
+        case .claudeCode: return "Empty uses Claude Code's default; an alias or a full model name."
+        case .codex: return "Empty uses the model in ~/.codex/config.toml."
+        case .opencode: return "Empty uses OpenCode's default; provider/model."
+        default: return nil
+        }
+    }
+
+    /// True when the model menu has names to offer.
+    var listsModels: Bool { self == .openRouter || self == .claudeCode || self == .opencode }
+
     /// Keychain account of the API key. OpenAI and Groq share the transcription keys.
     var keyAccount: String {
         switch self {

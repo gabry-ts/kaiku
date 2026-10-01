@@ -524,10 +524,7 @@ private struct SummarySettings: View {
                 .labelsHidden()
                 .fixedSize()
             }
-            SettingsRow("Model") {
-                TextField("Model", text: $model, prompt: Text(kind.defaultModel))
-                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
-            }
+            ModelField(kind: kind, text: $model)
             ProviderAccessRows(access: access, modelMissing: kind.requiresModel && model.isEmpty)
             GroupRow {
                 VStack(alignment: .leading, spacing: PUI.Space.s) {
@@ -600,6 +597,98 @@ final class ProviderAccess: ObservableObject {
             let path = await CLIProviders.detect(cli)
             if self.kind.cli == cli { self.found = path }
         }
+    }
+}
+
+/// Models the providers list, fetched when a model menu is first shown and kept in memory.
+@MainActor
+final class ModelCatalog: ObservableObject {
+    static let shared = ModelCatalog()
+    @Published private(set) var models: [SummaryProviderKind: [String]] = [:]
+    @Published private(set) var loading: Set<SummaryProviderKind> = []
+    @Published private(set) var errors: [SummaryProviderKind: String] = [:]
+
+    func load(_ kind: SummaryProviderKind, force: Bool = false) async {
+        guard kind.listsModels, force || models[kind] == nil, !loading.contains(kind) else { return }
+        loading.insert(kind)
+        defer { loading.remove(kind) }
+        do {
+            models[kind] = try await fetch(kind)
+            errors[kind] = nil
+        } catch {
+            errors[kind] = error.localizedDescription
+        }
+    }
+
+    private func fetch(_ kind: SummaryProviderKind) async throws -> [String] {
+        switch kind {
+        case .openRouter:
+            var req = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/models")!, timeoutInterval: 30)
+            if let key = kind.apiKey { req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw ProviderError(message: "Couldn't load the OpenRouter models.")
+            }
+            return try SummaryAPI.parseModelIDs(data)
+        case .opencode:
+            guard let binary = await CLIProviders.detect(.opencode) else { throw ProviderError(message: "OpenCode CLI not found.") }
+            return CLITool.parseOpenCodeModels(try await Shell.run(binary, ["models"], timeout: 30))
+        default:
+            return kind.cli?.modelSuggestions ?? []
+        }
+    }
+}
+
+/// Model name field with a menu of the models the provider lists or documents.
+/// Typing filters the menu; any name can still be typed.
+struct ModelField: View {
+    let kind: SummaryProviderKind
+    @Binding var text: String
+    var title = "Model"
+    var subtitle: String?
+    @ObservedObject private var catalog = ModelCatalog.shared
+
+    private var subtitleText: Text? {
+        let parts = [subtitle, kind.modelHint].compactMap { $0 }
+        return parts.isEmpty ? nil : Text(parts.joined(separator: " "))
+    }
+
+    private var choices: [String] {
+        let all = catalog.models[kind] ?? []
+        let query = text.trimmingCharacters(in: .whitespaces)
+        let matches = all.filter { $0.localizedCaseInsensitiveContains(query) }
+        return query.isEmpty || matches.isEmpty || matches == [query] ? all : matches
+    }
+
+    var body: some View {
+        SettingsRow(Text(title), subtitle: subtitleText) {
+            HStack(spacing: PUI.Space.s) {
+                TextField(title, text: $text, prompt: Text(kind.modelPlaceholder))
+                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
+                if kind.listsModels {
+                    Menu {
+                        if kind.cli != nil { Button("CLI default") { text = "" } }
+                        if catalog.loading.contains(kind) {
+                            Text("Loading…")
+                        } else if let error = catalog.errors[kind] {
+                            Text(error)
+                        }
+                        ForEach(choices, id: \.self) { name in Button(name) { text = name } }
+                        if kind != .claudeCode {
+                            Divider()
+                            Button("Refresh List") { Task { await catalog.load(kind, force: true) } }
+                        }
+                    } label: {
+                        Image(systemName: "list.bullet")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.bordered)
+                    .fixedSize()
+                    .help("Choose a model")
+                }
+            }
+        }
+        .task(id: kind) { await catalog.load(kind) }
     }
 }
 

@@ -78,14 +78,12 @@ struct LiveSettingsSection: View {
                         .labelsHidden()
                         .fixedSize()
                     }
-                    SettingsRow(Text("Summary model"), subtitle: Text("Updates the summary every minute or so.")) {
-                        TextField("Summary model", text: $summaryModel, prompt: Text(assistKind.defaultModel))
-                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
-                    }
-                    SettingsRow(Text("Ask model"), subtitle: Text("Answers your questions; a fast one keeps them quick.")) {
-                        TextField("Ask model", text: $askModel, prompt: Text(assistKind.defaultModel))
-                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
-                    }
+                    ModelField(kind: assistKind, text: $summaryModel, title: "Summary model",
+                               subtitle: "Updates the summary every minute or so.")
+                    ModelField(kind: assistKind, text: $askModel, title: "Ask model",
+                               subtitle: assistKind.cli == nil
+                                   ? "Answers your questions; a fast one keeps them quick."
+                                   : "Answers your questions. A command-line tool starts for each one, so answers take longer.")
                     ProviderAccessRows(access: access,
                                        modelMissing: assistKind.requiresModel && (summaryModel.isEmpty || askModel.isEmpty))
                 }
