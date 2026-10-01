@@ -120,6 +120,7 @@ private extension ProviderKind {
         case .elevenLabs: return .indigo
         case .openAI: return .teal
         case .groq: return .orange
+        case .alibaba: return .red
         }
     }
 
@@ -276,9 +277,19 @@ private struct CloudProviderSettings: View {
     @State private var reveal = false
     @State private var model = ""
     @State private var customModel = false
+    @AppStorage(Keys.alibabaRegion) private var alibabaRegion = AlibabaRegion.singapore.rawValue
 
     var body: some View {
         SettingsGroup(Text(kind.displayName), footer: Text(modelHint)) {
+            if kind == .alibaba {
+                SettingsRow("Region") {
+                    Picker("Region", selection: $alibabaRegion) {
+                        ForEach(AlibabaRegion.allCases) { Text($0.displayName).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
             SettingsRow("API key") {
                 HStack(spacing: PUI.Space.s) {
                     Group {
@@ -355,6 +366,11 @@ private struct CloudProviderSettings: View {
             default: return "gpt-4o models return text without timestamps, so audio is sent in 1-minute parts to keep the timeline."
             }
         case .groq: return "Groq runs Whisper with timestamps, very fast and cheap."
+        case .alibaba:
+            if AlibabaProvider.isChunked(model) {
+                return "qwen3-asr-flash returns text without timestamps, so audio is sent in parts of under 5 minutes. The key must belong to the chosen region."
+            }
+            return "The recording is uploaded to Alibaba's temporary storage (deleted after 48 hours) and transcribed with sentence timestamps. Fun-ASR, Paraformer and Qwen-Audio tell voices apart on the call audio. The key must belong to the chosen region."
         case .whisperCpp, .apple: return ""
         }
     }

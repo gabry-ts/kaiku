@@ -41,6 +41,8 @@ enum ProviderFactory {
         case .groq:
             return OpenAICompatibleProvider(
                 label: "Groq", baseURL: URL(string: "https://api.groq.com/openai/v1")!, apiKey: try key(), model: model)
+        case .alibaba:
+            return AlibabaProvider(region: AppSettings.alibabaRegion, apiKey: try key(), model: model)
         }
     }
 }

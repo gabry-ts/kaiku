@@ -44,6 +44,7 @@ extension ProviderKind {
         case .elevenLabs: return "waveform"
         case .openAI: return "sparkles"
         case .groq: return "bolt.fill"
+        case .alibaba: return "cloud.fill"
         }
     }
 
@@ -54,6 +55,7 @@ extension ProviderKind {
         case .elevenLabs: return "Scribe, with speaker detection."
         case .openAI: return "gpt-4o-transcribe and Whisper."
         case .groq: return "Very fast Whisper in the cloud."
+        case .alibaba: return "Qwen3-ASR and Fun-ASR, with speaker detection."
         }
     }
 
@@ -64,6 +66,9 @@ extension ProviderKind {
         case .elevenLabs: return ["scribe_v2", "scribe_v1"]
         case .openAI: return ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-4o-transcribe-diarize", "whisper-1"]
         case .groq: return ["whisper-large-v3-turbo", "whisper-large-v3"]
+        case .alibaba: return [
+            "qwen3-asr-flash-filetrans", "qwen3-asr-flash", "qwen-audio-3.1-asr-flash-filetrans", "fun-asr", "paraformer-v2",
+        ]
         }
     }
 
@@ -73,6 +78,7 @@ extension ProviderKind {
         case .elevenLabs: return URL(string: "https://elevenlabs.io/app/settings/api-keys")
         case .openAI: return URL(string: "https://platform.openai.com/api-keys")
         case .groq: return URL(string: "https://console.groq.com/keys")
+        case .alibaba: return URL(string: "https://modelstudio.console.alibabacloud.com/?tab=playground#/api-key")
         }
     }
 }

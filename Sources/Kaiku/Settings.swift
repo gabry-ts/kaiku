@@ -4,7 +4,7 @@ import PartitiUI
 import Security
 
 enum ProviderKind: String, CaseIterable, Identifiable, Codable {
-    case whisperCpp, apple, elevenLabs, openAI, groq
+    case whisperCpp, apple, elevenLabs, openAI, groq, alibaba
     var id: String { rawValue }
 
     var displayName: String {
@@ -14,6 +14,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         case .elevenLabs: return "ElevenLabs Scribe"
         case .openAI: return "OpenAI"
         case .groq: return "Groq"
+        case .alibaba: return "Alibaba Cloud"
         }
     }
 
@@ -23,6 +24,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         case .elevenLabs: return "scribe_v2"
         case .openAI: return "gpt-4o-mini-transcribe"
         case .groq: return "whisper-large-v3-turbo"
+        case .alibaba: return "qwen3-asr-flash-filetrans"
         }
     }
 
@@ -99,6 +101,26 @@ enum TrimSilenceMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Alibaba Cloud Model Studio region. API keys are issued per region.
+enum AlibabaRegion: String, CaseIterable, Identifiable {
+    case singapore, beijing
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .singapore: return "Singapore (international)"
+        case .beijing: return "Beijing (China)"
+        }
+    }
+
+    var host: String {
+        switch self {
+        case .singapore: return "dashscope-intl.aliyuncs.com"
+        case .beijing: return "dashscope.aliyuncs.com"
+        }
+    }
+}
+
 /// UserDefaults keys. Views bind to these with @AppStorage.
 enum Keys {
     static let baseFolder = "baseFolder"
@@ -159,6 +181,7 @@ enum Keys {
     static let liveEnabled = "liveEnabled"
     static let liveEngine = "liveEngine"
     static let liveAfterCall = "liveAfterCall"
+    static let alibabaRegion = "alibabaRegion"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
 }
@@ -198,6 +221,8 @@ enum AppSettings {
             Keys.model(.elevenLabs): ProviderKind.elevenLabs.defaultModel,
             Keys.model(.openAI): ProviderKind.openAI.defaultModel,
             Keys.model(.groq): ProviderKind.groq.defaultModel,
+            Keys.model(.alibaba): ProviderKind.alibaba.defaultModel,
+            Keys.alibabaRegion: AlibabaRegion.singapore.rawValue,
             Keys.trimSilence: TrimSilenceMode.cloud.rawValue,
             Keys.trimThresholdDB: -45.0,
             Keys.trimMinSilence: 2.0,
@@ -319,6 +344,10 @@ enum AppSettings {
     static var priceOverrides: [String: Double] {
         get { (defaults.dictionary(forKey: Keys.pricesPerHour) as? [String: Double]) ?? [:] }
         set { defaults.set(newValue, forKey: Keys.pricesPerHour) }
+    }
+
+    static var alibabaRegion: AlibabaRegion {
+        AlibabaRegion(rawValue: defaults.string(forKey: Keys.alibabaRegion) ?? "") ?? .singapore
     }
 
     static var removeEcho: Bool { defaults.bool(forKey: Keys.removeEcho) }
