@@ -81,6 +81,9 @@ enum Snapshots {
             LiveSettingsSection.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
             settings("settings-general-live-download-light", .general, dark: false)
             LiveSettingsSection.previewReadiness = .ready
+            defaults.register(defaults: [Keys.liveAssistEnabled: true])
+            settings("settings-general-live-assist-light", .general, dark: false)
+            defaults.register(defaults: [Keys.liveAssistEnabled: false])
             // Every other engine, and a cloud one without its API key.
             for kind in LiveEngineKind.allCases where kind != .apple {
                 defaults.register(defaults: [Keys.liveEngine: kind.rawValue])
@@ -137,6 +140,9 @@ enum Snapshots {
             snap(panel(), name: "panel-recording-live-failed-light", size: nil, dark: false, chrome: false, dir: dir)
             state.live.setPreview(Fixtures.liveTranscript)
             both("live-window", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live)) }
+            state.live.assistant.setPreview(bullets: Fixtures.liveSummary, exchanges: Fixtures.liveQuestions)
+            both("live-window-summary", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live, tab: .summary)) }
+            both("live-window-ask", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live, tab: .ask)) }
             state.live.setPreview(LiveTranscript(), running: false)
         }
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0, system: 0,
@@ -437,6 +443,20 @@ private enum Fixtures {
         t.setPartial("The permissions step. I'll add a short explainer before", speaker: .them, at: 63)
         return t
     }()
+
+    static let liveSummary = [
+        "Goal of the call: lock the **Q4 roadmap**.",
+        "Three big items: onboarding, billing and the new library.",
+        "Onboarding is basically ready: 4 of 5 test users finished without help.",
+        "The permissions step tripped up the fifth user; an explainer will be added before it.",
+    ]
+
+    static let liveQuestions = [
+        LiveAssist.Exchange(id: 1, question: "How many users tested onboarding?",
+                            answer: "Five users tested it last week, and four finished without help."),
+        LiveAssist.Exchange(id: 2, question: "When does billing ship?", answer: LiveAssist.notMentioned),
+        LiveAssist.Exchange(id: 3, question: "What tripped up the fifth user?"),
+    ]
 
     static let kickoff: [Segment] = [
         seg(4, "Me", "Benvenuti al kickoff di Nova. Partiamo dagli obiettivi del trimestre."),
