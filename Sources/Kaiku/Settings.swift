@@ -46,7 +46,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
 
 /// Where the optional summary is generated.
 enum SummaryProviderKind: String, CaseIterable, Identifiable {
-    case openAI, anthropic, groq
+    case openAI, anthropic, groq, openRouter
     var id: String { rawValue }
 
     var displayName: String {
@@ -54,16 +54,22 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .openAI: return "OpenAI"
         case .anthropic: return "Anthropic"
         case .groq: return "Groq"
+        case .openRouter: return "OpenRouter"
         }
     }
 
+    /// Empty when there is no sensible default to offer.
     var defaultModel: String {
         switch self {
         case .openAI: return "gpt-5-mini"
         case .anthropic: return "claude-sonnet-5"
         case .groq: return "openai/gpt-oss-120b"
+        case .openRouter: return ""
         }
     }
+
+    /// True when an empty model can't be sent.
+    var requiresModel: Bool { self == .openRouter }
 
     /// Keychain account of the API key. OpenAI and Groq share the transcription keys.
     var keyAccount: String {
@@ -71,14 +77,19 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .openAI: return ProviderKind.openAI.rawValue
         case .anthropic: return "anthropic"
         case .groq: return ProviderKind.groq.rawValue
+        case .openRouter: return "openrouter"
         }
     }
+
+    /// True when the key is entered with the summary settings, not shared with transcription.
+    var hasOwnKey: Bool { self == .anthropic || self == .openRouter }
 
     var keyURL: URL? {
         switch self {
         case .openAI: return ProviderKind.openAI.keyURL
         case .anthropic: return URL(string: "https://console.anthropic.com/settings/keys")
         case .groq: return ProviderKind.groq.keyURL
+        case .openRouter: return URL(string: "https://openrouter.ai/settings/keys")
         }
     }
 

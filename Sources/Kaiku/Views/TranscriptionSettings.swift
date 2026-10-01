@@ -510,7 +510,7 @@ private struct SummarySettings: View {
     @AppStorage(Keys.summaryProvider) private var provider = SummaryProviderKind.openAI.rawValue
     @AppStorage(Keys.summaryPrompt) private var prompt = SummaryAPI.defaultPrompt
     @State private var model = ""
-    @State private var anthropicKey = ""
+    @State private var key = ""
 
     private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: provider) ?? .openAI }
 
@@ -528,9 +528,9 @@ private struct SummarySettings: View {
                 TextField("Model", text: $model, prompt: Text(kind.defaultModel))
                     .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
             }
-            if kind == .anthropic {
+            if kind.hasOwnKey {
                 SettingsRow("API key") {
-                    SecureField("API key", text: $anthropicKey, prompt: Text("Paste your key"))
+                    SecureField("API key", text: $key, prompt: Text("Paste your key"))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .font(.body.monospaced())
@@ -539,10 +539,12 @@ private struct SummarySettings: View {
             }
             GroupRow {
                 HStack {
-                    if kind.apiKey != nil || !anthropicKey.isEmpty {
-                        StatusDot(kind: .ok, text: kind == .anthropic ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
+                    if kind.apiKey == nil && key.isEmpty {
+                        StatusDot(kind: .warning, text: kind.hasOwnKey ? "API key missing" : "No \(kind.displayName) key yet. Select \(kind.displayName) under Provider to add one.")
+                    } else if kind.requiresModel && model.isEmpty {
+                        StatusDot(kind: .warning, text: "Model required")
                     } else {
-                        StatusDot(kind: .warning, text: kind == .anthropic ? "API key missing" : "No \(kind.displayName) key yet. Select \(kind.displayName) under Provider to add one.")
+                        StatusDot(kind: .ok, text: kind.hasOwnKey ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
                     }
                     Spacer()
                     if let url = kind.keyURL { Link("Get an API key", destination: url).font(PUI.Font.caption) }
@@ -562,15 +564,18 @@ private struct SummarySettings: View {
                 }
             }
         }
-        .onAppear {
-            model = AppSettings.summaryModel(for: kind)
-            anthropicKey = Keychain.get(SummaryProviderKind.anthropic.keyAccount) ?? ""
-        }
-        .onChange(of: provider) { _, _ in model = AppSettings.summaryModel(for: kind) }
+        .onAppear(perform: load)
+        .onChange(of: provider) { _, _ in load() }
         .onChange(of: model) { _, v in AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.summaryModel(kind)) }
-        .onChange(of: anthropicKey) { _, v in
-            Keychain.set(v.trimmingCharacters(in: .whitespacesAndNewlines), for: SummaryProviderKind.anthropic.keyAccount)
+        .onChange(of: key) { _, v in
+            guard kind.hasOwnKey else { return }
+            Keychain.set(v.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keyAccount)
         }
+    }
+
+    private func load() {
+        model = AppSettings.summaryModel(for: kind)
+        key = kind.hasOwnKey ? (Keychain.get(kind.keyAccount) ?? "") : ""
     }
 }
 
