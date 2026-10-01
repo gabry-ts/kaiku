@@ -58,16 +58,50 @@ struct LiveCard: View {
     }
 }
 
-/// The floating window: the whole live transcript, following the newest line.
+/// The floating window: the whole live transcript, following the newest line, and the
+/// Summary and Ask tabs when they are switched on.
 struct LiveWindowView: View {
+    enum Tab: String { case transcript, summary, ask }
+
     @ObservedObject var live: LiveSession
+    @ObservedObject private var assistant: LiveAssistant
+    @State private var tab: Tab
     @Environment(\.colorScheme) private var scheme
 
-    static let size = CGSize(width: 380, height: 300)
+    static let size = CGSize(width: 400, height: 380)
     static let minSize = CGSize(width: 280, height: 160)
     private static let end = "end"
 
+    init(live: LiveSession, tab: Tab = .transcript) {
+        self.live = live
+        _assistant = ObservedObject(wrappedValue: live.assistant)
+        _tab = State(initialValue: tab)
+    }
+
     var body: some View {
+        VStack(spacing: 0) {
+            if assistant.isEnabled {
+                Picker("Show", selection: $tab) {
+                    Text("Transcript").tag(Tab.transcript)
+                    Text("Summary").tag(Tab.summary)
+                    Text("Ask").tag(Tab.ask)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, PUI.Space.xl)
+                .padding(.top, PUI.Space.l)
+            }
+            switch assistant.isEnabled ? tab : .transcript {
+            case .transcript: transcript
+            case .summary: LiveSummaryTab(assistant: assistant)
+            case .ask: LiveAskTab(assistant: assistant)
+            }
+        }
+        .frame(minWidth: Self.minSize.width, maxWidth: .infinity, minHeight: Self.minSize.height, maxHeight: .infinity)
+        .puiAccent(.kaiku)
+    }
+
+    private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: PUI.Space.l) {
@@ -86,8 +120,6 @@ struct LiveWindowView: View {
             .onAppear { proxy.scrollTo(Self.end, anchor: .bottom) }
             .onChange(of: live.transcript) { _, _ in proxy.scrollTo(Self.end, anchor: .bottom) }
         }
-        .frame(minWidth: Self.minSize.width, maxWidth: .infinity, minHeight: Self.minSize.height, maxHeight: .infinity)
-        .puiAccent(.kaiku)
     }
 }
 
