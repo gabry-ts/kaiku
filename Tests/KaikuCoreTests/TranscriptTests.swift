@@ -92,6 +92,26 @@ final class TranscriptTests: XCTestCase {
         let plain = try ResponseParsers.openAI(Data(#"{"text":"solo testo"}"#.utf8), offset: 60, chunkDuration: 60)
         XCTAssertEqual(plain.segments.first?.start, 60)
         XCTAssertEqual(plain.segments.first?.end, 120)
+
+        let qwen = """
+        {"choices":[{"message":{"annotations":[{"language":"it","type":"audio_info","emotion":"neutral"}],
+        "content":"Buongiorno a tutti","role":"assistant"}}]}
+        """
+        let q = try ResponseParsers.alibabaChat(Data(qwen.utf8), offset: 280, chunkDuration: 280)
+        XCTAssertEqual(q.segments.first?.text, "Buongiorno a tutti")
+        XCTAssertEqual(q.segments.first?.end, 560)
+        XCTAssertEqual(q.detectedLanguage, "it")
+
+        let file = """
+        {"properties":{"audio_format":"aac"},"transcripts":[{"channel_id":0,"text":"Ciao. Bene.","sentences":[
+        {"begin_time":100,"end_time":1500,"text":"Ciao.","speaker_id":0},
+        {"begin_time":1600,"end_time":2400,"text":"Bene.","speaker_id":1}]}]}
+        """
+        let f = try ResponseParsers.alibabaFile(Data(file.utf8), diarized: true)
+        XCTAssertEqual(f.segments.map(\.speaker), ["speaker_0", "speaker_1"])
+        XCTAssertEqual(f.segments.first?.start, 0.1)
+        let undiarized = try ResponseParsers.alibabaFile(Data(file.utf8), diarized: false)
+        XCTAssertEqual(undiarized.segments.first?.speaker, nil)
     }
 }
 

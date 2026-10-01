@@ -96,4 +96,62 @@ public enum ResponseParsers {
         let segs = text.isEmpty ? [] : [Segment(start: offset, end: offset + chunkDuration, text: text)]
         return TranscriptionResult(segments: segs, detectedLanguage: out.language)
     }
+
+    // MARK: Alibaba Cloud Model Studio
+
+    private struct AlibabaChatOutput: Decodable {
+        struct Choice: Decodable {
+            struct Message: Decodable {
+                struct Annotation: Decodable { let language: String? }
+                let content: String?
+                let annotations: [Annotation]?
+            }
+            let message: Message
+        }
+        let choices: [Choice]
+    }
+
+    /// Parses a Qwen3-ASR-Flash `chat/completions` response (text only, no timestamps).
+    public static func alibabaChat(_ data: Data, offset: Double, chunkDuration: Double) throws -> TranscriptionResult {
+        let out: AlibabaChatOutput
+        do { out = try JSONDecoder().decode(AlibabaChatOutput.self, from: data) }
+        catch { throw ParseError.invalid("Alibaba Cloud JSON: \(error)") }
+        let message = out.choices.first?.message
+        let text = (message?.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let segs = text.isEmpty ? [] : [Segment(start: offset, end: offset + chunkDuration, text: text)]
+        return TranscriptionResult(segments: segs, detectedLanguage: message?.annotations?.compactMap(\.language).first)
+    }
+
+    private struct AlibabaFileOutput: Decodable {
+        struct Transcript: Decodable {
+            struct Sentence: Decodable {
+                let begin_time: Double
+                let end_time: Double
+                let text: String
+                let speaker_id: Int?
+            }
+            let text: String?
+            let sentences: [Sentence]?
+        }
+        let transcripts: [Transcript]
+    }
+
+    /// Parses the result file of an asynchronous file transcription (times in milliseconds).
+    public static func alibabaFile(_ data: Data, diarized: Bool) throws -> TranscriptionResult {
+        let out: AlibabaFileOutput
+        do { out = try JSONDecoder().decode(AlibabaFileOutput.self, from: data) }
+        catch { throw ParseError.invalid("Alibaba Cloud JSON: \(error)") }
+        var segs: [Segment] = []
+        for transcript in out.transcripts {
+            if let sentences = transcript.sentences, !sentences.isEmpty {
+                segs += sentences.map {
+                    Segment(start: $0.begin_time / 1000, end: $0.end_time / 1000,
+                            speaker: diarized ? $0.speaker_id.map { "speaker_\($0)" } : nil, text: $0.text)
+                }
+            } else if let text = transcript.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                segs.append(Segment(start: 0, end: 0, text: text))
+            }
+        }
+        return TranscriptionResult(segments: segs)
+    }
 }
