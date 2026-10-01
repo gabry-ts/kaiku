@@ -75,13 +75,16 @@ private extension Data {
 }
 
 enum HTTP {
-    /// Retries transient failures as decided by `UploadRetry`.
     static func postMultipart(_ url: URL, form: MultipartForm, headers: [String: String], timeout: TimeInterval = 1800) async throws -> Data {
+        try await post(url, body: form.finalized(), contentType: form.contentType, headers: headers, timeout: timeout)
+    }
+
+    /// Retries transient failures as decided by `UploadRetry`.
+    static func post(_ url: URL, body: Data, contentType: String, headers: [String: String], timeout: TimeInterval = 1800) async throws -> Data {
         var req = URLRequest(url: url, timeoutInterval: timeout)
         req.httpMethod = "POST"
-        req.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
         headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        let body = form.finalized()
         var attempt = 0
         while true {
             let failure: UploadRetry.Failure
