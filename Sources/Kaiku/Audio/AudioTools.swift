@@ -71,7 +71,9 @@ enum Shell {
         }
         let out = (try? String(contentsOf: outURL, encoding: .utf8)) ?? ""
         if status != 0 {
-            let err = ((try? String(contentsOf: errURL, encoding: .utf8)) ?? "").suffix(800)
+            let stderr = (try? String(contentsOf: errURL, encoding: .utf8)) ?? ""
+            // Some tools print their errors on stdout.
+            let err = (stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? out : stderr).suffix(800)
             throw ProcessError(message: "\(name) failed (\(status)): \(err)")
         }
         return out
