@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, webhook, notifications, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, live, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -14,6 +14,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "Recording"
         case .sources: return "Sources"
         case .transcription: return "Transcription"
+        case .live: return "Live"
         case .webhook: return "Webhook"
         case .notifications: return "Notifications"
         case .permissions: return "Permissions"
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "mic.fill"
         case .sources: return "dot.radiowaves.left.and.right"
         case .transcription: return "text.quote"
+        case .live: return "captions.bubble.fill"
         case .webhook: return "paperplane.fill"
         case .notifications: return "bell.badge.fill"
         case .permissions: return "lock.shield.fill"
@@ -44,12 +46,16 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return AppAccent.kaiku.color
         case .sources: return .teal
         case .transcription: return .blue
+        case .live: return .pink
         case .webhook: return .purple
         case .notifications: return .red
         case .permissions: return .green
         case .about: return .teal
         }
     }
+
+    /// The panes this Mac can show: Live only where an engine can run.
+    static var available: [SettingsPane] { allCases.filter { $0 != .live || LiveTranscription.isSupported } }
 
     var sidebarItem: SidebarItem {
         SidebarItem(Text(title), id: rawValue, symbol: symbol, style: .tile(tint))
@@ -60,7 +66,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @State var pane: SettingsPane = .general
 
-    private static let sections = [SidebarSection(nil, SettingsPane.allCases.map(\.sidebarItem))]
+    private static let sections = [SidebarSection(nil, SettingsPane.available.map(\.sidebarItem))]
 
     var body: some View {
         SettingsWindow(sections: Self.sections, selection: selection) {
@@ -71,6 +77,7 @@ struct SettingsView: View {
             case .recording: RecordingSettings()
             case .sources: SourcesSettings()
             case .transcription: TranscriptionSettings()
+            case .live: LiveSettings()
             case .webhook: WebhookSettings()
             case .notifications: NotificationSettings()
             case .permissions: PermissionsSettings()
@@ -97,9 +104,7 @@ struct GeneralSettings: View {
     @State private var loginError: String?
 
     var body: some View {
-        KaikuPane(pane: .general, subtitle: LiveTranscription.isSupported
-                  ? "Where calls are saved, their language, live transcription, startup and storage."
-                  : "Where calls are saved, their language, startup and storage.") {
+        KaikuPane(pane: .general, subtitle: "Where calls are saved, their language, startup and storage.") {
             SettingsGroup("Recordings", footer: "Every call gets its own folder with the audio, transcript.md and meta.json.") {
                 SettingsRow(Text("Save recordings in"),
                             subtitle: Text(AppSettings.displayBaseFolderOverride ?? (baseFolder as NSString).abbreviatingWithTildeInPath)) {
@@ -115,8 +120,6 @@ struct GeneralSettings: View {
             SettingsGroup("Language", footer: "Auto-detect handles most calls, including mixed languages. Choosing one can improve accuracy. You can also change it per call.") {
                 LanguagePicker(language: $language, label: "Default for new calls")
             }
-
-            if LiveTranscription.isSupported { LiveSettingsSection() }
 
             SettingsGroup("Startup") {
                 SwitchRow("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLogin))

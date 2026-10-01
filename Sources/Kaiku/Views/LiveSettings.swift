@@ -2,8 +2,8 @@ import KaikuCore
 import PartitiUI
 import SwiftUI
 
-/// Live transcription in Settings > General. Only shown where an engine can run.
-struct LiveSettingsSection: View {
+/// Settings > Live: the live transcript, its engine and the live summary. Only shown where an engine can run.
+struct LiveSettings: View {
     @AppStorage(Keys.liveEnabled) private var enabled = false
     @AppStorage(Keys.liveEngine) private var engine = LiveEngineKind.apple.rawValue
     @AppStorage(Keys.liveAfterCall) private var afterCall = LiveAfterCall.preview.rawValue
@@ -33,6 +33,12 @@ struct LiveSettingsSection: View {
     }
 
     var body: some View {
+        KaikuPane(pane: .live, subtitle: "The live transcript while you record, and the live summary and questions.") {
+            group
+        }
+    }
+
+    private var group: some View {
         SettingsGroup(Text("Live Transcription"), footer: Text(footer)) {
             SwitchRow("Show the transcript while recording", isOn: $enabled)
             if enabled {
@@ -52,7 +58,7 @@ struct LiveSettingsSection: View {
                         }
                     }
                 }
-                SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set above.")) {
+                SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set in General.")) {
                     ValueText(LanguagePicker.recognizerName(language))
                 }
                 SpeechModelStatusRow(readiness: model.readiness, readyText: kind.readyText,

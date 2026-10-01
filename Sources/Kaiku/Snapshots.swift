@@ -37,7 +37,7 @@ enum Snapshots {
             "webhook.headers": #"{"Authorization":"Bearer demo-token"}"#,
         ]
         // The speech model is never looked up or downloaded while rendering.
-        LiveSettingsSection.previewReadiness = .ready
+        LiveSettings.previewReadiness = .ready
         TranscriptionSettings.previewSpeechReadiness = .ready
         let folders = Fixtures.make(in: library)
         folders[0].updateMeta {
@@ -72,29 +72,29 @@ enum Snapshots {
             snap(AnyView(SettingsView(pane: pane).environmentObject(state)), name: name, size: PUI.Window.settings,
                  dark: dark, chrome: true, dir: dir, chromeless: false, growToContent: true)
         }
-        for pane in SettingsPane.allCases {
+        for pane in SettingsPane.available {
             for dark in [false, true] { settings("settings-\(pane.rawValue)-\(dark ? "dark" : "light")", pane, dark: dark) }
         }
         if LiveTranscription.isSupported {
             defaults.register(defaults: [Keys.liveEnabled: true])
-            for dark in [false, true] { settings("settings-general-live-\(dark ? "dark" : "light")", .general, dark: dark) }
-            LiveSettingsSection.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
-            settings("settings-general-live-download-light", .general, dark: false)
-            LiveSettingsSection.previewReadiness = .ready
+            for dark in [false, true] { settings("settings-live-\(dark ? "dark" : "light")", .live, dark: dark) }
+            LiveSettings.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
+            settings("settings-live-download-light", .live, dark: false)
+            LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveAssistEnabled: true])
-            settings("settings-general-live-assist-light", .general, dark: false)
+            settings("settings-live-assist-light", .live, dark: false)
             defaults.register(defaults: [Keys.liveProvider: SummaryProviderKind.claudeCode.rawValue])
-            settings("settings-general-live-assist-claudecode-light", .general, dark: false)
+            settings("settings-live-assist-claudecode-light", .live, dark: false)
             defaults.register(defaults: [Keys.liveProvider: ""])
             defaults.register(defaults: [Keys.liveAssistEnabled: false])
             // Every other engine, and a cloud one without its API key.
             for kind in LiveEngineKind.allCases where kind != .apple {
                 defaults.register(defaults: [Keys.liveEngine: kind.rawValue])
-                settings("settings-general-live-\(kind.rawValue)-light", .general, dark: false)
+                settings("settings-live-\(kind.rawValue)-light", .live, dark: false)
             }
-            LiveSettingsSection.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Transcription.")
-            settings("settings-general-live-elevenlabs-nokey-light", .general, dark: false)
-            LiveSettingsSection.previewReadiness = .ready
+            LiveSettings.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Transcription.")
+            settings("settings-live-elevenlabs-nokey-light", .live, dark: false)
+            LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveEngine: LiveEngineKind.apple.rawValue, Keys.liveEnabled: false])
         }
         // Notifications with some switched off and some silenced.
