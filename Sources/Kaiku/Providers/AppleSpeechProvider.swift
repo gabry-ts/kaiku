@@ -20,7 +20,7 @@ struct AppleSpeechProvider: TranscriptionProvider {
             throw ProviderError(message: "The system speech recognizer doesn't support \(AppleSpeech.name(ofLanguage: language)).")
         }
         // Never download during a transcription: that is done from Settings.
-        guard await AssetInventory.status(forModules: [AppleSpeech.transcriber(locale)]) == .installed else {
+        guard await AppleSpeech.isInstalled(locale) else {
             throw ProviderError(message: "The speech model for \(AppleSpeech.name(locale)) isn't downloaded. Get it in Settings > Transcription.")
         }
 

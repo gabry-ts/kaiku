@@ -49,6 +49,13 @@ enum AppleSpeech {
         language == "auto" ? "the system language" : (Locale.current.localizedString(forLanguageCode: language) ?? language)
     }
 
+    /// True when the model is on this Mac. After a catalog update the system reports an older
+    /// model on disk as only supported, though the recognizer still runs with it.
+    static func isInstalled(_ locale: Locale) async -> Bool {
+        if await AssetInventory.status(forModules: [transcriber(locale)]) == .installed { return true }
+        return await SpeechTranscriber.installedLocales.contains { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
+    }
+
     /// Only asks the system what is installed; nothing is downloaded.
     static func readiness(language: String) async -> LiveReadiness {
         guard SpeechTranscriber.isAvailable else {
@@ -57,6 +64,7 @@ enum AppleSpeech {
         guard let locale = await locale(for: language) else {
             return .unavailable("The system speech recognizer doesn't support \(name(ofLanguage: language)).")
         }
+        if await isInstalled(locale) { return .ready }
         switch await AssetInventory.status(forModules: [transcriber(locale)]) {
         case .installed: return .ready
         case .downloading: return .downloading(0)

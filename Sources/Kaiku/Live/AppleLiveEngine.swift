@@ -53,7 +53,7 @@ final class AppleLiveEngine: LiveEngine, @unchecked Sendable {
             throw LiveEngineError("The system speech recognizer doesn't support \(AppleSpeech.name(ofLanguage: language)).")
         }
         // Never download during a call: that is done from Settings.
-        guard await AssetInventory.status(forModules: [AppleSpeech.transcriber(locale)]) == .installed else {
+        guard await AppleSpeech.isInstalled(locale) else {
             throw LiveEngineError("The speech model for \(AppleSpeech.name(locale)) isn't downloaded. Get it in Settings > General.")
         }
         Log.transcription.info("Live transcription in \(locale.identifier, privacy: .public)")
