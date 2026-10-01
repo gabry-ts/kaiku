@@ -10,20 +10,24 @@ struct LiveSettingsSection: View {
     @AppStorage(Keys.language) private var language = "auto"
     @AppStorage(Keys.liveAssistEnabled) private var assist = false
     @AppStorage(Keys.summaryProvider) private var summaryProvider = SummaryProviderKind.openAI.rawValue
+    @AppStorage(Keys.liveProvider) private var liveProvider = ""
     @State private var summaryModel = ""
     @State private var askModel = ""
+    @StateObject private var access = ProviderAccess()
     @StateObject private var model = SpeechModelStatus()
 
     /// Snapshot rendering only: shown instead of asking the system.
     static var previewReadiness: LiveReadiness?
 
     private var kind: LiveEngineKind { AppSettings.liveEngine ?? .apple }
-    private var assistKind: SummaryProviderKind { SummaryProviderKind(rawValue: summaryProvider) ?? .openAI }
+    private var assistKind: SummaryProviderKind {
+        SummaryProviderKind(rawValue: liveProvider) ?? SummaryProviderKind(rawValue: summaryProvider) ?? .openAI
+    }
 
     private var footer: String {
         var text = "What is being said shows in the popover and in a floating window, as Me and Them. \(kind.privacyNote) Preview only transcribes the call as usual when it ends. Use as the transcript keeps the live text instead; you can still transcribe the call again from the library."
         if assist {
-            text += " Summary and Ask send the transcript to the summary provider while you talk, even when the engine runs on this Mac. The live summary is saved as live-summary.md in the call folder."
+            text += " Summary and Ask send the transcript to the provider chosen here while you talk, even when the engine runs on this Mac. The live summary is saved as live-summary.md in the call folder."
         }
         return text
     }
@@ -67,6 +71,13 @@ struct LiveSettingsSection: View {
                 }
                 SwitchRow("Summarize and answer questions during the call", isOn: $assist)
                 if assist {
+                    SettingsRow("Provider") {
+                        Picker("Provider", selection: Binding(get: { assistKind.rawValue }, set: { liveProvider = $0 })) {
+                            ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
                     SettingsRow(Text("Summary model"), subtitle: Text("Updates the summary every minute or so.")) {
                         TextField("Summary model", text: $summaryModel, prompt: Text(assistKind.defaultModel))
                             .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
@@ -75,18 +86,14 @@ struct LiveSettingsSection: View {
                         TextField("Ask model", text: $askModel, prompt: Text(assistKind.defaultModel))
                             .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
                     }
-                    GroupRow {
-                        if assistKind.apiKey != nil {
-                            StatusDot(kind: .ok, text: "Uses \(assistKind.displayName), the provider chosen in Transcription > Summary")
-                        } else {
-                            StatusDot(kind: .warning, text: "No \(assistKind.displayName) key yet. Add it in Settings > Transcription > Summary.")
-                        }
-                    }
+                    ProviderAccessRows(access: access,
+                                       modelMissing: assistKind.requiresModel && (summaryModel.isEmpty || askModel.isEmpty))
                 }
             }
         }
         .onAppear(perform: loadModels)
         .onChange(of: summaryProvider) { _, _ in loadModels() }
+        .onChange(of: liveProvider) { _, _ in loadModels() }
         .onChange(of: summaryModel) { _, v in
             AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.liveSummaryModel(assistKind))
         }
@@ -101,6 +108,7 @@ struct LiveSettingsSection: View {
     private func loadModels() {
         summaryModel = AppSettings.liveSummaryModel(for: assistKind)
         askModel = AppSettings.liveAskModel(for: assistKind)
+        access.load(assistKind)
     }
 
     private func refresh() async {

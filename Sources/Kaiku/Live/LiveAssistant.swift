@@ -2,8 +2,8 @@ import Foundation
 import KaikuCore
 
 /// The Summary and Ask tabs of the live window: a bullet summary brought up to date as
-/// the call goes on, and questions answered from what was said so far. Uses the summary
-/// provider and key; never runs unless switched on in Settings.
+/// the call goes on, and questions answered from what was said so far. Uses the live
+/// provider; never runs unless switched on in Settings.
 @MainActor
 final class LiveAssistant: ObservableObject {
     /// True for a recording started with the feature on.
@@ -34,7 +34,7 @@ final class LiveAssistant: ObservableObject {
 
     /// The provider in use when it can't run yet, for the empty state.
     var missingKeyProvider: SummaryProviderKind? {
-        let kind = AppSettings.summaryProvider
+        let kind = AppSettings.liveProvider
         return kind.problem == nil ? nil : kind
     }
 
@@ -80,9 +80,9 @@ final class LiveAssistant: ObservableObject {
         guard !lines.isEmpty else { return }
         guard force || LiveAssist.shouldSummarize(pendingWords: LiveAssist.wordCount(lines),
                                                   sinceLast: Date().timeIntervalSince(lastRun)) else { return }
-        let kind = AppSettings.summaryProvider
+        let kind = AppSettings.liveProvider
         if let problem = kind.problem {
-            summaryError = "\(problem) Check Settings > Transcription > Summary."
+            summaryError = "\(problem) Check Settings > General > Live Transcription."
             return
         }
         let model = AppSettings.liveSummaryModel(for: kind)
@@ -121,9 +121,9 @@ final class LiveAssistant: ObservableObject {
     func ask(_ question: String) {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isEnabled, askTask == nil, !question.isEmpty else { return }
-        let kind = AppSettings.summaryProvider
+        let kind = AppSettings.liveProvider
         if let problem = kind.problem {
-            askError = "\(problem) Check Settings > Transcription > Summary."
+            askError = "\(problem) Check Settings > General > Live Transcription."
             return
         }
         let model = AppSettings.liveAskModel(for: kind)

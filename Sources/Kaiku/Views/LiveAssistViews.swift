@@ -130,16 +130,16 @@ struct LiveAskTab: View {
     }
 }
 
-/// The key the live tabs need, with a way to add it.
+/// What the live tabs' provider still needs, with a way to set it up.
 private struct MissingKeyNote: View {
     let provider: SummaryProviderKind
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: PUI.Space.m) {
-            Text("Summary and Ask use \(provider.displayName), which needs an API key.")
+            Text("Summary and Ask use \(provider.displayName). \(provider.problem ?? "")")
                 .font(PUI.Font.callout).foregroundStyle(Ink(scheme).secondary)
-            Button("Open Settings") { WindowManager.shared.showSettings(.transcription) }
+            Button("Open Settings") { WindowManager.shared.showSettings(.general) }
                 .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
         }
     }

@@ -216,6 +216,8 @@ enum Keys {
     static let liveAfterCall = "liveAfterCall"
     static let alibabaRegion = "alibabaRegion"
     static let liveAssistEnabled = "liveAssistEnabled"
+    /// Provider of the live Summary and Ask tabs; unset uses the summary provider.
+    static let liveProvider = "liveProvider"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
@@ -402,8 +404,11 @@ enum AppSettings {
     }
     static var summaryPrompt: String { defaults.string(forKey: Keys.summaryPrompt) ?? SummaryAPI.defaultPrompt }
 
-    /// The live window's Summary and Ask tabs, with the summary provider and key.
+    /// The live window's Summary and Ask tabs, with their own provider.
     static var liveAssistEnabled: Bool { liveEnabled && defaults.bool(forKey: Keys.liveAssistEnabled) }
+    static var liveProvider: SummaryProviderKind {
+        SummaryProviderKind(rawValue: defaults.string(forKey: Keys.liveProvider) ?? "") ?? summaryProvider
+    }
     static func liveSummaryModel(for p: SummaryProviderKind) -> String {
         nonEmpty(defaults.string(forKey: Keys.liveSummaryModel(p)), p.defaultModel)
     }
