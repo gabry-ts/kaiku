@@ -60,9 +60,10 @@ enum Snapshots {
         folders[5].updateMeta { $0.tags = ["Nova", "Roadmap"]; $0.source = "Zoom" }
         let state = AppState.shared
 
-        func both(_ name: String, size: CGSize?, chrome: Bool = true, _ view: @escaping () -> AnyView) {
+        func both(_ name: String, size: CGSize?, chrome: Bool = true, livePanel: Bool = false, _ view: @escaping () -> AnyView) {
             for dark in [false, true] {
-                snap(view(), name: "\(name)-\(dark ? "dark" : "light")", size: size, dark: dark, chrome: chrome, dir: dir)
+                snap(view(), name: "\(name)-\(dark ? "dark" : "light")", size: size, dark: dark, chrome: chrome, dir: dir,
+                     livePanel: livePanel)
             }
         }
 
@@ -148,10 +149,10 @@ enum Snapshots {
                                   notice: "Live transcription stopped (call audio): The speech recognizer was interrupted.")
             snap(panel(), name: "panel-recording-live-failed-light", size: nil, dark: false, chrome: false, dir: dir)
             state.live.setPreview(Fixtures.liveTranscript)
-            both("live-window", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live)) }
+            both("live-window", size: LiveWindowView.size, livePanel: true) { AnyView(LiveWindowView(live: state.live)) }
             state.live.assistant.setPreview(bullets: Fixtures.liveSummary, exchanges: Fixtures.liveQuestions)
-            both("live-window-summary", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live, tab: .summary)) }
-            both("live-window-ask", size: LiveWindowView.size) { AnyView(LiveWindowView(live: state.live, tab: .ask)) }
+            both("live-window-summary", size: LiveWindowView.size, livePanel: true) { AnyView(LiveWindowView(live: state.live, tab: .summary)) }
+            both("live-window-ask", size: LiveWindowView.size, livePanel: true) { AnyView(LiveWindowView(live: state.live, tab: .ask)) }
             state.live.setPreview(LiveTranscript(), running: false)
         }
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0, system: 0,
@@ -217,20 +218,22 @@ enum Snapshots {
     // MARK: Rendering
 
     private static func snap(_ view: AnyView, name: String, size: CGSize?, dark: Bool, chrome: Bool, dir: URL,
-                             chromeless: Bool? = nil, growToContent: Bool = false) {
+                             chromeless: Bool? = nil, growToContent: Bool = false, livePanel: Bool = false) {
         // Glass is painted, so offscreen captures match the running app.
         let hosting = NSHostingController(rootView: AnyView(view.puiGlassRendering(.painted)))
         hosting.sceneBridgingOptions = chrome ? [.toolbars, .title] : []
         let style: NSWindow.StyleMask = chrome ? [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView] : [.borderless]
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size ?? CGSize(width: 400, height: 300)),
-                              styleMask: style, backing: .buffered, defer: false)
+        // The live window is captured in its real floating panel.
+        let window = livePanel ? WindowManager.makeLivePanel()
+            : NSWindow(contentRect: NSRect(origin: .zero, size: size ?? CGSize(width: 400, height: 300)),
+                       styleMask: style, backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentViewController = hosting
-        if chrome {
-            window.toolbarStyle = .unified
-        } else {
+        if !chrome {
             window.isOpaque = false
             window.backgroundColor = .clear
+        } else if !livePanel {
+            window.toolbarStyle = .unified
         }
         if let hide = chromeless { WindowManager.makeChromeless(window, hideButtons: hide) }
         if let size { window.setContentSize(size) } else { window.setContentSize(hosting.view.fittingSize) }
