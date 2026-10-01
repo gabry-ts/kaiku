@@ -21,8 +21,12 @@ enum SummaryJob {
     }
 
     /// Sends one prompt to the provider and returns the text of its answer.
+    /// `maxTokens` only applies to HTTP APIs.
     static func complete(kind: SummaryProviderKind, model: String, prompt: String,
                          maxTokens: Int = 4096, timeout: TimeInterval = 300) async throws -> String {
+        if let cli = kind.cli {
+            return try await CLIProviders.complete(cli, name: kind.displayName, model: model, prompt: prompt, timeout: timeout)
+        }
         if let problem = kind.problem { throw ProviderError(message: problem) }
         if kind.requiresModel, model.trimmingCharacters(in: .whitespaces).isEmpty {
             throw ProviderError(message: "\(kind.displayName) needs a model.")
@@ -47,6 +51,8 @@ enum SummaryJob {
                 body: try SummaryAPI.chatCompletionsBody(model: model, prompt: prompt),
                 headers: ["Authorization": "Bearer \(key)"], timeout: timeout)
             return try SummaryAPI.parseChatCompletions(data)
+        case .claudeCode, .codex, .opencode:
+            throw ProviderError(message: "\(kind.displayName) runs as a command-line tool.")
         }
     }
 }

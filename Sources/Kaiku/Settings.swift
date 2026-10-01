@@ -46,7 +46,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
 
 /// Where the optional summary is generated.
 enum SummaryProviderKind: String, CaseIterable, Identifiable {
-    case openAI, anthropic, groq, openRouter
+    case openAI, anthropic, groq, openRouter, claudeCode, codex, opencode
     var id: String { rawValue }
 
     var displayName: String {
@@ -55,6 +55,19 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .anthropic: return "Anthropic"
         case .groq: return "Groq"
         case .openRouter: return "OpenRouter"
+        case .claudeCode: return "Claude Code"
+        case .codex: return "Codex"
+        case .opencode: return "OpenCode"
+        }
+    }
+
+    /// The command-line tool behind it, nil for HTTP APIs.
+    var cli: CLITool? {
+        switch self {
+        case .claudeCode: return .claude
+        case .codex: return .codex
+        case .opencode: return .opencode
+        default: return nil
         }
     }
 
@@ -64,7 +77,7 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .openAI: return "gpt-5-mini"
         case .anthropic: return "claude-sonnet-5"
         case .groq: return "openai/gpt-oss-120b"
-        case .openRouter: return ""
+        case .openRouter, .claudeCode, .codex, .opencode: return ""
         }
     }
 
@@ -78,6 +91,7 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .anthropic: return "anthropic"
         case .groq: return ProviderKind.groq.rawValue
         case .openRouter: return "openrouter"
+        case .claudeCode, .codex, .opencode: return rawValue
         }
     }
 
@@ -90,17 +104,20 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .anthropic: return URL(string: "https://console.anthropic.com/settings/keys")
         case .groq: return ProviderKind.groq.keyURL
         case .openRouter: return URL(string: "https://openrouter.ai/settings/keys")
+        case .claudeCode, .codex, .opencode: return nil
         }
     }
 
     var apiKey: String? {
+        guard cli == nil else { return nil }
         guard let v = Keychain.get(keyAccount)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty else { return nil }
         return v
     }
 
     /// What is missing before it can be used, nil when ready.
     var problem: String? {
-        apiKey == nil ? "No \(displayName) API key yet." : nil
+        if let cli { return CLIProviders.locate(cli) == nil ? "\(displayName) CLI not found." : nil }
+        return apiKey == nil ? "No \(displayName) API key yet." : nil
     }
 }
 
@@ -204,6 +221,7 @@ enum Keys {
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
     static func liveAskModel(_ p: SummaryProviderKind) -> String { "liveAskModel.\(p.rawValue)" }
     static func cliPath(_ t: CLITool) -> String { "cliPath.\(t.rawValue)" }
+    static func cliDetected(_ t: CLITool) -> String { "cliDetected.\(t.rawValue)" }
 }
 
 enum AppSettings {

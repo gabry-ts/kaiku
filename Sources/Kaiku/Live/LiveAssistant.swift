@@ -94,7 +94,7 @@ final class LiveAssistant: ObservableObject {
             let reply: Result<String, Error>
             do {
                 reply = .success(try await SummaryJob.complete(kind: kind, model: model, prompt: prompt,
-                                                               maxTokens: 1024, timeout: 60))
+                                                               maxTokens: 1024, timeout: kind.cli == nil ? 60 : 120))
             } catch {
                 reply = .failure(error)
             }
@@ -137,7 +137,7 @@ final class LiveAssistant: ObservableObject {
             let reply: Result<String, Error>
             do {
                 reply = .success(try await SummaryJob.complete(kind: kind, model: model, prompt: prompt,
-                                                               maxTokens: 400, timeout: 30))
+                                                               maxTokens: 400, timeout: kind.cli == nil ? 30 : 90))
             } catch {
                 reply = .failure(error)
             }
