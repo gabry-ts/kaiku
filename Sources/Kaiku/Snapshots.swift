@@ -83,6 +83,9 @@ enum Snapshots {
             LiveSettingsSection.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveAssistEnabled: true])
             settings("settings-general-live-assist-light", .general, dark: false)
+            defaults.register(defaults: [Keys.liveProvider: SummaryProviderKind.claudeCode.rawValue])
+            settings("settings-general-live-assist-claudecode-light", .general, dark: false)
+            defaults.register(defaults: [Keys.liveProvider: ""])
             defaults.register(defaults: [Keys.liveAssistEnabled: false])
             // Every other engine, and a cloud one without its API key.
             for kind in LiveEngineKind.allCases where kind != .apple {
@@ -107,6 +110,12 @@ enum Snapshots {
         defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.standard.rawValue, NotificationKind.callEnded.showKey: true])
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])
         for dark in [false, true] { settings("settings-transcription-openai-\(dark ? "dark" : "light")", .transcription, dark: dark) }
+        // The summary with each provider that needs more than a shared transcription key.
+        for kind in [SummaryProviderKind.openRouter, .claudeCode, .codex, .opencode] {
+            defaults.register(defaults: [Keys.summaryProvider: kind.rawValue])
+            settings("settings-transcription-summary-\(kind.rawValue)-light", .transcription, dark: false)
+        }
+        defaults.register(defaults: [Keys.summaryProvider: SummaryProviderKind.openAI.rawValue])
         if ProviderKind.apple.isAvailable {
             // The system recognizer, with its speech model installed and still to download.
             defaults.register(defaults: [Keys.provider: ProviderKind.apple.rawValue])
