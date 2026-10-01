@@ -42,6 +42,11 @@ enum CLIProviders {
         return path
     }
 
+    /// Drops the remembered path so the next search starts over.
+    static func forget(_ tool: CLITool) {
+        AppSettings.defaults.removeObject(forKey: Keys.cliDetected(tool))
+    }
+
     /// Kept across launches, so a tool only the login shell knows is found from the Finder too.
     private static func remember(_ path: String, for tool: CLITool) {
         AppSettings.defaults.set(path, forKey: Keys.cliDetected(tool))

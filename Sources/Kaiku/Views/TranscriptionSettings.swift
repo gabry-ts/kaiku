@@ -510,12 +510,12 @@ private struct SummarySettings: View {
     @AppStorage(Keys.summaryProvider) private var provider = SummaryProviderKind.openAI.rawValue
     @AppStorage(Keys.summaryPrompt) private var prompt = SummaryAPI.defaultPrompt
     @State private var model = ""
-    @State private var key = ""
+    @StateObject private var access = ProviderAccess()
 
     private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: provider) ?? .openAI }
 
     var body: some View {
-        SettingsGroup("Summary", footer: "Off by default. Sends the transcript to the provider you pick, with your own key, and saves summary.md in the call folder. You can also summarize any past call from the library.") {
+        SettingsGroup("Summary", footer: "Off by default. Sends the transcript to the provider you pick, with your own key or command-line tool, and saves summary.md in the call folder. You can also summarize any past call from the library.") {
             SwitchRow("Summarize every call after transcription", isOn: $enabled)
             SettingsRow("Provider") {
                 Picker("Provider", selection: $provider) {
@@ -528,28 +528,7 @@ private struct SummarySettings: View {
                 TextField("Model", text: $model, prompt: Text(kind.defaultModel))
                     .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
             }
-            if kind.hasOwnKey {
-                SettingsRow("API key") {
-                    SecureField("API key", text: $key, prompt: Text("Paste your key"))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .font(.body.monospaced())
-                        .frame(maxWidth: 280)
-                }
-            }
-            GroupRow {
-                HStack {
-                    if kind.apiKey == nil && key.isEmpty {
-                        StatusDot(kind: .warning, text: kind.hasOwnKey ? "API key missing" : "No \(kind.displayName) key yet. Select \(kind.displayName) under Provider to add one.")
-                    } else if kind.requiresModel && model.isEmpty {
-                        StatusDot(kind: .warning, text: "Model required")
-                    } else {
-                        StatusDot(kind: .ok, text: kind.hasOwnKey ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
-                    }
-                    Spacer()
-                    if let url = kind.keyURL { Link("Get an API key", destination: url).font(PUI.Font.caption) }
-                }
-            }
+            ProviderAccessRows(access: access, modelMissing: kind.requiresModel && model.isEmpty)
             GroupRow {
                 VStack(alignment: .leading, spacing: PUI.Space.s) {
                     HStack {
@@ -567,15 +546,108 @@ private struct SummarySettings: View {
         .onAppear(perform: load)
         .onChange(of: provider) { _, _ in load() }
         .onChange(of: model) { _, v in AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.summaryModel(kind)) }
-        .onChange(of: key) { _, v in
-            guard kind.hasOwnKey else { return }
-            Keychain.set(v.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keyAccount)
-        }
     }
 
     private func load() {
         model = AppSettings.summaryModel(for: kind)
+        access.load(kind)
+    }
+}
+
+/// The API key or command-line tool of a summary provider, as edited in Settings.
+@MainActor
+final class ProviderAccess: ObservableObject {
+    @Published private(set) var kind: SummaryProviderKind = .openAI
+    @Published var key = "" {
+        didSet {
+            guard !loading, kind.hasOwnKey else { return }
+            Keychain.set(key.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keyAccount)
+        }
+    }
+    /// Custom CLI path; empty finds it automatically.
+    @Published var path = "" {
+        didSet {
+            guard !loading, let cli = kind.cli else { return }
+            AppSettings.defaults.set(path.trimmingCharacters(in: .whitespaces), forKey: Keys.cliPath(cli))
+            refresh()
+        }
+    }
+    /// Where the CLI was found, nil when it wasn't.
+    @Published private(set) var found: String?
+    private var loading = false
+
+    func load(_ kind: SummaryProviderKind) {
+        loading = true
+        self.kind = kind
         key = kind.hasOwnKey ? (Keychain.get(kind.keyAccount) ?? "") : ""
+        path = kind.cli.map { AppSettings.defaults.string(forKey: Keys.cliPath($0)) ?? "" } ?? ""
+        loading = false
+        refresh()
+    }
+
+    /// Clears the custom path and searches again, login shell included.
+    func redetect() {
+        guard let cli = kind.cli else { return }
+        CLIProviders.forget(cli)
+        path = ""
+    }
+
+    private func refresh() {
+        guard let cli = kind.cli else { found = nil; return }
+        found = CLIProviders.locate(cli)
+        guard found == nil else { return }
+        Task {
+            let path = await CLIProviders.detect(cli)
+            if self.kind.cli == cli { self.found = path }
+        }
+    }
+}
+
+/// API key field or CLI path for the provider, then whether it's ready.
+struct ProviderAccessRows: View {
+    @ObservedObject var access: ProviderAccess
+    /// True when the provider needs a model and none is set.
+    var modelMissing = false
+
+    var body: some View {
+        let kind = access.kind
+        if kind.hasOwnKey {
+            SettingsRow("API key") {
+                SecureField("API key", text: $access.key, prompt: Text("Paste your key"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .font(.body.monospaced())
+                    .frame(maxWidth: 280)
+            }
+        }
+        if let cli = kind.cli {
+            PathField(label: cli.binaryName, path: $access.path, placeholder: "Automatic",
+                      fallback: access.found, detect: access.redetect)
+        }
+        GroupRow {
+            HStack {
+                status(kind)
+                Spacer()
+                if let url = kind.keyURL { Link("Get an API key", destination: url).font(PUI.Font.caption) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func status(_ kind: SummaryProviderKind) -> some View {
+        if kind.cli != nil {
+            if let found = access.found {
+                StatusDot(kind: .ok, text: "Found at \(found). Uses your own sign-in, no API key.")
+            } else {
+                StatusDot(kind: .warning, text: "\(kind.displayName) CLI not found. Install it, or set its path.")
+            }
+        } else if kind.apiKey == nil && access.key.isEmpty {
+            StatusDot(kind: .warning, text: kind.hasOwnKey ? "API key missing" : "No \(kind.displayName) key yet. Add it under Transcription > Provider.")
+        } else if modelMissing {
+            StatusDot(kind: .warning, text: "Model required")
+        } else {
+            StatusDot(kind: .ok, text: kind.hasOwnKey ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
+        }
     }
 }
 
