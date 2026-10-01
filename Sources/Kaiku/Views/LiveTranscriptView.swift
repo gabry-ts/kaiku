@@ -8,19 +8,31 @@ struct LiveLines: View {
     let lines: [LiveLine]
     /// Lines per entry before the text is cut; nil shows everything.
     var lineLimit: Int?
+    /// The reading size: callout in the popover, body in the floating window.
+    var font: Font = PUI.Font.callout
+    /// Shows when each line started, under the speaker.
+    var showsTime = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let ink = Ink(scheme)
-        VStack(alignment: .leading, spacing: PUI.Space.s) {
+        VStack(alignment: .leading, spacing: showsTime ? PUI.Space.l : PUI.Space.s) {
             ForEach(lines) { line in
                 HStack(alignment: .firstTextBaseline, spacing: PUI.Space.m) {
-                    Text(line.speaker.label)
-                        .font(PUI.Font.label)
-                        .foregroundStyle(line.speaker == .me ? AppAccent.kaiku.legible(scheme) : ink.secondary)
-                        .frame(width: 34, alignment: .leading)
+                    VStack(alignment: .leading, spacing: PUI.Space.xxs) {
+                        Text(line.speaker.label)
+                            .font(showsTime ? PUI.Font.label.weight(.semibold) : PUI.Font.label)
+                            .foregroundStyle(line.speaker == .me ? AppAccent.kaiku.legible(scheme) : ink.secondary)
+                        if showsTime {
+                            Text(Self.time(line.start))
+                                .font(PUI.Font.caption.monospacedDigit())
+                                .foregroundStyle(ink.tertiary)
+                        }
+                    }
+                    .frame(width: showsTime ? 40 : 34, alignment: .leading)
                     Text(line.text)
-                        .font(PUI.Font.callout)
+                        .font(font)
+                        .lineSpacing(showsTime ? 2 : 0)
                         .foregroundStyle(line.isFinal ? ink.primary : ink.secondary)
                         .lineLimit(lineLimit)
                         // A line still being spoken keeps its newest words in view.
@@ -31,6 +43,13 @@ struct LiveLines: View {
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    /// Minutes and seconds into the recording, with hours only once there are any.
+    static func time(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        let (h, m, s) = (total / 3600, total % 3600 / 60, total % 60)
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 }
 
@@ -79,26 +98,35 @@ struct LiveWindowView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if assistant.isEnabled {
-                Picker("Show", selection: $tab) {
-                    Text("Transcript").tag(Tab.transcript)
-                    Text("Summary").tag(Tab.summary)
-                    Text("Ask").tag(Tab.ask)
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                // The header fills the clear title bar, level with the close button.
+                header
+                    .frame(maxWidth: .infinity)
+                    .frame(height: max(geo.safeAreaInsets.top, PUI.Control.large))
+                Hairline()
+                switch assistant.isEnabled ? tab : .transcript {
+                case .transcript: transcript
+                case .summary: LiveSummaryTab(assistant: assistant)
+                case .ask: LiveAskTab(assistant: assistant)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, PUI.Space.xl)
-                .padding(.top, PUI.Space.l)
             }
-            switch assistant.isEnabled ? tab : .transcript {
-            case .transcript: transcript
-            case .summary: LiveSummaryTab(assistant: assistant)
-            case .ask: LiveAskTab(assistant: assistant)
-            }
+            .ignoresSafeArea(.container, edges: .top)
         }
         .frame(minWidth: Self.minSize.width, maxWidth: .infinity, minHeight: Self.minSize.height, maxHeight: .infinity)
+        .background { LiveWindowMaterial().ignoresSafeArea() }
         .puiAccent(.kaiku)
+    }
+
+    @ViewBuilder private var header: some View {
+        if assistant.isEnabled {
+            SegmentedPill([(value: Tab.transcript, title: "Transcript"), (value: Tab.summary, title: "Summary"),
+                           (value: Tab.ask, title: "Ask")], selection: $tab)
+        } else {
+            Text("Live Transcript")
+                .font(PUI.Font.label)
+                .foregroundStyle(Ink(scheme).secondary)
+        }
     }
 
     private var transcript: some View {
@@ -106,21 +134,70 @@ struct LiveWindowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: PUI.Space.l) {
                     if live.transcript.isEmpty {
-                        Text(live.isRunning ? "Listening…" : "Nothing to show. The live transcript follows the call while you record.")
-                            .font(PUI.Font.callout).foregroundStyle(Ink(scheme).tertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        LiveEmptyState(symbol: live.isRunning ? "waveform" : "captions.bubble",
+                                       text: live.isRunning ? "Listening…" : "Nothing to show. The live transcript follows the call while you record.",
+                                       animated: live.isRunning)
                     } else {
-                        LiveLines(lines: live.transcript.lines)
+                        LiveLines(lines: live.transcript.lines, font: PUI.Font.body, showsTime: true)
                     }
                     LiveNotice(live: live)
                     Color.clear.frame(height: 1).id(Self.end)
                 }
-                .padding(PUI.Space.xl)
+                .padding(.horizontal, PUI.Space.xl)
+                .padding(.vertical, PUI.Space.l)
             }
             .onAppear { proxy.scrollTo(Self.end, anchor: .bottom) }
             .onChange(of: live.transcript) { _, _ in proxy.scrollTo(Self.end, anchor: .bottom) }
         }
     }
+}
+
+/// What a tab of the live window shows before it has anything: a symbol over a short line.
+struct LiveEmptyState<Accessory: View>: View {
+    let symbol: String
+    let text: String
+    var animated = false
+    @ViewBuilder var accessory: Accessory
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let ink = Ink(scheme)
+        VStack(spacing: PUI.Space.m) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(ink.tertiary)
+                .symbolEffect(.variableColor.iterative, isActive: animated)
+            Text(text)
+                .font(PUI.Font.callout)
+                .foregroundStyle(ink.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            accessory
+        }
+        .frame(maxWidth: 260)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, PUI.Space.xxl * 2)
+    }
+}
+
+extension LiveEmptyState where Accessory == EmptyView {
+    init(symbol: String, text: String, animated: Bool = false) {
+        self.init(symbol: symbol, text: text, animated: animated) { EmptyView() }
+    }
+}
+
+/// The floating window's backdrop: the system's translucent popover material, so the
+/// window reads as a light utility panel over whatever is behind it.
+struct LiveWindowMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 /// In the recording card: opens the floating window, and says why the live

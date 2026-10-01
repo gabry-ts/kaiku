@@ -66,16 +66,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
         }
         let hosting = NSHostingController(rootView: LiveWindowView(live: AppState.shared.live))
         hosting.sizingOptions = []
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: LiveWindowView.size),
-                            styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
+        let panel = Self.makeLivePanel()
         panel.contentViewController = hosting
-        panel.title = "Live Transcript"
-        panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.delegate = self
         panel.identifier = NSUserInterfaceItemIdentifier(id)
@@ -89,6 +81,23 @@ final class WindowManager: NSObject, NSWindowDelegate {
         panel.setFrameAutosaveName(autosave)
         windows[id] = panel
         panel.orderFrontRegardless()
+    }
+
+    /// The floating panel of the live transcript, without content: a clear title bar over
+    /// a full-size content view, so the view's material and header run under the close button.
+    static func makeLivePanel() -> NSPanel {
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: LiveWindowView.size),
+                            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .utilityWindow, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.title = "Live Transcript"
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.hidesOnDeactivate = false
+        panel.isMovableByWindowBackground = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        return panel
     }
 
     /// Transparent title bar, content up to the top edge.
