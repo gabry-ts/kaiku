@@ -187,6 +187,7 @@ enum Keys {
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
     static func liveAskModel(_ p: SummaryProviderKind) -> String { "liveAskModel.\(p.rawValue)" }
+    static func cliPath(_ t: CLITool) -> String { "cliPath.\(t.rawValue)" }
 }
 
 enum AppSettings {
