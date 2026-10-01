@@ -10,6 +10,14 @@ public enum CLITool: String, CaseIterable, Sendable {
     /// Replaces the coding-agent prompt of Claude Code: shorter and plain text only.
     public static let systemPrompt = "You are a concise assistant. Follow the user's instructions exactly and reply with plain text only."
 
+    /// Model names the tool documents; anything else can still be typed.
+    public var modelSuggestions: [String] {
+        switch self {
+        case .claude: return ["fable", "opus", "sonnet"]
+        case .codex, .opencode: return []
+        }
+    }
+
     /// Arguments for one non-interactive answer without tools. An empty model leaves
     /// the tool's own default. `outputFile` is where Codex writes its last message.
     public func arguments(model: String, workDir: String, outputFile: String) -> [String] {
@@ -66,5 +74,12 @@ public enum CLITool: String, CaseIterable, Sendable {
     /// Removes terminal color and cursor codes.
     public static func stripANSI(_ text: String) -> String {
         text.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression)
+    }
+
+    /// `provider/model` lines printed by `opencode models`.
+    public static func parseOpenCodeModels(_ output: String) -> [String] {
+        stripANSI(output).split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.contains(" ") && $0.contains("/") }
     }
 }

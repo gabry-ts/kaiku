@@ -44,6 +44,19 @@ final class CLICompletionTests: XCTestCase {
         XCTAssertNil(CLITool.path(fromShellOutput: "codex not found\n"))
     }
 
+    func testOpenCodeModelsKeepProviderModelLines() {
+        let out = "\u{1B}[0mopencode/big-pickle\nanthropic/claude-x\n\nSome notice here\n"
+        XCTAssertEqual(CLITool.parseOpenCodeModels(out), ["opencode/big-pickle", "anthropic/claude-x"])
+        XCTAssertEqual(CLITool.claude.modelSuggestions, ["fable", "opus", "sonnet"])
+        XCTAssertTrue(CLITool.codex.modelSuggestions.isEmpty)
+    }
+
+    func testOpenRouterModelIDs() throws {
+        let json = #"{"data":[{"id":"b/two","name":"Two"},{"id":"a/one","context_length":1}]}"#
+        XCTAssertEqual(try SummaryAPI.parseModelIDs(Data(json.utf8)), ["a/one", "b/two"])
+        XCTAssertThrowsError(try SummaryAPI.parseModelIDs(Data("{}".utf8)))
+    }
+
     func testParseOutputPrefersLastMessageAndStripsColors() throws {
         XCTAssertEqual(try CLITool.parseOutput(stdout: "noise", lastMessage: " final \n"), "final")
         XCTAssertEqual(try CLITool.parseOutput(stdout: "\u{1B}[0m\u{1B}[91m\u{1B}[1mpong\u{1B}[0m\n", lastMessage: ""), "pong")

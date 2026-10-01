@@ -69,6 +69,17 @@ public enum SummaryAPI {
         return text
     }
 
+    private struct ModelList: Decodable {
+        struct Model: Decodable { let id: String }
+        let data: [Model]
+    }
+
+    /// Model ids from an OpenAI-style `GET /models` response (OpenRouter), sorted.
+    public static func parseModelIDs(_ data: Data) throws -> [String] {
+        do { return try JSONDecoder().decode(ModelList.self, from: data).data.map(\.id).sorted() }
+        catch { throw ParseError.invalid("model list JSON: \(error)") }
+    }
+
     public static func parseAnthropic(_ data: Data) throws -> String {
         let r: AnthropicResponse
         do { r = try JSONDecoder().decode(AnthropicResponse.self, from: data) }
