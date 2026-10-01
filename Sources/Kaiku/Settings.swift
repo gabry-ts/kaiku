@@ -94,9 +94,9 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
     var modelHint: String? {
         switch self {
         case .openRouter: return "Required, as provider/model."
-        case .claudeCode: return "Empty uses Claude Code's default; an alias or a full model name."
-        case .codex: return "Empty uses the model in ~/.codex/config.toml."
-        case .opencode: return "Empty uses OpenCode's default; provider/model."
+        case .claudeCode: return "Empty uses the CLI default."
+        case .codex: return "Empty uses ~/.codex/config.toml."
+        case .opencode: return "provider/model; empty uses the CLI default."
         default: return nil
         }
     }

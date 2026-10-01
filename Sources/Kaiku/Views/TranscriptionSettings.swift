@@ -726,7 +726,7 @@ struct ProviderAccessRows: View {
     private func status(_ kind: SummaryProviderKind) -> some View {
         if kind.cli != nil {
             if let found = access.found {
-                StatusDot(kind: .ok, text: "Found at \(found). Uses your own sign-in, no API key.")
+                StatusDot(kind: .ok, text: "Uses your own sign-in, no API key. Found at \(found)")
             } else {
                 StatusDot(kind: .warning, text: "\(kind.displayName) CLI not found. Install it, or set its path.")
             }

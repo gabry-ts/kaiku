@@ -83,7 +83,7 @@ struct LiveSettingsSection: View {
                     ModelField(kind: assistKind, text: $askModel, title: "Ask model",
                                subtitle: assistKind.cli == nil
                                    ? "Answers your questions; a fast one keeps them quick."
-                                   : "Answers your questions. A command-line tool starts for each one, so answers take longer.")
+                                   : "Answers your questions; slower with a command-line tool.")
                     ProviderAccessRows(access: access,
                                        modelMissing: assistKind.requiresModel && (summaryModel.isEmpty || askModel.isEmpty))
                 }
