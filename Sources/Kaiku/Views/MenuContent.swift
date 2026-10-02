@@ -153,6 +153,12 @@ struct MenuPanel: View {
                     ProgressView().controlSize(.small)
                     StatusText("Transcribing", detail: state.busyStage[key] ?? "Working…")
                     Spacer(minLength: 0)
+                    let folder = RecordingFolder(url: URL(fileURLWithPath: key))
+                    if state.canCancelTranscription(folder) {
+                        Button("Cancel") { state.cancelTranscription(folder) }
+                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                            .help("Stop transcribing. No summary or webhook is sent.")
+                    }
                 }
             }
             .transition(.opacity)
