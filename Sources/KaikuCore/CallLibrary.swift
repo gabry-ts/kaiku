@@ -50,16 +50,23 @@ public struct CallLibrary: Sendable {
     }
 
     /// The call an agent refers to: by its id, its folder name or its folder path.
+    /// Nil when none matches or the id is shared by several calls.
     public func resolve(_ reference: String) -> CallEntry? {
+        let found = matches(reference)
+        return found.count == 1 ? found[0] : nil
+    }
+
+    /// Every call `reference` can mean; more than one when ids collide.
+    public func matches(_ reference: String) -> [CallEntry] {
         let ref = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !ref.isEmpty else { return nil }
+        guard !ref.isEmpty else { return [] }
         if ref.contains("/") || ref.hasPrefix("~") {
-            guard let folder = folder(atPath: ref), let meta = folder.loadMeta() else { return nil }
-            return CallEntry(folder: folder, meta: meta)
+            guard let folder = folder(atPath: ref), let meta = folder.loadMeta() else { return [] }
+            return [CallEntry(folder: folder, meta: meta)]
         }
         let all = calls()
-        let lower = ref.lowercased()
-        return all.first { $0.id == lower } ?? all.first { $0.folder.url.lastPathComponent == ref }
+        let byID = all.filter { $0.id == ref.lowercased() }
+        return byID.isEmpty ? all.filter { $0.folder.url.lastPathComponent == ref } : byID
     }
 }
 

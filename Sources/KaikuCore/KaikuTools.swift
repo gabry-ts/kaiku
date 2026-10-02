@@ -97,12 +97,16 @@ public struct KaikuToolSet: MCPToolSet {
         library.resolve(try args.requiredString("id"))
     }
 
-    private static func notFound(_ args: MCPArguments) -> MCPToolResult {
-        .error("No call with id \((try? args.string("id")) ?? "") in the recordings folder. Use list_calls to find its id.")
+    private func notFound(_ args: MCPArguments) -> MCPToolResult {
+        let id = (try? args.string("id")) ?? ""
+        if library.matches(id).count > 1 {
+            return .error("The id \(id) matches more than one call; pass the call folder path instead (see list_calls).")
+        }
+        return .error("No call with id \(id) in the recordings folder. Use list_calls to find its id.")
     }
 
     private func getCall(_ args: MCPArguments) throws -> MCPToolResult {
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         let m = c.meta, f = c.folder
         var o = Self.listing(c).objectValue ?? [:]
         o["durationSeconds"] = .double(m.durationSeconds)
@@ -160,7 +164,7 @@ public struct KaikuToolSet: MCPToolSet {
         } else {
             limit = try args.int("limit", default: 40_000, in: 1...400_000)
         }
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         guard let t = CallTranscript.load(c.folder) else { return Self.noTranscript(c) }
         let bytes = RecordingFolder.fileSize(c.folder.transcriptURL)
         var lines = [
@@ -184,7 +188,7 @@ public struct KaikuToolSet: MCPToolSet {
     }
 
     private func readSummary(_ args: MCPArguments) throws -> MCPToolResult {
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         guard let summary = c.folder.summary else {
             return .error("\"\(c.meta.title)\" has no summary." + (allowEdits() && c.folder.hasTranscript ? " summarize_again can write one." : ""))
         }
@@ -232,7 +236,7 @@ public struct KaikuToolSet: MCPToolSet {
 
     private func renameCall(_ args: MCPArguments) throws -> MCPToolResult {
         let title = try args.requiredString("title")
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
         c.folder.rename(to: title)
         changed()
@@ -246,7 +250,7 @@ public struct KaikuToolSet: MCPToolSet {
         guard replace != nil || !add.isEmpty || !remove.isEmpty else {
             throw MCPError.invalidParams("Give tags (to replace them all), add or remove")
         }
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
         let tags = Self.tags(current: c.meta.tags ?? [], replace: replace, add: add, remove: remove)
         c.folder.setTags(tags)
@@ -263,7 +267,7 @@ public struct KaikuToolSet: MCPToolSet {
     private func renameSpeaker(_ args: MCPArguments) throws -> MCPToolResult {
         let speaker = try args.requiredString("speaker")
         guard let name = try args.rawString("name") else { throw MCPError.invalidParams("name is required") }
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
         guard let raw = c.folder.loadSegments() else {
             return .error("\"\(c.meta.title)\" has no segments.json, so its speakers can't be renamed; transcribe it again first.")
@@ -294,7 +298,7 @@ public struct KaikuToolSet: MCPToolSet {
     }
 
     private func transcribeAgain(_ args: MCPArguments) throws -> MCPToolResult {
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
         let fm = FileManager.default
         guard fm.fileExists(atPath: c.folder.micURL.path) || fm.fileExists(atPath: c.folder.systemURL.path) else {
@@ -305,7 +309,7 @@ public struct KaikuToolSet: MCPToolSet {
     }
 
     private func summarizeAgain(_ args: MCPArguments) throws -> MCPToolResult {
-        guard let c = try entry(args) else { return Self.notFound(args) }
+        guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
         guard c.folder.hasTranscript else { return Self.noTranscript(c) }
         return ask(.summarize(folder: c.folder.url.path), c,
