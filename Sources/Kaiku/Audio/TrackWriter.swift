@@ -200,13 +200,15 @@ final class TrackWriter: @unchecked Sendable {
 enum AudioFiles {
     private static let chunk: AVAudioFrameCount = 32_768
 
-    /// Converts a (possibly unfinished) PCM file to AAC .m4a. Returns the duration in seconds.
-    /// The source is left in place; the caller removes it once the result is verified.
+    /// Converts a (possibly unfinished) PCM file to AAC .m4a, keeping at most `maxSeconds`.
+    /// Returns the duration in seconds. The source is left in place; the caller removes it
+    /// once the result is verified.
     @discardableResult
-    static func convertToM4A(_ source: URL, output: URL) throws -> Double {
+    static func convertToM4A(_ source: URL, output: URL, maxSeconds: Double? = nil) throws -> Double {
         let input = try AVAudioFile(forReading: source)
         let format = input.processingFormat
         guard input.length > 0 else { throw AudioCaptureError("\(source.lastPathComponent) has no audio") }
+        let length = maxSeconds.map { min(input.length, max(1, AVAudioFramePosition($0 * format.sampleRate))) } ?? input.length
         let partial = output.deletingPathExtension().appendingPathExtension("partial.m4a")
         try? FileManager.default.removeItem(at: partial)
         do {
@@ -216,8 +218,8 @@ enum AudioFiles {
             guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else {
                 throw AudioCaptureError("Could not allocate audio buffer")
             }
-            while input.framePosition < input.length {
-                try input.read(into: buffer, frameCount: chunk)
+            while input.framePosition < length {
+                try input.read(into: buffer, frameCount: min(chunk, AVAudioFrameCount(length - input.framePosition)))
                 if buffer.frameLength == 0 { break }
                 try out.write(from: buffer)
             }
@@ -228,7 +230,7 @@ enum AudioFiles {
             try FileManager.default.moveItem(at: partial, to: output)
         }
         let check = try AVAudioFile(forReading: output)
-        let expected = Double(input.length) / format.sampleRate
+        let expected = Double(length) / format.sampleRate
         let got = Double(check.length) / check.processingFormat.sampleRate
         guard got >= expected - 1 else {
             throw AudioCaptureError("Converted \(output.lastPathComponent) is shorter than the recording (\(Int(got)) s of \(Int(expected)) s)")

@@ -3,10 +3,11 @@ import KaikuCore
 
 /// Turns the crash-safe CAF files of a recording into the final .m4a files.
 enum AudioFinalizer {
-    /// Converts mic.caf / system.caf to .m4a. Each CAF is removed only after its .m4a
-    /// has been written and checked. Returns the longest track duration, or nil when
-    /// there was nothing to convert. Blocking: call off the main thread.
-    static func finalize(_ folder: RecordingFolder) throws -> Double? {
+    /// Converts mic.caf / system.caf to .m4a, keeping at most `maxSeconds` of each. Each
+    /// CAF is removed only after its .m4a has been written and checked. Returns the longest
+    /// track duration, or nil when there was nothing to convert. Blocking: call off the
+    /// main thread.
+    static func finalize(_ folder: RecordingFolder, maxSeconds: Double? = nil) throws -> Double? {
         let fm = FileManager.default
         var longest: Double?
         var errors: [String] = []
@@ -18,7 +19,7 @@ enum AudioFinalizer {
                 continue
             }
             do {
-                let d = try AudioFiles.convertToM4A(raw, output: final)
+                let d = try AudioFiles.convertToM4A(raw, output: final, maxSeconds: maxSeconds)
                 try fm.removeItem(at: raw)
                 longest = max(longest ?? 0, d)
             } catch {

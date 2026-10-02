@@ -15,7 +15,10 @@ public struct RecordingGuard: Sendable {
     public var silenceLimit: Double
     /// Longest recording in seconds; 0 is no limit.
     public var maxDuration: Double
-    private var lastSound: Double = 0
+    /// Recorded time of the last sound on either track.
+    public private(set) var lastSound: Double = 0
+    /// Silence kept after the last sound when a recording stopped for silence is cut.
+    public static let tailAfterSound: Double = 30
 
     public init(silenceLimit: Double = 0, maxDuration: Double = 0) {
         self.silenceLimit = silenceLimit

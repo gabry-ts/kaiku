@@ -18,6 +18,13 @@ final class RecordingGuardTests: XCTestCase {
         XCTAssertEqual(g.update(recorded: 165, micLevel: 0, systemLevel: 0), .silence)
     }
 
+    func testRemembersTheLastSound() {
+        var g = RecordingGuard(silenceLimit: 60)
+        _ = g.update(recorded: 42, micLevel: 0, systemLevel: 0.2)
+        _ = g.update(recorded: 90, micLevel: 0, systemLevel: 0)
+        XCTAssertEqual(g.lastSound, 42)
+    }
+
     func testStopsAtMaximumLength() {
         var g = RecordingGuard(silenceLimit: 0, maxDuration: 3600)
         XCTAssertNil(g.update(recorded: 3599, micLevel: 0.5, systemLevel: 0.5))

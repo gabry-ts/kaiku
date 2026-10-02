@@ -218,14 +218,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    func stopRecording() {
+    /// - Parameter keepUntil: recorded time after which the audio is dropped, e.g. the
+    ///   silence at the end of a recording stopped for silence.
+    func stopRecording(keepUntil: Double? = nil) {
         guard case .recording(let title, _) = phase, let rec = recorder, let folder = currentFolder else { return }
         recorder = nil
         stopTicker()
         stopLevelTimer()
         let stopDate = Date()
         closeClock(at: stopDate)
-        let duration = elapsed(at: stopDate)
+        let duration = min(elapsed(at: stopDate), keepUntil ?? .infinity)
         phase = .transcribing(title: title)
         busyFolders.insert(folder.key)
         busyStage[folder.key] = "Saving audio…"
@@ -233,7 +235,7 @@ final class AppState: ObservableObject {
         Task {
             let result = await Task.detached { () -> Result<Double?, Error> in
                 rec.stop()
-                return Result { try AudioFinalizer.finalize(folder) }
+                return Result { try AudioFinalizer.finalize(folder, maxSeconds: keepUntil) }
             }.value
             let heard = await live.finish()
             WindowManager.shared.close("live")
@@ -835,7 +837,8 @@ final class AppState: ObservableObject {
             body = "It reached the maximum length of \(RecordingGuard.describe(seconds: AppSettings.maxRecordingSeconds))."
         }
         Log.app.info("Recording stopped by itself: \(body, privacy: .public)")
-        stopRecording()
+        // The silence at the end is cut, so it is neither transcribed nor kept.
+        stopRecording(keepUntil: reason == .silence ? recordingGuard.lastSound + RecordingGuard.tailAfterSound : nil)
         Notifier.shared.post(.recordingStopped, title: "Recording stopped", body: body, folderPath: nil)
     }
 
