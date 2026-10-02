@@ -238,7 +238,11 @@ public struct KaikuToolSet: MCPToolSet {
         let title = try args.requiredString("title")
         guard let c = try entry(args) else { return notFound(args) }
         if let busy = editable(c) { return busy }
-        c.folder.rename(to: title)
+        do {
+            try c.folder.rename(to: title)
+        } catch {
+            return .error("Couldn't rename \"\(c.meta.title)\": \(error.localizedDescription)")
+        }
         changed()
         return MCPToolResult(text: "Renamed call \(c.id) to \"\(title)\".")
     }

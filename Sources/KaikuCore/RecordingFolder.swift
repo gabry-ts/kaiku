@@ -255,12 +255,15 @@ public struct RecordingError: LocalizedError, Sendable {
 /// Edits made from the library and by agents, the same way in both.
 public extension RecordingFolder {
     /// Sets the title in meta.json and in the first line of transcript.md.
-    /// Returns false when the title is empty.
+    /// Returns false when the title is empty; throws when meta.json can't be written.
     @discardableResult
-    func rename(to newTitle: String) -> Bool {
+    func rename(to newTitle: String) throws -> Bool {
         let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return false }
-        updateMeta { $0.title = title }
+        if var meta = loadMeta() {
+            meta.title = title
+            try saveMeta(meta)
+        }
         if var text = try? String(contentsOf: transcriptURL, encoding: .utf8), text.hasPrefix("# ") {
             let firstLineEnd = text.firstIndex(of: "\n") ?? text.endIndex
             text.replaceSubrange(text.startIndex..<firstLineEnd, with: "# \(title)")

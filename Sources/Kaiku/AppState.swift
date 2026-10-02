@@ -773,7 +773,12 @@ final class AppState: ObservableObject {
     // MARK: Library actions
 
     func rename(_ folder: RecordingFolder, to newTitle: String) {
-        guard folder.rename(to: newTitle) else { return }
+        do {
+            guard try folder.rename(to: newTitle) else { return }
+        } catch {
+            Log.app.error("Renaming a call failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         libraryVersion += 1
     }
 
