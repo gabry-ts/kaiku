@@ -305,6 +305,28 @@ final class MeetingDetectionTests: XCTestCase {
     }
 }
 
+final class SpeakerAutoNameTests: XCTestCase {
+    private func event(_ attendees: [CalendarEventInfo.Attendee]) -> CalendarEventInfo {
+        CalendarEventInfo(title: "x", calendar: nil, start: Date(), end: Date(), attendees: attendees)
+    }
+
+    func testAssignsOnlyInTheCertainCase() {
+        let anna = CalendarEventInfo.Attendee(name: "Anna Rossi", email: "anna@acme.it")
+        let room = CalendarEventInfo.Attendee(name: "Room 1", email: "c_1@resource.calendar.google.com")
+        let one = SpeakerAutoName.assignment(event: event([anna, room]), speakers: ["Me", "Others"], meLabel: "Me", existing: nil)
+        XCTAssertEqual(one?.speaker, "Others")
+        XCTAssertEqual(one?.name, "Anna Rossi")
+        XCTAssertNil(SpeakerAutoName.assignment(event: nil, speakers: ["Me", "Others"], meLabel: "Me", existing: nil))
+        XCTAssertNil(SpeakerAutoName.assignment(event: event([]), speakers: ["Me", "Others"], meLabel: "Me", existing: nil))
+        let marco = CalendarEventInfo.Attendee(name: "Marco", email: nil)
+        XCTAssertNil(SpeakerAutoName.assignment(event: event([anna, marco]), speakers: ["Me", "Others"], meLabel: "Me", existing: nil))
+        XCTAssertNil(SpeakerAutoName.assignment(event: event([anna]), speakers: ["Me", "Speaker 1", "Speaker 2"], meLabel: "Me", existing: nil))
+        XCTAssertNil(SpeakerAutoName.assignment(event: event([anna]), speakers: ["Me"], meLabel: "Me", existing: nil))
+        XCTAssertNil(SpeakerAutoName.assignment(event: event([anna]), speakers: ["Me", "Others"], meLabel: "Me", existing: ["Others": "Luca"]))
+        XCTAssertNotNil(SpeakerAutoName.assignment(event: event([anna]), speakers: ["Speaker 1"], meLabel: "Me", existing: ["Others": " "]))
+    }
+}
+
 final class TagsTests: XCTestCase {
     func testNormalize() {
         XCTAssertEqual(Tags.normalize([" Nova ", "nova", "", "ACME", "  ", "Acme", "Two\nLines"]), ["Nova", "ACME", "Two Lines"])

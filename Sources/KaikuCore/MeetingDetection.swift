@@ -144,15 +144,31 @@ public struct CalendarEventInfo: Codable, Equatable, Sendable {
         "tiscali.it", "alice.it", "tim.it", "fastwebnet.it", "proton.me", "protonmail.com", "aol.com", "gmx.com",
     ]
 
-    /// Attendee names (or email local parts) for speaker suggestions.
+    /// Attendee names (or email local parts) for speaker suggestions. Calendar resources
+    /// such as rooms are left out.
     public var attendeeNames: [String] {
         var out: [String] = []
         for a in attendees {
+            if let d = a.email.flatMap(Self.domain), d.hasSuffix("calendar.google.com") { continue }
             let name = a.name?.trimmingCharacters(in: .whitespaces).nilIfEmpty
                 ?? a.email.flatMap { $0.split(separator: "@").first.map(String.init) }
             if let name, !out.contains(name) { out.append(name) }
         }
         return out
+    }
+}
+
+/// Names a speaker from the calendar, only when it is certain who they are.
+public enum SpeakerAutoName {
+    /// The speaker and name to store when the event has exactly one other attendee and the
+    /// transcript exactly one speaker besides you; nil when unsure or already named.
+    public static func assignment(event: CalendarEventInfo?, speakers: [String], meLabel: String,
+                                  existing: [String: String]?) -> (speaker: String, name: String)? {
+        guard let names = event?.attendeeNames, names.count == 1 else { return nil }
+        let others = speakers.filter { $0 != meLabel }
+        guard others.count == 1, let speaker = others.first else { return nil }
+        if let current = existing?[speaker], !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
+        return (speaker, names[0])
     }
 }
 
