@@ -100,9 +100,13 @@ public enum AgentConfig {
 
     /// `config` (the text of ~/.codex/config.toml, empty when missing) with the server
     /// added at the end, or its command changed when the table is already there. Everything
-    /// else is kept as is.
-    public static func codex(_ config: String, path: String) -> (text: String, change: Change) {
+    /// else is kept as is. Throws when kaiku is defined in a form other than its own table
+    /// (dotted keys or an inline table), since adding the table would duplicate it.
+    public static func codex(_ config: String, path: String) throws -> (text: String, change: Change) {
         var lines = config.components(separatedBy: "\n")
+        if definesServerOutsideTable(lines) {
+            throw ConfigError(message: "~/.codex/config.toml defines mcp_servers.kaiku with dotted keys or an inline table; change it to a [mcp_servers.kaiku] table or remove it first.")
+        }
         guard let header = lines.firstIndex(where: { isCodexHeader($0) }) else {
             var text = config
             if !text.isEmpty {
@@ -120,6 +124,28 @@ public enum AgentConfig {
             lines.insert(command, at: header + 1)
         }
         return (lines.joined(separator: "\n"), .updated)
+    }
+
+    /// True when a line outside the `[mcp_servers.kaiku]` tables sets mcp_servers.kaiku, as
+    /// dotted keys (`mcp_servers.kaiku.command = …`) or inline (`kaiku = { … }`).
+    private static func definesServerOutsideTable(_ lines: [String]) -> Bool {
+        func bare(_ s: Substring) -> String { s.filter { $0 != " " && $0 != "\t" && $0 != "\"" && $0 != "'" } }
+        let target = codexTable
+        var table = ""
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("[") {
+                table = bare(Substring(t)).trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                continue
+            }
+            guard !t.hasPrefix("#"), let eq = t.firstIndex(of: "=") else { continue }
+            if table == target || table.hasPrefix(target + ".") { continue }
+            let key = bare(t[..<eq])
+            let full = table.isEmpty ? key : table + "." + key
+            if full == target || full.hasPrefix(target + ".") { return true }
+            if full == "mcp_servers", bare(t[t.index(after: eq)...]).contains("\(KaikuAgents.serverName)=") { return true }
+        }
+        return false
     }
 
     private static func isCodexHeader(_ line: String) -> Bool {

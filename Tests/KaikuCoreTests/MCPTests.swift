@@ -160,24 +160,38 @@ final class MCPTests: XCTestCase {
 
     // MARK: Agent setup
 
-    func testCodexConfigAddsUpdatesAndKeepsTheRest() {
-        let added = AgentConfig.codex("", path: "/Apps/Kaiku.app/Contents/MacOS/kaiku-mcp")
+    func testCodexConfigAddsUpdatesAndKeepsTheRest() throws {
+        let added = try AgentConfig.codex("", path: "/Apps/Kaiku.app/Contents/MacOS/kaiku-mcp")
         XCTAssertEqual(added.change, .added)
         XCTAssertEqual(added.text, "[mcp_servers.kaiku]\ncommand = \"/Apps/Kaiku.app/Contents/MacOS/kaiku-mcp\"\n")
 
         let existing = "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\""
-        let appended = AgentConfig.codex(existing, path: "/k")
+        let appended = try AgentConfig.codex(existing, path: "/k")
         XCTAssertEqual(appended.text, existing + "\n\n[mcp_servers.kaiku]\ncommand = \"/k\"\n")
 
-        XCTAssertEqual(AgentConfig.codex(appended.text, path: "/k").change, .unchanged)
+        XCTAssertEqual(try AgentConfig.codex(appended.text, path: "/k").change, .unchanged)
 
-        let moved = AgentConfig.codex(appended.text, path: "/new \"path\"")
+        let moved = try AgentConfig.codex(appended.text, path: "/new \"path\"")
         XCTAssertEqual(moved.change, .updated)
         XCTAssertEqual(moved.text, existing + "\n\n[mcp_servers.kaiku]\ncommand = \"/new \\\"path\\\"\"\n")
-        XCTAssertEqual(AgentConfig.codex(moved.text, path: "/new \"path\"").change, .unchanged)
+        XCTAssertEqual(try AgentConfig.codex(moved.text, path: "/new \"path\"").change, .unchanged)
 
         let noCommand = "[mcp_servers.kaiku]\nargs = []\n[other]\n"
-        XCTAssertEqual(AgentConfig.codex(noCommand, path: "/k").text, "[mcp_servers.kaiku]\ncommand = \"/k\"\nargs = []\n[other]\n")
+        XCTAssertEqual(try AgentConfig.codex(noCommand, path: "/k").text, "[mcp_servers.kaiku]\ncommand = \"/k\"\nargs = []\n[other]\n")
+    }
+
+    func testCodexConfigRefusesOtherDefinitionsOfTheServer() {
+        let forms = [
+            "mcp_servers.kaiku.command = \"/x\"\n",
+            "mcp_servers.\"kaiku\".command = \"/x\"\n",
+            "[mcp_servers]\nkaiku = { command = \"/x\" }\n",
+            "[mcp_servers]\nkaiku.command = \"/x\"\n",
+            "mcp_servers = { kaiku = { command = \"/x\" } }\n",
+        ]
+        for form in forms {
+            XCTAssertThrowsError(try AgentConfig.codex(form, path: "/k"), form)
+        }
+        XCTAssertNoThrow(try AgentConfig.codex("[mcp_servers.other]\nkaiku = 1\n[mcp_servers.kaiku]\ncommand = \"/x\"\n", path: "/k"))
     }
 
     func testClaudeDesktopConfigMergesIntoExistingKeys() throws {

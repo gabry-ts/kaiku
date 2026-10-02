@@ -53,7 +53,7 @@ enum AgentInstaller {
         case .codex:
             let url = codexConfig
             let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-            let result = AgentConfig.codex(existing, path: path)
+            let result = try AgentConfig.codex(existing, path: path)
             guard result.change != .unchanged else { return "Already added." }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try result.text.write(to: url, atomically: true, encoding: .utf8)
