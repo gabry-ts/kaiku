@@ -77,6 +77,14 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(vtt.contains("Anna: Sì -> ok"))
     }
 
+    func testVTTEscapesAndBlankLines() {
+        var d = doc
+        d.segments = [Segment(start: 1, end: 2, speaker: "Me", text: "R&D <team>\n\nnext")]
+        let vtt = ExportFormatter.vtt(d)
+        XCTAssertTrue(vtt.contains("Me: R&amp;D &lt;team>\nnext\n"))
+        XCTAssertTrue(ExportFormatter.srt(d).contains("Me: R&D <team>\nnext\n"))
+    }
+
     func testText() {
         let txt = ExportFormatter.text(doc)
         XCTAssertTrue(txt.hasPrefix("Weekly <sync> & more\n\nDate: "))

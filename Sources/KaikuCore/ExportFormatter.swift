@@ -84,7 +84,10 @@ public enum ExportFormatter {
             .sorted { $0.0.start < $1.0.start }
             .map { s, text in
                 let prefix = s.speaker.map { "\($0): " } ?? ""
-                return (s.start, max(s.end, s.start + 1), prefix + text)
+                // A blank line would end the cue early in both formats.
+                let lines = (prefix + text).components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                return (s.start, max(s.end, s.start + 1), lines.joined(separator: "\n"))
             }
     }
 
@@ -97,8 +100,10 @@ public enum ExportFormatter {
     public static func vtt(_ doc: ExportDocument) -> String {
         var out = "WEBVTT\n"
         for c in cues(doc) {
-            // "-->" is not allowed inside cue text.
+            // "-->" is not allowed inside cue text, and & < start entities and tags.
             let text = c.text.replacingOccurrences(of: "-->", with: "->")
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
             out += "\n\(cueTime(c.start, separator: ".")) --> \(cueTime(c.end, separator: "."))\n\(text)\n"
         }
         return out
