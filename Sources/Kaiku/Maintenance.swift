@@ -45,11 +45,21 @@ enum Recovery {
         meta.status == .recording || meta.status == .paused
     }
 
-    /// Blocking: call off the main thread. `skip` is the folder being recorded right now, if any.
-    static func recoverAll(base: URL, skip: String?) -> [Outcome] {
+    /// Blocking: call off the main thread. `skip` is the folder being recorded right now, if
+    /// any; `busy` the folders being transcribed.
+    static func recoverAll(base: URL, skip: String?, busy: Set<String> = []) -> [Outcome] {
         var outcomes: [Outcome] = []
         for folder in RecordingFolder.scan(base: base) where folder.key != skip {
-            guard var meta = folder.loadMeta(), needsRecovery(meta) else { continue }
+            guard var meta = folder.loadMeta() else { continue }
+            if meta.status == .transcribing && !busy.contains(folder.key) {
+                // The app quit or crashed during the transcription.
+                meta.status = .error
+                meta.error = "Transcription interrupted when the app quit. Transcribe again."
+                try? folder.saveMeta(meta)
+                Log.app.info("Interrupted transcription marked as failed: \(folder.url.lastPathComponent, privacy: .public)")
+                continue
+            }
+            guard needsRecovery(meta) else { continue }
             let hadRaw = FileManager.default.fileExists(atPath: folder.micRawURL.path)
                 || FileManager.default.fileExists(atPath: folder.systemRawURL.path)
             // Close a pause left open: nothing was recorded after it anyway.

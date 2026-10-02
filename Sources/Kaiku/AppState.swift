@@ -580,10 +580,11 @@ final class AppState: ObservableObject {
     func recoverOnLaunch() {
         let base = AppSettings.baseFolder
         let skip = currentFolder?.key
+        let busy = busyFolders
         Task {
-            let outcomes = await Task.detached { Recovery.recoverAll(base: base, skip: skip) }.value
-            guard !outcomes.isEmpty else { return }
+            let outcomes = await Task.detached { Recovery.recoverAll(base: base, skip: skip, busy: busy) }.value
             libraryVersion += 1
+            guard !outcomes.isEmpty else { return }
             for o in outcomes where o.recovered {
                 recoveredFolders.append(o.folder)
                 Notifier.shared.postRecovered(title: o.title, folderPath: o.folder.url.path)
