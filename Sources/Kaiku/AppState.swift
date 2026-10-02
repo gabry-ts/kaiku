@@ -221,7 +221,7 @@ final class AppState: ObservableObject {
             if let liveEngine {
                 // The previous recording's live session may still be handing over its last
                 // words; the engine queues the audio meanwhile.
-                await liveFinishing?.value
+                _ = await liveFinishing?.value
                 if recorder === rec {
                     live.start(liveEngine, language: language) { AppState.shared.elapsed(at: Date()) }
                 } else {
