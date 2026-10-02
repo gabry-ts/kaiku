@@ -25,7 +25,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         present(id: "title", window: panel, view: view, title: "New Recording", recreate: true)
+        // Stays where it opened: not draggable, and moved back if a window manager moves it.
+        panel.isMovable = false
+        panel.isMovableByWindowBackground = false
+        titleAnchor = NSPoint(x: panel.frame.midX, y: panel.frame.maxY)
     }
+
+    /// Top center of the title prompt when it opened; it grows downwards from there.
+    private var titleAnchor: NSPoint?
 
     func showSettings(_ pane: SettingsPane = .general) {
         let view = SettingsView(pane: pane).environmentObject(AppState.shared)
@@ -144,6 +151,26 @@ final class WindowManager: NSObject, NSWindowDelegate {
         updateDockPresence()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window.identifier?.rawValue == "title" else { return }
+        recenter(window)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window.identifier?.rawValue == "title" else { return }
+        recenter(window)
+    }
+
+    /// Puts the title prompt back where it opened.
+    private func recenter(_ window: NSWindow) {
+        guard let anchor = titleAnchor else { return }
+        let origin = NSPoint(x: (anchor.x - window.frame.width / 2).rounded(),
+                             y: (anchor.y - window.frame.height).rounded())
+        if abs(window.frame.origin.x - origin.x) > 1 || abs(window.frame.origin.y - origin.y) > 1 {
+            window.setFrameOrigin(origin)
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
