@@ -19,10 +19,29 @@ enum ChatJob {
         let text: String
         /// About the calls sent, e.g. the ones left out because they didn't fit.
         let note: String?
+        /// The chat title written with the answer, when one was asked for.
+        var title: String?
     }
 
+    /// What the provider does before it writes, e.g. "Reading 12 calls…".
+    static func readingStatus(_ count: Int) -> String {
+        count == 1 ? "Reading the call…" : "Reading \(count) calls…"
+    }
+
+    /// - Parameter asksTitle: also asks for a short title of the chat, split off the answer.
     static func answer(kind: SummaryProviderKind, model: String, calls: [ChatCall], history: [ChatMessage], question: String,
-                       update: @escaping @MainActor (Progress) -> Void) async throws -> Answer {
+                       asksTitle: Bool = false, update: @escaping @MainActor (Progress) -> Void) async throws -> Answer {
+        let answer = try await text(kind: kind, model: model, calls: calls, history: history, question: question,
+                                    asksTitle: asksTitle) { progress in
+            if case .text(let soFar) = progress { update(.text(ChatTitle.hidingTitle(soFar))) } else { update(progress) }
+        }
+        guard asksTitle else { return answer }
+        let split = ChatTitle.split(answer.text)
+        return Answer(text: split.text, note: answer.note, title: split.title)
+    }
+
+    private static func text(kind: SummaryProviderKind, model: String, calls: [ChatCall], history: [ChatMessage], question: String,
+                             asksTitle: Bool, update: @escaping @MainActor (Progress) -> Void) async throws -> Answer {
         if kind.requiresModel, model.trimmingCharacters(in: .whitespaces).isEmpty {
             throw ProviderError(message: "\(kind.displayName) needs a model. Check Settings > Chat.")
         }
@@ -36,15 +55,15 @@ enum ChatJob {
                 ChatCallFiles(call: $0.call, transcriptPath: $0.folder.transcriptURL.path,
                               summaryPath: $0.folder.hasSummary ? $0.folder.summaryURL.path : nil)
             }
-            let prompt = ChatPrompt.cliPrompt(files: files, history: past, question: question)
-            update(.status("\(kind.displayName) is reading the calls…"))
+            let prompt = ChatPrompt.cliPrompt(files: files, history: past, question: question, asksTitle: asksTitle)
+            update(.status(readingStatus(folders.count)))
             let text = try await CLIProviders.chat(cli, name: kind.displayName, model: model, prompt: prompt,
                                                    // OpenCode reads files inside the folder it runs in.
                                                    workDir: cli == .opencode ? AppSettings.baseFolder : nil,
                                                    readableDirs: folders.map { $0.folder.url.path }, timeout: 600) { event in
                 switch event {
                 case .answer(let soFar): update(.text(soFar))
-                case .tool: update(.status("\(kind.displayName) is reading the calls…"))
+                case .tool: update(.status(readingStatus(folders.count)))
                 default: break
                 }
             }
@@ -59,8 +78,8 @@ enum ChatJob {
         let reserved = ChatPrompt.instructions(readsFiles: false).count + 4_000
             + past.reduce(0) { $0 + $1.text.count } + question.count + answerTokens * 4
         let packing = ChatPrompt.pack(contexts, budgetCharacters: max(8_000, kind.chatContextTokens * 4 - reserved))
-        update(.status("Waiting for \(kind.displayName)…"))
-        let text = try await stream(kind: kind, model: model, system: ChatPrompt.apiSystem(packing),
+        update(.status(readingStatus(packing.included.count)))
+        let text = try await stream(kind: kind, model: model, system: ChatPrompt.apiSystem(packing, asksTitle: asksTitle),
                                     messages: past + [ChatMessage(role: .user, text: question)], update: update)
         var note: String?
         if packing.truncated {

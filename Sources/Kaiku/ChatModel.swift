@@ -15,6 +15,8 @@ final class ChatModel: ObservableObject {
     /// What the provider is doing before it writes.
     @Published private(set) var status: String?
     @Published private(set) var isAnswering = false
+    /// When the answer being written was asked.
+    @Published private(set) var answerStarted: Date?
     @Published var error: String?
     /// About the calls sent, e.g. that some don't fit or have no transcript.
     @Published private(set) var contextNote: String?
@@ -91,13 +93,14 @@ final class ChatModel: ObservableObject {
         chat.messages.append(ChatMessage(role: .user, text: question))
         if chat.title.isEmpty { chat.title = ChatConversation.title(from: question) }
         isAnswering = true
+        answerStarted = Date()
         partial = ""
-        status = "Waiting for \(kind.displayName)…"
+        status = ChatJob.readingStatus(calls.count)
         task = Task { [weak self] in
             let result: Result<ChatJob.Answer, Error>
             do {
                 result = .success(try await ChatJob.answer(kind: kind, model: model, calls: calls, history: history,
-                                                           question: question) { [weak self] progress in
+                                                           question: question, asksTitle: history.isEmpty) { [weak self] progress in
                     guard let self, self.chat.id == id, self.isAnswering else { return }
                     switch progress {
                     case .text(let text): self.partial = text
@@ -117,6 +120,7 @@ final class ChatModel: ObservableObject {
         task.cancel()
         self.task = nil
         isAnswering = false
+        answerStarted = nil
         if !partial.isEmpty {
             chat.messages.append(ChatMessage(role: .assistant, text: partial + "\n\n_Stopped._"))
             save()
@@ -134,11 +138,13 @@ final class ChatModel: ObservableObject {
         guard task != nil, chat.id == chatID else { return }
         task = nil
         isAnswering = false
+        answerStarted = nil
         partial = ""
         status = nil
         switch result {
         case .success(let answer):
             chat.messages.append(ChatMessage(role: .assistant, text: answer.text))
+            if let title = answer.title { chat.title = title }
             chat.provider = kind.rawValue
             chat.model = model
             save()
@@ -158,6 +164,32 @@ final class ChatModel: ObservableObject {
             self.error = "Couldn't save the chat: \(error.localizedDescription)"
         }
         loadSaved()
+    }
+
+    /// Answers the next questions with `kind`, as chosen in Settings > Chat.
+    func setProvider(_ kind: SummaryProviderKind) {
+        AppSettings.defaults.set(kind.rawValue, forKey: Keys.chatProvider)
+        objectWillChange.send()
+        refreshNote()
+    }
+
+    /// The model `kind` answers with; empty uses its default.
+    func setModel(_ model: String, for kind: SummaryProviderKind) {
+        AppSettings.defaults.set(model.trimmingCharacters(in: .whitespaces), forKey: Keys.chatModel(kind))
+        objectWillChange.send()
+    }
+
+    /// Shows a conversation as if it were being answered, for snapshots.
+    func setPreview(_ chat: ChatConversation, answering: Bool = false, partial: String = "", status: String? = nil,
+                    started: Date? = nil) {
+        task = nil
+        self.chat = chat
+        isAnswering = answering
+        answerStarted = answering ? (started ?? Date()) : nil
+        self.partial = partial
+        self.status = status
+        error = nil
+        contextNote = nil
     }
 
     /// Updates the note on the calls for the provider chosen now.
