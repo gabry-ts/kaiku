@@ -157,4 +157,27 @@ final class SourceCacheTests: XCTestCase {
         XCTAssertEqual(cache.update(active: ["chrome", "Zoom"], resolve: { $0 == "Zoom" ? "Zoom" : title }),
                        ["chrome": "Google Meet", "Zoom": "Zoom"])
     }
+
+    func testAutoRecordChoicesAreCaseInsensitive() {
+        var rules = SourceRules()
+        rules.setAutoRecord(true, for: "Teams")
+        XCTAssertTrue(rules.autoRecords("teams"))
+        rules.setAutoRecord(false, for: "TEAMS")
+        XCTAssertFalse(rules.autoRecords("Teams"))
+    }
+
+    func testRulesSavedBeforeAutoRecordStillDecode() throws {
+        let old = Data(#"{"saved":{"Zoom":"never"}}"#.utf8)
+        let rules = try JSONDecoder().decode(SourceRules.self, from: old)
+        XCTAssertEqual(rules.rule(for: "Zoom"), .never)
+        XCTAssertEqual(rules.autoRecord, [])
+    }
+
+    func testAutoRecordModes() {
+        XCTAssertFalse(AutoRecordMode.off.records(rule: .always, chosen: true))
+        XCTAssertTrue(AutoRecordMode.all.records(rule: .new, chosen: false))
+        XCTAssertTrue(AutoRecordMode.selected.records(rule: .always, chosen: true))
+        XCTAssertFalse(AutoRecordMode.selected.records(rule: .always, chosen: false))
+        XCTAssertFalse(AutoRecordMode.selected.records(rule: .new, chosen: true))
+    }
 }

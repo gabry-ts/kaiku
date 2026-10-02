@@ -10,6 +10,26 @@ public enum SourceRule: String, Codable, Sendable {
     case new
 }
 
+/// When a detected call starts recording by itself.
+public enum AutoRecordMode: String, CaseIterable, Identifiable, Sendable {
+    /// Never: a notification offers to record.
+    case off
+    /// Every source that isn't ignored; a source never seen before is recorded, then asked about.
+    case all
+    /// Only the sources chosen in Settings > Sources; the others are offered.
+    case selected
+    public var id: String { rawValue }
+
+    /// Whether a call from a source with `rule` starts recording by itself.
+    public func records(rule: SourceRule, chosen: Bool) -> Bool {
+        switch self {
+        case .off: return false
+        case .all: return rule != .never
+        case .selected: return rule == .always && chosen
+        }
+    }
+}
+
 /// Where a call comes from, e.g. "WhatsApp" for both the WhatsApp app and WhatsApp Web.
 public struct CallSource: Equatable, Sendable {
     public let name: String
@@ -201,8 +221,31 @@ public struct DetectedCall: Equatable, Sendable {
 /// Always/Never choices saved per source name (case-insensitive).
 public struct SourceRules: Codable, Equatable, Sendable {
     public private(set) var saved: [String: SourceRule]
+    /// Sources recorded automatically when auto-recording is limited to chosen sources.
+    public private(set) var autoRecord: [String]
 
-    public init(_ saved: [String: SourceRule] = [:]) { self.saved = saved }
+    public init(_ saved: [String: SourceRule] = [:], autoRecord: [String] = []) {
+        self.saved = saved
+        self.autoRecord = autoRecord
+    }
+
+    private enum CodingKeys: String, CodingKey { case saved, autoRecord }
+
+    /// Rules saved before auto-recording per source have no `autoRecord`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        saved = try c.decodeIfPresent([String: SourceRule].self, forKey: .saved) ?? [:]
+        autoRecord = try c.decodeIfPresent([String].self, forKey: .autoRecord) ?? []
+    }
+
+    public func autoRecords(_ source: String) -> Bool {
+        autoRecord.contains { $0.caseInsensitiveCompare(source) == .orderedSame }
+    }
+
+    public mutating func setAutoRecord(_ on: Bool, for source: String) {
+        autoRecord.removeAll { $0.caseInsensitiveCompare(source) == .orderedSame }
+        if on { autoRecord.append(source) }
+    }
 
     /// Saved choice, else the known source's default, else `.new`.
     public func rule(for source: String) -> SourceRule {
