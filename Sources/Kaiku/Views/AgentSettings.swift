@@ -52,7 +52,7 @@ struct AgentSettings: View {
                 }
             }
 
-            SettingsGroup("Permissions", footer: "Agents can always list, read and search your calls. With editing allowed they can also rename calls, change tags and speaker names (which rewrites meta.json and transcript.md), and ask Kaiku to transcribe or summarize a call again with the providers chosen here.") {
+            SettingsGroup("Permissions", footer: "Agents can always list, read and search your calls. With editing allowed they can also rename calls, change tags and speaker names (which rewrites meta.json and transcript.md), and ask Kaiku to transcribe or summarize a call again with the providers chosen here. Agents see the change in new sessions; sessions already open keep the tools they had.") {
                 SwitchRow("Allow agents to edit calls", isOn: $allowEdits)
             }
         }
