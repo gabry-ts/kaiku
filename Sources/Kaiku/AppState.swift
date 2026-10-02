@@ -58,6 +58,8 @@ final class AppState: ObservableObject {
 
     private var recorder: CallRecorder?
     private var currentFolder: RecordingFolder?
+    /// The live session of the recording just stopped, while it hands over its last words.
+    private var liveFinishing: Task<LiveSession.Outcome, Never>?
     private var ticker: Timer?
     private var clock: RecordingClock?
     private var routes: [OutputRoute] = []
@@ -166,9 +168,6 @@ final class AppState: ObservableObject {
             let liveEngine = AppSettings.liveEnabled ? AppSettings.liveEngine?.make() : nil
             if let liveEngine { rec.liveTap = LiveSession.tap(into: liveEngine) }
             try rec.start(micURL: folder.micRawURL, systemURL: folder.systemRawURL, micDevice: micDevice)
-            if let liveEngine {
-                live.start(liveEngine, language: language) { AppState.shared.elapsed(at: Date()) }
-            }
             recorder = rec
             currentFolder = folder
             clock = RecordingClock(start: date)
@@ -196,6 +195,16 @@ final class AppState: ObservableObject {
                 let detail = rec.warnings.joined(separator: "\n")
                 lastErrorDetail = "Recording started with problems:\n\n\(detail)"
                 Notifier.shared.post(.problem, title: "Recording one track only", body: detail, folderPath: nil)
+            }
+            if let liveEngine {
+                // The previous recording's live session may still be handing over its last
+                // words; the engine queues the audio meanwhile.
+                await liveFinishing?.value
+                if recorder === rec {
+                    live.start(liveEngine, language: language) { AppState.shared.elapsed(at: Date()) }
+                } else {
+                    Task { await liveEngine.stop() }
+                }
             }
         } catch {
             fail("Could not start recording. \(error.diagnosticDescription)", folderPath: nil)
@@ -246,24 +255,31 @@ final class AppState: ObservableObject {
         busyFolders.insert(folder.key)
         busyStage[folder.key] = "Saving audio…"
         updateGlyphTimer()
+        // Cleared now: a new recording can start while this one is still being saved.
+        currentFolder = nil
+        clock = nil
+        currentMic = nil
+        isPaused = false
+        currentEvent = nil
+        let finishing = Task { () -> LiveSession.Outcome in
+            let heard = await live.finish()
+            WindowManager.shared.close("live")
+            return heard
+        }
+        liveFinishing = finishing
         Task {
             let result = await Task.detached { () -> Result<Double?, Error> in
                 rec.stop()
                 return Result { try AudioFinalizer.finalize(folder, maxSeconds: keepUntil) }
             }.value
-            let heard = await live.finish()
-            WindowManager.shared.close("live")
+            let heard = await finishing.value
+            if liveFinishing == finishing { liveFinishing = nil }
             if let summary = heard.summary {
                 // Kept apart from summary.md, which is written after transcription.
                 try? ("## Live summary\n\n" + summary + "\n").write(to: folder.liveSummaryURL, atomically: true, encoding: .utf8)
             }
-            currentFolder = nil
-            clock = nil
-            currentMic = nil
-            isPaused = false
-            currentEvent = nil
             finishBusy(folder)
-            phase = .idle
+            if !isRecording { phase = .idle }
             switch result {
             case .success:
                 folder.updateMeta { $0.durationSeconds = duration }

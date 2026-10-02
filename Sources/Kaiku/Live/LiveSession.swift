@@ -58,7 +58,7 @@ final class LiveSession: ObservableObject {
     private static let stopTimeout: Double = 8
 
     /// What a finished session heard.
-    struct Outcome {
+    struct Outcome: Sendable {
         let transcript: LiveTranscript
         /// False when the engine failed or didn't finish in time, so text is missing.
         let complete: Bool
