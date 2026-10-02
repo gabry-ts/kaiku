@@ -14,6 +14,8 @@ final class MeetingMonitor {
     private var cache = SourceCache()
     /// Auto-started recording still waiting for a meaningful call window title.
     private var retitle: (source: String, user: MicUser, until: Date)?
+    /// Processes using audio input at the last change, for the log.
+    private var lastInputs: Set<String> = []
     private let ownPID = getpid()
 
     /// A known call app (native or browser) whose process is capturing audio input.
@@ -35,6 +37,7 @@ final class MeetingMonitor {
             detector = MeetingDetector()
             cache = SourceCache()
             retitle = nil
+            lastInputs = []
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
                 Task { @MainActor in MeetingMonitor.shared.tick() }
             }
@@ -45,6 +48,7 @@ final class MeetingMonitor {
     }
 
     private func tick() {
+        logInputChanges()
         let users = Dictionary(Self.micUsers(excluding: ownPID, custom: AppSettings.customApps).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let sources = cache.update(active: Set(users.keys)) { key in Self.source(of: users[key]!) }
         let rules = AppSettings.sourceRules
@@ -63,6 +67,7 @@ final class MeetingMonitor {
         detector.autoStopAfter = Double(callEnd.autoStopSeconds(delay: AppSettings.detectAutoStopSeconds))
         let now = Date()
         for event in detector.update(active: Set(calls.keys), isRecording: state.isRecording, now: now) {
+            Log.app.info("Call detection: \(String(describing: event), privacy: .public) (recording: \(state.isRecording), when the call ends: \(String(describing: callEnd), privacy: .public), delay: \(self.detector.autoStopAfter) s)")
             switch event {
             case .started(let source):
                 guard var call = calls[source], let owner = owners[source] else { continue }
@@ -75,6 +80,15 @@ final class MeetingMonitor {
             }
         }
         retryTitle(now: now)
+    }
+
+    /// Logs which processes use audio input whenever that changes, so a call that never
+    /// seemed to end can be explained from the log (e.g. a browser keeping the mic open).
+    private func logInputChanges() {
+        let inputs = Set(Self.inputProcessBundleIDs())
+        guard inputs != lastInputs else { return }
+        lastInputs = inputs
+        Log.app.info("Audio input in use by: \(inputs.isEmpty ? "nothing" : inputs.sorted().joined(separator: ", "), privacy: .public)")
     }
 
     /// Some apps name the call window late: re-read it during the first 30 s.
