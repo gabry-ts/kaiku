@@ -255,11 +255,11 @@ enum SelfTest {
             muter.restoreAfterCrash()
         }
         for d in devices {
-            let method = MutePlanner.method(MicMuter.capabilities(d))
+            let method = MutePlanner.method(MicMuter.capabilities(d), style: AppSettings.muteStyle)
             let how: String
             switch method {
             case .mute: how = "mute switch"
-            case .volume(let e): how = "volume to 0 on \(e == [0] ? "master" : "channels \(e.map(String.init).joined(separator: ","))")"
+            case .volume(let e): how = "volume to \(Int(AppSettings.muteVolume * 100))% on \(e == [0] ? "master" : "channels \(e.map(String.init).joined(separator: ","))")"
             case .unsupported: how = "NOT SUPPORTED"
             }
             print("\(d.name) [\(d.transportName)]: \(how); before: mute \(before[d.uid]?.mute.map(String.init) ?? "-"), volumes \(before[d.uid]?.volumes.sorted { $0.key < $1.key }.map { "\($0.key)=\(String(format: "%.2f", $0.value))" }.joined(separator: " ") ?? "-")")
@@ -270,12 +270,12 @@ enum SelfTest {
         for d in devices where !muter.unsupported.contains(d.name) {
             let method = muter.method(for: d.uid) ?? .unsupported
             let now = MicMuter.volumes(d)
-            if MutePlanner.needsReapply(method, mute: MicMuter.muteValue(d.id), volumes: now) {
+            if MutePlanner.needsReapply(method, mute: MicMuter.muteValue(d.id), volumes: now, floor: muter.mutedVolume(for: d.uid)) {
                 print("FAIL: \(d.name) is not silent")
                 ok = false
             }
-            if case .volume = method, MutePlanner.method(MicMuter.capabilities(d)) == .mute {
-                print("\(d.name): mute switch ignored, used volume 0 instead")
+            if case .volume = method, MutePlanner.method(MicMuter.capabilities(d), style: AppSettings.muteStyle) == .mute {
+                print("\(d.name): mute switch ignored, turned the volume down instead")
             }
             if d.isBluetooth && d.isRunningSomewhere && before[d.uid]?.running == false {
                 print("FAIL: \(d.name) started running")
@@ -291,7 +291,8 @@ enum SelfTest {
             }
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
             let reapplied = !MutePlanner.needsReapply(muter.method(for: d.uid) ?? .unsupported,
-                                                      mute: MicMuter.muteValue(d.id), volumes: MicMuter.volumes(d))
+                                                      mute: MicMuter.muteValue(d.id), volumes: MicMuter.volumes(d),
+                                                      floor: muter.mutedVolume(for: d.uid))
             print("Raised by \"another app\" on \(d.name), muted again: \(reapplied ? "YES" : "NO")")
             ok = ok && reapplied
         }

@@ -202,6 +202,8 @@ enum Keys {
     static let bookmarkHotKey = "bookmarkHotKey"
     static let pauseHotKey = "pauseHotKey"
     static let trimSilence = "trimSilence"
+    static let muteStyle = "muteStyle"
+    static let muteVolumePercent = "muteVolumePercent"
     static let trimThresholdDB = "trimThresholdDB"
     static let trimMinSilence = "trimMinSilence"
     static let pricesPerHour = "pricesPerHour"
@@ -288,6 +290,8 @@ enum AppSettings {
             Keys.model(.alibaba): ProviderKind.alibaba.defaultModel,
             Keys.alibabaRegion: AlibabaRegion.singapore.rawValue,
             Keys.trimSilence: TrimSilenceMode.cloud.rawValue,
+            Keys.muteStyle: MuteStyle.volume.rawValue,
+            Keys.muteVolumePercent: 1,
             Keys.trimThresholdDB: -45.0,
             Keys.trimMinSilence: 2.0,
             Keys.autoCleanupEnabled: false,
@@ -406,6 +410,15 @@ enum AppSettings {
         case .cloud: return p.isCloud
         case .always: return true
         }
+    }
+
+    static var muteStyle: MuteStyle {
+        MuteStyle(rawValue: defaults.string(forKey: Keys.muteStyle) ?? "") ?? .volume
+    }
+
+    /// Input volume (0...1) left on microphones muted by turning the volume down.
+    static var muteVolume: Float {
+        Float(min(max(defaults.integer(forKey: Keys.muteVolumePercent), 0), 10)) / 100
     }
 
     static var trimOptions: SilenceTrimmer.Options {
