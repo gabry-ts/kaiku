@@ -17,8 +17,7 @@ struct LiveSummaryTab: View {
                             MissingKeyNote(provider: provider)
                         } else {
                             LiveEmptyState(symbol: "list.bullet.rectangle",
-                                           text: assistant.isSummarizing ? "Writing the summary…" : "The summary starts after the first minute of talk.",
-                                           animated: assistant.isSummarizing)
+                                           text: assistant.isSummarizing ? "Writing the summary…" : "The summary starts after the first minute of talk.")
                         }
                     } else {
                         VStack(alignment: .leading, spacing: PUI.Space.m) {

@@ -20,7 +20,7 @@ struct TranscriptionSettings: View {
             SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so the transcript knows who said what.") {
                 ForEach(ProviderKind.available) { p in
                     ProviderRow(kind: p, selected: p == kind, status: status(of: p), refresh: refresh) {
-                        withAnimation(.snappy) { provider = p.rawValue }
+                        provider = p.rawValue
                     }
                 }
             }
@@ -392,7 +392,8 @@ private struct ProviderTestSection: View {
                         result = nil
                         Task {
                             let r = await ProviderTester.test(kind)
-                            withAnimation { result = r; running = false }
+                            result = r
+                            running = false
                         }
                     } label: {
                         Label("Test \(kind.testName)", systemImage: "checkmark.seal")

@@ -25,8 +25,6 @@ struct OnboardingView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)))
             .id(step)
 
             Divider()
@@ -42,7 +40,7 @@ struct OnboardingView: View {
                 .accessibilityLabel("Step \(step + 1) of \(steps)")
                 Spacer()
                 if step > 0 && step < steps - 1 {
-                    Button("Back") { withAnimation(.snappy) { step -= 1 } }
+                    Button("Back") { step -= 1 }
                         .buttonStyle(SecondaryButtonStyle())
                 }
                 Button(accessibilityOnly ? "Done" : step == steps - 1 ? "Start Using Kaiku" : "Continue") {
@@ -51,7 +49,7 @@ struct OnboardingView: View {
                         AppSettings.defaults.set(true, forKey: Keys.accessibilityAsked)
                         finish()
                     } else {
-                        withAnimation(.snappy) { step += 1 }
+                        step += 1
                     }
                 }
                 .keyboardShortcut(.defaultAction)

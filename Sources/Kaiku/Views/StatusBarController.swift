@@ -91,7 +91,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let hosting = NSHostingController(rootView: AnyView(
             MenuPanel()
                 .environmentObject(AppState.shared)
-                .defaultAppStorage(AppSettings.defaults)))
+                .defaultAppStorage(AppSettings.defaults)
+                .withoutAnimations()))
         hosting.sizingOptions = [.preferredContentSize]
         let popover = NSPopover()
         popover.contentViewController = hosting

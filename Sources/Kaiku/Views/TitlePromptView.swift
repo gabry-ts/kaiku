@@ -33,7 +33,6 @@ struct TitlePromptView: View {
                 Image(systemName: "record.circle.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(AppAccent.kaiku.color)
-                    .symbolEffect(.pulse, options: .repeating)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("New Recording").font(.headline)
                     Text("Name the call so you can find it later.").font(.callout).foregroundStyle(.secondary)

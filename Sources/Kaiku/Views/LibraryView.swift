@@ -730,7 +730,7 @@ private struct RecordingDetail: View {
                     Spacer()
                     if !cancelled {
                         Button(showErrorDetails ? "Hide Details" : "Show Details") {
-                            withAnimation(.snappy) { showErrorDetails.toggle() }
+                            showErrorDetails.toggle()
                         }
                     }
                     Button("Try Again") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
@@ -739,14 +739,12 @@ private struct RecordingDetail: View {
                 }
                 if showErrorDetails, !cancelled, let err = item.meta.error {
                     Text(err).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                        .transition(.opacity)
                 }
             }
             .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
         }
         if let webhookStatus {
             StatusDot(kind: webhookStatus.ok ? .ok : .error, text: webhookStatus.text)
-                .transition(.opacity)
         }
     }
 
@@ -833,7 +831,7 @@ private struct RecordingDetail: View {
             } catch {
                 status = (false, error.localizedDescription)
             }
-            withAnimation { webhookStatus = status }
+            webhookStatus = status
             sendingWebhook = false
         }
     }
@@ -965,7 +963,6 @@ private struct PlayerCard: View {
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
                     .background(AppAccent.kaiku.color.gradient, in: Circle())
-                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.space, modifiers: [])

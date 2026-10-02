@@ -161,7 +161,6 @@ struct MenuPanel: View {
                     }
                 }
             }
-            .transition(.opacity)
         } else if case .error = state.phase {
             errorCard
         } else if case .done(let title) = state.phase {
@@ -392,12 +391,7 @@ private struct MuteCard: View {
                 Text("Mute all microphones").font(PUI.Font.body).foregroundStyle(Ink(scheme).primary)
                 Spacer(minLength: PUI.Space.m)
                 Toggle("Mute all microphones",
-                       isOn: Binding(get: { muter.isMuted }, set: { on in
-                           // The switch animates its change, which would also spring the banner and the panel size.
-                           var t = Transaction()
-                           t.disablesAnimations = true
-                           withTransaction(t) { on ? muter.mute() : muter.unmute() }
-                       }))
+                       isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
                     .toggleStyle(PUISwitchStyle(mini: true, showsLabel: false))
             }
             .padding(.horizontal, PUI.Space.xxs)
@@ -510,7 +504,7 @@ private struct RecentRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { inside in withAnimation(PUI.Motion.hover) { hover = inside } }
+        .onHover { hover = $0 }
     }
 }
 
@@ -527,7 +521,7 @@ struct StatusIcon: View {
             case .recording: RowSymbol("record.circle.fill", color: accent)
             case .paused: RowSymbol("pause.circle.fill", color: ink.orange)
             case .recovered: RowSymbol("arrow.uturn.backward.circle.fill", color: .blue)
-            case .transcribing: RowSymbol("waveform", color: accent).symbolEffect(.variableColor.iterative)
+            case .transcribing: RowSymbol("waveform", color: accent)
             case .done: RowSymbol("text.bubble")
             case .error: RowSymbol("exclamationmark.triangle.fill", color: ink.orange)
             }

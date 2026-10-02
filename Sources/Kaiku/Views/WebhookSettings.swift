@@ -65,7 +65,7 @@ struct WebhookSettings: View {
                                 .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 170)
                             SecureField("Value", text: $h.value, prompt: Text("Bearer …"))
                                 .labelsHidden().textFieldStyle(.roundedBorder)
-                            Button { withAnimation { headers.removeAll { $0.id == h.id } } } label: {
+                            Button { headers.removeAll { $0.id == h.id } } label: {
                                 Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
@@ -75,7 +75,7 @@ struct WebhookSettings: View {
                 }
                 GroupRow {
                     HStack {
-                        Button { withAnimation { headers.append(Header(name: "", value: "")) } } label: {
+                        Button { headers.append(Header(name: "", value: "")) } label: {
                             Label("Add Header", systemImage: "plus").labelStyle(TightLabelStyle())
                         }
                         .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
@@ -121,7 +121,8 @@ struct WebhookSettings: View {
                             testResult = nil
                             Task {
                                 let text = await AppState.shared.testWebhook()
-                                withAnimation { testResult = (text.hasPrefix("HTTP 2"), text); testing = false }
+                                testResult = (text.hasPrefix("HTTP 2"), text)
+                                testing = false
                             }
                         } label: {
                             Label("Send Test", systemImage: "paperplane").labelStyle(TightLabelStyle())
@@ -175,7 +176,7 @@ private struct PlaceholderChip: View {
                 .background(Capsule().fill(hover ? ink.strongFill : ink.fill))
         }
         .buttonStyle(.plain)
-        .onHover { inside in withAnimation(PUI.Motion.hover) { hover = inside } }
+        .onHover { hover = $0 }
     }
 }
 

@@ -135,8 +135,7 @@ struct LiveWindowView: View {
                 VStack(alignment: .leading, spacing: PUI.Space.l) {
                     if live.transcript.isEmpty {
                         LiveEmptyState(symbol: live.isRunning ? "waveform" : "captions.bubble",
-                                       text: live.isRunning ? "Listening…" : "Nothing to show. The live transcript follows the call while you record.",
-                                       animated: live.isRunning)
+                                       text: live.isRunning ? "Listening…" : "Nothing to show. The live transcript follows the call while you record.")
                     } else {
                         LiveLines(lines: live.transcript.lines, font: PUI.Font.body, showsTime: true)
                     }
@@ -156,7 +155,6 @@ struct LiveWindowView: View {
 struct LiveEmptyState<Accessory: View>: View {
     let symbol: String
     let text: String
-    var animated = false
     @ViewBuilder var accessory: Accessory
     @Environment(\.colorScheme) private var scheme
 
@@ -166,7 +164,6 @@ struct LiveEmptyState<Accessory: View>: View {
             Image(systemName: symbol)
                 .font(.system(size: 22, weight: .light))
                 .foregroundStyle(ink.tertiary)
-                .symbolEffect(.variableColor.iterative, isActive: animated)
             Text(text)
                 .font(PUI.Font.callout)
                 .foregroundStyle(ink.secondary)
@@ -181,8 +178,8 @@ struct LiveEmptyState<Accessory: View>: View {
 }
 
 extension LiveEmptyState where Accessory == EmptyView {
-    init(symbol: String, text: String, animated: Bool = false) {
-        self.init(symbol: symbol, text: text, animated: animated) { EmptyView() }
+    init(symbol: String, text: String) {
+        self.init(symbol: symbol, text: text) { EmptyView() }
     }
 }
 

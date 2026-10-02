@@ -64,7 +64,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
             existing.orderFrontRegardless()
             return
         }
-        let hosting = NSHostingController(rootView: LiveWindowView(live: AppState.shared.live))
+        let hosting = NSHostingController(rootView: LiveWindowView(live: AppState.shared.live).withoutAnimations())
         hosting.sizingOptions = []
         let panel = Self.makeLivePanel()
         panel.contentViewController = hosting
@@ -124,7 +124,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
             return
         }
         windows[id]?.close()
-        let hosting = NSHostingController(rootView: view)
+        let hosting = NSHostingController(rootView: view.withoutAnimations())
         if bridgeToolbar { hosting.sceneBridgingOptions = [.toolbars, .title] }
         window.contentViewController = hosting
         window.title = title
@@ -148,4 +148,15 @@ final class WindowManager: NSObject, NSWindowDelegate {
 final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+}
+
+extension View {
+    /// Kaiku shows every change at once: no springs, fades or animated resizes, including
+    /// the ones built into PartitiUI controls.
+    func withoutAnimations() -> some View {
+        transaction { t in
+            t.animation = nil
+            t.disablesAnimations = true
+        }
+    }
 }

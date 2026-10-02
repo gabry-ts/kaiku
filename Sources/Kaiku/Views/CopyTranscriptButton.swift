@@ -10,17 +10,13 @@ struct CopyTranscriptButton: View {
     var body: some View {
         Button {
             copy(folder)
-            withAnimation(.snappy) { copied = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                withAnimation(.snappy) { copied = false }
-            }
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
         } label: {
             if labeled {
                 Label(copied ? "Copied" : "Copy Transcript", systemImage: copied ? "checkmark" : "doc.on.doc")
-                    .contentTransition(.symbolEffect(.replace))
             } else {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .contentTransition(.symbolEffect(.replace))
                     .foregroundStyle(copied ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
             }
         }
