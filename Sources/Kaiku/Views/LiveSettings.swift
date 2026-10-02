@@ -11,6 +11,7 @@ struct LiveSettings: View {
     @AppStorage(Keys.liveAssistEnabled) private var assist = false
     @AppStorage(Keys.summaryProvider) private var summaryProvider = SummaryProviderKind.openAI.rawValue
     @AppStorage(Keys.liveProvider) private var liveProvider = ""
+    @AppStorage(Keys.liveWhisperModel) private var liveWhisperModel = ""
     @State private var summaryModel = ""
     @State private var askModel = ""
     @StateObject private var access = ProviderAccess()
@@ -56,6 +57,18 @@ struct LiveSettings: View {
                         } else {
                             StatusDot(kind: .warning, text: notice)
                         }
+                    }
+                }
+                if kind == .whisper {
+                    SettingsRow(Text("Live model"), subtitle: Text("A light model is enough live and saves battery. Download more in Settings > Transcription.")) {
+                        Picker("Live model", selection: $liveWhisperModel) {
+                            Text("Automatic (Small or Base)").tag("")
+                            ForEach(WhisperModel.catalog.filter(\.isInstalled)) { m in
+                                Text(m.name).tag(m.localURL.path)
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
                     }
                 }
                 SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set in General.")) {
@@ -104,7 +117,7 @@ struct LiveSettings: View {
         .onChange(of: askModel) { _, v in
             AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.liveAskModel(assistKind))
         }
-        .task(id: "\(enabled) \(engine) \(language)") { await refresh() }
+        .task(id: "\(enabled) \(engine) \(language) \(liveWhisperModel)") { await refresh() }
         // The model is fetched when the feature is switched on, never during a call.
         .onChange(of: enabled) { _, on in if on { Task { await refresh(); if case .needsDownload = model.readiness { await download() } } } }
     }

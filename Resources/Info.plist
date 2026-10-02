@@ -30,6 +30,11 @@
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>

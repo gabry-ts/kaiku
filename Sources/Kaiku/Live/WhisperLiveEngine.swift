@@ -3,8 +3,9 @@ import KaikuCore
 import os
 
 /// Live transcription with whisper.cpp, on device. whisper can't take a stream, so the
-/// audio of each track is cut into chunks of about twelve seconds that overlap, and
-/// `whisper-cli` runs on one chunk at a time with low priority. The text shows up some
+/// audio of each track is cut into chunks of about twelve seconds that overlap, and one
+/// `whisper-server`, started with the recording, transcribes one chunk at a time with
+/// low priority: the model is loaded once, not for every chunk. The text shows up some
 /// ten seconds after it was said.
 final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
     static let sampleRate = 16_000
@@ -12,10 +13,14 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
     /// Whether whisper can run, in the words the transcription settings use.
     static var readiness: LiveReadiness {
         switch ProviderKind.whisperCpp.readiness {
-        case .ready: return .ready
-        case .needsModel: return .unavailable("\(ProviderReadiness.needsModel.text). Download a whisper.cpp model in Settings > Transcription.")
+        case .ready, .needsModel: break
         case let other: return .unavailable("\(other.text). Set it up in Settings > Transcription.")
         }
+        guard WhisperServer.detect() != nil else { return .unavailable(WhisperServer.missingHelp) }
+        guard FileManager.default.fileExists(atPath: AppSettings.liveWhisperModel) else {
+            return .unavailable("\(ProviderReadiness.needsModel.text). Download a whisper.cpp model in Settings > Transcription.")
+        }
+        return .ready
     }
 
     let events: AsyncStream<LiveEvent>
@@ -52,7 +57,7 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
     private struct State {
         var tracks: [LiveTrack: Track] = [:]
         var workers: [Task<Void, Never>] = []
-        var process: Process?
+        var server: WhisperServer?
         var stopped = false
         /// Set when the recording can't wait for the chunks left.
         var abandoned = false
@@ -65,8 +70,7 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
     private let wake: AsyncStream<Void>
     private let waker: AsyncStream<Void>.Continuation
     private let state = OSAllocatedUnfairLock(initialState: State())
-    private let binary = AppSettings.whisperPath
-    private let model = AppSettings.whisperModel
+    private let model = AppSettings.liveWhisperModel
 
     init() {
         (events, report) = AsyncStream<LiveEvent>.makeStream()
@@ -79,20 +83,34 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
         feeder.finish()
         waker.finish()
         report.finish()
-        if let dir = state.withLock({ $0.dir }) { try? FileManager.default.removeItem(at: dir) }
+        let (dir, server) = state.withLock { ($0.dir, $0.server) }
+        server?.stop()
+        if let dir { try? FileManager.default.removeItem(at: dir) }
     }
 
     func start(language: String) async throws {
         if case .unavailable(let why) = Self.readiness { throw LiveEngineError(why) }
+        guard let binary = WhisperServer.detect() else { throw LiveEngineError(WhisperServer.missingHelp) }
         let dir = try AudioTools.makeTempDir()
-        Log.transcription.info("Live transcription with whisper.cpp (\((self.model as NSString).lastPathComponent, privacy: .public))")
+        Log.transcription.info("Live transcription with whisper-server (\((self.model as NSString).lastPathComponent, privacy: .public))")
+        let server: WhisperServer
+        do {
+            server = try await WhisperServer.start(binary: binary, model: model, language: language)
+        } catch {
+            try? FileManager.default.removeItem(at: dir)
+            throw error
+        }
         let started = state.withLock { s -> Bool in
             guard !s.stopped else { return false }
             s.dir = dir
+            s.server = server
             s.workers = [Task { await self.cut() }, Task { await self.transcribe(language: language, dir: dir) }]
             return true
         }
-        if !started { try? FileManager.default.removeItem(at: dir) }
+        if !started {
+            server.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
     }
 
     func feed(_ buffer: AVAudioPCMBuffer, track: LiveTrack, at time: Double) {
@@ -112,16 +130,17 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
         } onCancel: {
             self.abandon()
         }
+        state.withLock { $0.server }?.stop()
         if let dir { try? FileManager.default.removeItem(at: dir) }
         report.finish()
     }
 
     private func abandon() {
-        let process = state.withLock { s -> Process? in
+        let server = state.withLock { s -> WhisperServer? in
             s.abandoned = true
-            return s.process
+            return s.server
         }
-        if process?.isRunning == true { process?.terminate() }
+        server?.stop()
     }
 
     /// Converts the audio as it arrives and plans the chunks of each track.
@@ -208,44 +227,19 @@ final class WhisperLiveEngine: LiveEngine, @unchecked Sendable {
     private func run(_ job: Job, language: String, dir: URL) async throws {
         // whisper makes words up when given silence.
         guard !ChunkAudio.isSilent(job.samples, sampleRate: Self.sampleRate) else { return }
-        let wav = dir.appendingPathComponent("chunk.wav")
-        let outBase = dir.appendingPathComponent("chunk")
-        let json = outBase.appendingPathExtension("json")
-        defer {
-            try? FileManager.default.removeItem(at: wav)
-            try? FileManager.default.removeItem(at: json)
+        guard let server = state.withLock({ $0.server }) else { throw LiveEngineError("whisper-server is not running") }
+        let wav = ChunkAudio.wav(job.samples, sampleRate: Self.sampleRate)
+        let seconds = Double(job.samples.count) / Double(Self.sampleRate)
+        let raw: String
+        do {
+            raw = try await server.transcribe(wav: wav, language: language,
+                                               audioContext: WhisperServer.audioContext(seconds: seconds))
+        } catch {
+            if state.withLock({ $0.abandoned }) { throw CancellationError() }
+            throw error
         }
-        try ChunkAudio.wav(job.samples, sampleRate: Self.sampleRate).write(to: wav)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        // Half the cores at most, so the call itself keeps running smoothly.
-        let threads = max(2, ProcessInfo.processInfo.activeProcessorCount / 2)
-        process.arguments = ["-m", model, "-f", wav.path, "-l", language, "-t", String(threads), "-oj", "-of", outBase.path, "-np"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        process.qualityOfService = .utility
-        let status: Int32 = try await withCheckedThrowingContinuation { cont in
-            process.terminationHandler = { cont.resume(returning: $0.terminationStatus) }
-            do {
-                try process.run()
-                state.withLock { $0.process = process }
-            } catch {
-                process.terminationHandler = nil
-                cont.resume(throwing: error)
-            }
-        }
-        let abandoned = state.withLock { s -> Bool in
-            s.process = nil
-            return s.abandoned
-        }
-        if abandoned { throw CancellationError() }
-        // As in the offline provider: whisper can abort at exit after writing its output.
-        guard let data = try? Data(contentsOf: json), let result = try? ResponseParsers.whisperCpp(data) else {
-            throw LiveEngineError("whisper-cli failed (\(status))")
-        }
-        let heard = OverlapText.spoken(result.segments.map(\.text).joined(separator: " "))
+        if state.withLock({ $0.abandoned }) { throw CancellationError() }
+        let heard = OverlapText.spoken(raw)
         state.withLock { $0.tracks[job.track]?.lastText = heard }
         let text = OverlapText.trim(heard, after: job.previous)
         if !text.isEmpty { report.yield(.final(job.track, text, start: job.start, end: job.end)) }

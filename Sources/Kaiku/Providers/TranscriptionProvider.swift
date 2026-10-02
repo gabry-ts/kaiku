@@ -68,6 +68,12 @@ struct MultipartForm {
         body.append("\r\n")
     }
 
+    mutating func file(_ name: String, data: Data, filename: String, mime: String) {
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        body.append("\r\n")
+    }
+
     func finalized() -> Data {
         var d = body
         d.append("--\(boundary)--\r\n")

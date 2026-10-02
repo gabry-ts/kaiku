@@ -89,7 +89,7 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
         case .apple:
             return nil
         case .whisper:
-            return "whisper.cpp transcribes about ten seconds at a time: the text shows some ten seconds after it is said, and the processor is kept busy during the call."
+            return "whisper.cpp transcribes about ten seconds at a time: the text shows some ten seconds after it is said. whisper-server keeps the model loaded during the call; a small model uses far less battery."
         case .openAI, .elevenLabs:
             let name = keyProvider == .openAI ? "OpenAI" : "ElevenLabs"
             return "During the call the audio of both tracks, your microphone and the other people, is sent to \(name) as two streams. \(name) bills both to your account."
@@ -100,7 +100,7 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
     var readyText: String {
         switch self {
         case .apple: return "Ready. The speech model is on this Mac."
-        case .whisper: return "Ready. whisper-cli and its model are on this Mac."
+        case .whisper: return "Ready. whisper-server and its model are on this Mac."
         case .openAI: return "Ready. Uses your OpenAI API key."
         case .elevenLabs: return "Ready. Uses your ElevenLabs API key."
         }

@@ -203,6 +203,8 @@ enum Keys {
     static let pauseHotKey = "pauseHotKey"
     static let trimSilence = "trimSilence"
     static let muteStyle = "muteStyle"
+    /// Model file for live whisper; empty picks a light one.
+    static let liveWhisperModel = "liveWhisperModel"
     static let muteVolumePercent = "muteVolumePercent"
     static let trimThresholdDB = "trimThresholdDB"
     static let trimMinSilence = "trimMinSilence"
@@ -365,6 +367,14 @@ enum AppSettings {
         return WhisperModels.detectWhisperCLI() ?? custom
     }
     static var whisperModel: String { expand(defaults.string(forKey: Keys.whisperModel)) }
+    /// The model for live whisper: the one chosen in Settings > Live, else Small or Base
+    /// when downloaded (light enough to run all call long), else the transcription model.
+    static var liveWhisperModel: String {
+        let chosen = expand(defaults.string(forKey: Keys.liveWhisperModel))
+        if !chosen.isEmpty, FileManager.default.fileExists(atPath: chosen) { return chosen }
+        let light = ["ggml-small.bin", "ggml-base.bin"].map { WhisperModels.directory.appendingPathComponent($0).path }
+        return light.first { FileManager.default.fileExists(atPath: $0) } ?? whisperModel
+    }
     /// "auto", "none" or a Core Audio device UID.
     static var microphone: String { defaults.string(forKey: Keys.microphone) ?? AudioDevices.automatic }
     /// In automatic mode, record from the microphone the call app uses, and follow it.
