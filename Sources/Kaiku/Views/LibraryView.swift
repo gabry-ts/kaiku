@@ -273,6 +273,9 @@ struct LibraryView: View {
         if let sel = state.librarySelection, !ids.contains(sel) {
             state.librarySelection = nil
         }
+        // A filter whose tag or source is gone would hide every call with no way to clear it.
+        if let tagFilter, !Tags.contains(allTags, tagFilter) { self.tagFilter = nil }
+        if let sourceFilter, !Tags.contains(allSources, sourceFilter) { self.sourceFilter = nil }
     }
 }
 
