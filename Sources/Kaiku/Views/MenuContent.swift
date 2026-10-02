@@ -61,7 +61,7 @@ struct MenuPanel: View {
 
     @ViewBuilder private var recordSection: some View {
         if case .recording(let title, _) = state.phase {
-            RecordingCard(title: title, elapsed: state.elapsed, paused: state.isPaused, levels: state.levels) {
+            RecordingCard(title: title, paused: state.isPaused, tick: state.tick, levels: state.levels) {
                 state.stopRecording()
             }
         } else {
@@ -224,8 +224,9 @@ private struct StatusText: View {
 private struct RecordingCard: View {
     @EnvironmentObject var state: AppState
     let title: String
-    let elapsed: TimeInterval
     let paused: Bool
+    /// Observed here so the per-second clock redraws only the card, not the whole panel.
+    @ObservedObject var tick: AppState.Tick
     /// Observed by the meters only, so the rest of the card isn't rebuilt at their rate.
     let levels: AppState.Levels
     let stop: () -> Void
@@ -256,7 +257,7 @@ private struct RecordingCard: View {
                         Text(title).font(PUI.Font.headline).foregroundStyle(ink.primary).lineLimit(2)
                     }
                     Spacer(minLength: PUI.Space.m)
-                    BigNumber(MenuBarGlyph.shortTime(elapsed))
+                    BigNumber(MenuBarGlyph.shortTime(state.elapsed))
                         .lineLimit(1)
                         .fixedSize()
                         .padding(.top, -3)

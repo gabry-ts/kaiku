@@ -15,7 +15,6 @@ final class AppState: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .idle
-    @Published private(set) var now = Date()
     /// Bumped whenever recordings on disk change, so the library can reload.
     @Published private(set) var libraryVersion = 0
     /// Folders currently being transcribed.
@@ -45,6 +44,13 @@ final class AppState: ObservableObject {
 
     /// Live levels, kept separate so only views that show meters re-render at 12 Hz.
     let levels = Levels()
+
+    /// The per-second clock, kept separate so only views that show elapsed time re-render each second.
+    let tick = Tick()
+
+    final class Tick: ObservableObject {
+        @Published var now = Date()
+    }
 
     final class Levels: ObservableObject {
         @Published var mic: Float = 0
@@ -100,7 +106,7 @@ final class AppState: ObservableObject {
     /// Recorded time of the current call (pauses excluded).
     var elapsed: TimeInterval {
         guard case .recording(_, let start) = phase else { return 0 }
-        return (clock ?? RecordingClock(start: start)).recordedTime(at: now)
+        return (clock ?? RecordingClock(start: start)).recordedTime(at: tick.now)
     }
 
     /// The call the last error is about, nil when it is about no call (e.g. no mic access).
@@ -219,7 +225,7 @@ final class AppState: ObservableObject {
             followFailedUID = nil
             AppSettings.lastRecordingFolder = folder.url
             phase = .recording(title: title, start: started)
-            now = started
+            tick.now = started
             startTicker()
             startLevelTimer(rec)
             libraryVersion += 1
@@ -440,7 +446,7 @@ final class AppState: ObservableObject {
         clock = c
         isPaused = c.isPaused
         rec.setPaused(c.isPaused)
-        now = date
+        tick.now = date
         folder.updateMeta {
             $0.pauses = c.pauses
             $0.status = c.isPaused ? .paused : .recording
@@ -1006,13 +1012,13 @@ final class AppState: ObservableObject {
         self.lastErrorDetail = error
         levels.mic = mic
         levels.system = system
-        if case .recording(_, let start) = phase { now = start.addingTimeInterval(754) }
+        if case .recording(_, let start) = phase { tick.now = start.addingTimeInterval(754) }
     }
 
     private func startTicker() {
         ticker?.invalidate()
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            Task { @MainActor in AppState.shared.now = Date() }
+            Task { @MainActor in AppState.shared.tick.now = Date() }
         }
         ticker?.tolerance = 0.1
     }

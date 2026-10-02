@@ -29,7 +29,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         updateImage()
         // objectWillChange fires before the change: read the new values on the next turn.
         AppState.shared.objectWillChange
-            .merge(with: MicMuter.shared.objectWillChange)
+            .merge(with: AppState.shared.tick.objectWillChange, MicMuter.shared.objectWillChange)
             .sink { _ in DispatchQueue.main.async { StatusBarController.shared.updateImage() } }
             .store(in: &cancellables)
     }
