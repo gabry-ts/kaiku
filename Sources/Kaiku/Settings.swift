@@ -288,6 +288,10 @@ enum Keys {
     static let summaryEnabled = "summaryEnabled"
     static let summaryProvider = "summaryProvider"
     static let summaryPrompt = "summaryPrompt"
+    /// Where action items go: the Reminders list and the Linear team and project (ids).
+    static let remindersListID = "remindersListID"
+    static let linearTeamID = "linearTeamID"
+    static let linearProjectID = "linearProjectID"
     static let lastTags = "lastTags"
     static let removeEcho = "removeEcho"
     static let popoverSections = "popoverSections"
