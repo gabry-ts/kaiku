@@ -215,6 +215,8 @@ enum Keys {
     static let detectEndNotify = "detectEndNotify"
     static let detectAutoStopSeconds = "detectAutoStopSeconds"
     static let detectCallEndMode = "detectCallEndMode"
+    static let stopAfterSilenceSeconds = "stopAfterSilenceSeconds"
+    static let maxRecordingSeconds = "maxRecordingSeconds"
     static let detectSourceRules = "detectSourceRules"
     static let detectSeenSources = "detectSeenSources"
     static let detectCustomApps = "detectCustomApps"
@@ -293,6 +295,8 @@ enum AppSettings {
             Keys.detectAutoStart: false,
             Keys.detectAutoStopSeconds: 120,
             Keys.detectCallEndMode: CallEndMode.standard.rawValue,
+            Keys.stopAfterSilenceSeconds: 900,
+            Keys.maxRecordingSeconds: 14400,
             Keys.calendarEnabled: true,
             Keys.calendarIDs: [String](),
             Keys.removeEcho: true,
@@ -445,6 +449,8 @@ enum AppSettings {
     static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
     static var detectAutoStopSeconds: Int { defaults.integer(forKey: Keys.detectAutoStopSeconds) }
     static var callEndMode: CallEndMode { CallEndMode(saved: defaults.string(forKey: Keys.detectCallEndMode)) }
+    static var stopAfterSilenceSeconds: Int { defaults.integer(forKey: Keys.stopAfterSilenceSeconds) }
+    static var maxRecordingSeconds: Int { defaults.integer(forKey: Keys.maxRecordingSeconds) }
 
     /// What happens when a call ends: the chosen mode, unless its question can't be shown.
     @MainActor static var callEndBehavior: CallEndBehavior {

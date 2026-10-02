@@ -66,6 +66,8 @@ final class AppState: ObservableObject {
     /// Fallback title given to the current auto-started recording, replaced if the
     /// call window gets a meaningful title soon after.
     private var autoFallbackTitle: String?
+    /// Stops the current recording when it was clearly left running.
+    private var recordingGuard = RecordingGuard()
 
     var isRecording: Bool { if case .recording = phase { return true } else { return false } }
 
@@ -166,6 +168,7 @@ final class AppState: ObservableObject {
             currentEvent = event
             autoStartedSource = nil
             autoFallbackTitle = nil
+            recordingGuard = RecordingGuard()
             AppSettings.lastRecordingFolder = folder.url
             phase = .recording(title: title, start: date)
             now = date
@@ -780,13 +783,33 @@ final class AppState: ObservableObject {
                 let state = AppState.shared
                 guard let rec = state.recorder else { return }
                 let sys = rec.systemLevel
-                state.levels.mic = rec.micLevel
+                let mic = rec.micLevel
+                state.levels.mic = mic
                 state.levels.system = max(sys, state.levels.system * 0.8)
+                state.checkLeftRunning(micLevel: mic, systemLevel: sys)
                 if sys > 0.002 && !AppSettings.defaults.bool(forKey: Keys.systemAudioVerified) {
                     AppSettings.defaults.set(true, forKey: Keys.systemAudioVerified)
                 }
             }
         }
+    }
+
+    /// Stops the recording after a long silence or at the maximum length.
+    private func checkLeftRunning(micLevel: Float, systemLevel: Float) {
+        guard isRecording else { return }
+        recordingGuard.silenceLimit = Double(AppSettings.stopAfterSilenceSeconds)
+        recordingGuard.maxDuration = Double(AppSettings.maxRecordingSeconds)
+        guard let reason = recordingGuard.update(recorded: elapsed(at: Date()), micLevel: micLevel, systemLevel: systemLevel) else { return }
+        let body: String
+        switch reason {
+        case .silence:
+            body = "No sound for \(RecordingGuard.describe(seconds: AppSettings.stopAfterSilenceSeconds))."
+        case .maxDuration:
+            body = "It reached the maximum length of \(RecordingGuard.describe(seconds: AppSettings.maxRecordingSeconds))."
+        }
+        Log.app.info("Recording stopped by itself: \(body, privacy: .public)")
+        stopRecording()
+        Notifier.shared.post(.recordingStopped, title: "Recording stopped", body: body, folderPath: nil)
     }
 
     private func stopLevelTimer() {

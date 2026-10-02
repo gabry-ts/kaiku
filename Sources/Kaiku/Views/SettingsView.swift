@@ -367,6 +367,7 @@ struct RecordingSettings: View {
 
             MuteSection()
             CallDetectionSection()
+            AutoStopSection()
             CalendarSection()
 
             SettingsGroup("Speaker Names", footer: "Providers that tell voices apart label people Speaker 1, Speaker 2… Rename them for each call in the library.") {
@@ -467,6 +468,43 @@ struct CallDetectionSection: View {
         }
         .onChange(of: detect) { _, _ in MeetingMonitor.shared.apply() }
         .onAppear { permissions.refreshNotifications() }
+    }
+}
+
+// MARK: - Automatic stop
+
+/// Stops recordings left running by mistake, whether started by hand or by call detection.
+struct AutoStopSection: View {
+    @AppStorage(Keys.stopAfterSilenceSeconds) private var silence = 900
+    @AppStorage(Keys.maxRecordingSeconds) private var maxLength = 14400
+
+    var body: some View {
+        SettingsGroup("Forgotten Recordings", footer: "Stops a recording that was left running, even when the call app keeps the microphone open after the call. Silence means no sound from your microphone or from the call. Pauses don't count.") {
+            SettingsRow("Stop after a silence of") {
+                Picker("Stop after a silence of", selection: $silence) {
+                    Text("Never").tag(0)
+                    Text("5 minutes").tag(300)
+                    Text("10 minutes").tag(600)
+                    Text("15 minutes").tag(900)
+                    Text("30 minutes").tag(1800)
+                    Text("1 hour").tag(3600)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            SettingsRow("Stop recordings longer than") {
+                Picker("Stop recordings longer than", selection: $maxLength) {
+                    Text("Never").tag(0)
+                    Text("2 hours").tag(7200)
+                    Text("3 hours").tag(10800)
+                    Text("4 hours").tag(14400)
+                    Text("6 hours").tag(21600)
+                    Text("8 hours").tag(28800)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+        }
     }
 }
 
