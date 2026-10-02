@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Kaiku.app"
 EXEC_NAME="Kaiku"
+# MCP server for local agents, bundled next to the app's executable.
+MCP_NAME="kaiku-mcp"
 
 # Signing identity: a Developer ID Application certificate (codesign resolves it by
 # prefix, so the team name/hash suffix can be omitted), or "-" for an ad-hoc local
@@ -18,11 +20,13 @@ WHISPER_BIN="$ROOT/vendor/whisper-bin"
 # Universal binary (Apple silicon + Intel).
 ARCHS=(--arch arm64 --arch x86_64)
 swift build -c release "${ARCHS[@]}" --product "$EXEC_NAME"
+swift build -c release "${ARCHS[@]}" --product "$MCP_NAME"
 BIN_DIR="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN_DIR/$EXEC_NAME" "$APP/Contents/MacOS/$EXEC_NAME"
+cp "$BIN_DIR/$MCP_NAME" "$APP/Contents/MacOS/$MCP_NAME"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
@@ -64,7 +68,7 @@ fi
 CODESIGN+=(-s "$SIGN_IDENTITY")
 
 # Sign inside-out, never with --deep: Sparkle's XPC services and helper tools first,
-# then the framework itself, then the vendored whisper tools, then the app last.
+# then the framework itself, then the vendored whisper tools and kaiku-mcp, then the app last.
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
@@ -75,6 +79,9 @@ CODESIGN+=(-s "$SIGN_IDENTITY")
 # their Metal shaders at build time, so they need no entitlements beyond the hardened runtime.
 "${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-cli"
 "${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-server"
+
+# kaiku-mcp only reads and writes the recordings folder: no entitlements either.
+"${CODESIGN[@]}" "$APP/Contents/MacOS/$MCP_NAME"
 
 # Every build needs the audio-input and calendars entitlements, or the hardened runtime
 # silently denies microphone and calendar access. Ad-hoc builds also need
@@ -90,5 +97,6 @@ fi
 
 codesign --verify --strict --verbose "$APP"
 lipo -info "$APP/Contents/MacOS/$EXEC_NAME"
+lipo -info "$APP/Contents/MacOS/$MCP_NAME"
 
 echo "Built $APP (signed with \"$SIGN_IDENTITY\")"
