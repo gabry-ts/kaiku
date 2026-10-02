@@ -100,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.recoverOnLaunch()
             AppState.shared.startAutoCleanup()
             MeetingMonitor.shared.apply()
+            SpotlightIndexer.shared.start()
             // kaiku-mcp changed calls on disk.
             _ = DistributedNotificationCenter.default().addObserver(
                 forName: Notification.Name(KaikuAgents.libraryChangedNotification), object: nil, queue: .main) { _ in
@@ -118,6 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             for url in urls { AppState.shared.handleAgentURL(url) }
         }
+    }
+
+    /// A Spotlight result for a call was opened.
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
+        guard let folder = SpotlightIndexer.folder(for: userActivity) else { return false }
+        MainActor.assumeIsolated { AppState.shared.openInLibrary(folder) }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
