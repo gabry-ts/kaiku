@@ -79,4 +79,201 @@ enum CLIProviders {
         }
         return try CLITool.parseOutput(stdout: out, lastMessage: try? String(contentsOf: lastMessage, encoding: .utf8))
     }
+
+    /// Answers a chat question with the tool, which reads the call files itself. `update` gets
+    /// the whole answer so far as `.answer` (Claude Code as it is written, OpenCode a part at a
+    /// time; Codex only answers at the end) and `.tool` while the tool reads.
+    /// - Parameters:
+    ///   - workDir: where the tool runs; an empty temporary folder when nil.
+    ///   - readableDirs: the call folders the tool may read.
+    @MainActor
+    static func chat(_ tool: CLITool, name: String, model: String, prompt: String, workDir: URL?, readableDirs: [String],
+                     timeout: TimeInterval, update: @escaping @MainActor (ChatStreamEvent) -> Void) async throws -> String {
+        guard let binary = await detect(tool) else {
+            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings.")
+        }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kaiku-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let lastMessage = dir.appendingPathComponent("last-message.txt")
+        let runDir = workDir ?? dir
+
+        var env = ProcessInfo.processInfo.environment
+        let dirs = [(binary as NSString).deletingLastPathComponent]
+            + CLITool.searchDirs(home: home, nodeVersions: nodeVersions)
+            + [env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"]
+        env["PATH"] = dirs.joined(separator: ":")
+        let args = tool.chatArguments(model: model, workDir: runDir.path, outputFile: lastMessage.path, readableDirs: readableDirs)
+
+        let reply = ChatReply()
+        let out = try await StreamingProcess.run(binary, args, input: Data(prompt.utf8), workDir: runDir, scratch: dir,
+                                                 environment: env, timeout: timeout) { line in
+            switch tool {
+            case .claude:
+                switch ChatAPI.parseClaudeCode(line) {
+                case .answer(let text):
+                    reply.answer = text
+                    update(.answer(text))
+                case .error(let message):
+                    reply.error = message
+                case .reset:
+                    // A new message after using a tool: what came before was its preamble.
+                    reply.text = ""
+                    update(.answer(""))
+                case .text(let text):
+                    reply.text += text
+                    update(.answer(reply.text))
+                case .tool(let name):
+                    update(.tool(name))
+                case .done, .ignored:
+                    break
+                }
+            case .opencode:
+                let clean = CLITool.stripANSI(line)
+                if ChatAPI.isOpenCodeToolLine(clean) {
+                    update(.tool(""))
+                } else {
+                    reply.text += (reply.text.isEmpty ? "" : "\n") + clean
+                    update(.answer(reply.text.trimmingCharacters(in: .whitespacesAndNewlines)))
+                }
+            case .codex:
+                break
+            }
+        }
+        // Claude Code says why it failed in its last line.
+        if let error = reply.error { throw ProviderError(message: error) }
+        if out.status != 0 { throw ProviderError(message: out.failure) }
+        switch tool {
+        case .claude:
+            return try CLITool.parseOutput(stdout: reply.answer.flatMap { $0.isEmpty ? nil : $0 } ?? reply.text)
+        case .opencode:
+            return try CLITool.parseOutput(stdout: reply.text)
+        case .codex:
+            return try CLITool.parseOutput(stdout: out.stdout, lastMessage: try? String(contentsOf: lastMessage, encoding: .utf8))
+        }
+    }
+
+    /// What a tool answered so far.
+    @MainActor
+    private final class ChatReply {
+        var text = ""
+        var answer: String?
+        var error: String?
+    }
+}
+
+/// Runs a tool and hands over each line of its output as soon as it is printed.
+enum StreamingProcess {
+    struct Output {
+        let stdout: String
+        let status: Int32
+        /// The end of stderr (or of stdout, where some tools print their errors), for a failed run.
+        let failure: String
+    }
+
+    /// Runs `executable` with `input` on stdin and waits for it to exit. Stops it when the
+    /// task is cancelled or after `timeout` seconds.
+    /// - Parameter scratch: a folder for the stdin and stderr files.
+    static func run(_ executable: String, _ args: [String], input: Data, workDir: URL, scratch: URL,
+                    environment: [String: String], timeout: TimeInterval,
+                    line: @escaping @MainActor (String) -> Void) async throws -> Output {
+        guard FileManager.default.isExecutableFile(atPath: executable) else {
+            throw ProviderError(message: "Executable not found: \(executable)")
+        }
+        let inURL = scratch.appendingPathComponent("stdin.txt")
+        let errURL = scratch.appendingPathComponent("stderr.txt")
+        try input.write(to: inURL)
+        FileManager.default.createFile(atPath: errURL.path, contents: nil)
+        let errHandle = try FileHandle(forWritingTo: errURL)
+        defer { try? errHandle.close() }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = args
+        process.currentDirectoryURL = workDir
+        process.environment = environment
+        process.standardInput = try FileHandle(forReadingFrom: inURL)
+        process.standardError = errHandle
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        let exited = ExitStatus()
+        process.terminationHandler = { exited.finish($0.terminationStatus) }
+
+        try process.run()
+        let reader = pipe.fileHandleForReading
+        let lines = AsyncStream<String> { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var buffer = LineBuffer()
+                // Ends when the tool exits and its end of the pipe closes.
+                while true {
+                    let data = reader.availableData
+                    if data.isEmpty { break }
+                    for text in buffer.append(data) { continuation.yield(text) }
+                }
+                if let rest = buffer.flush() { continuation.yield(rest) }
+                continuation.finish()
+            }
+        }
+
+        let timedOut = ExitStatus()
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            guard process.isRunning else { return }
+            timedOut.finish(1)
+            process.terminate()
+        }
+
+        var stdout = ""
+        await withTaskCancellationHandler {
+            for await text in lines {
+                stdout += text + "\n"
+                await line(text)
+            }
+        } onCancel: {
+            if process.isRunning { process.terminate() }
+        }
+        let status = await exited.wait()
+        try Task.checkCancellation()
+
+        let name = (executable as NSString).lastPathComponent
+        if timedOut.isFinished { throw ProviderError(message: "\(name) timed out after \(Int(timeout)) s") }
+        let stderr = (try? String(contentsOf: errURL, encoding: .utf8)) ?? ""
+        let err = (stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? stdout : stderr).suffix(800)
+        return Output(stdout: stdout, status: status, failure: CLITool.stripANSI("\(name) failed (\(status)): \(err)"))
+    }
+
+    /// A value set once from another thread and awaited once.
+    private final class ExitStatus: @unchecked Sendable {
+        private let lock = NSLock()
+        private var status: Int32?
+        private var waiter: CheckedContinuation<Int32, Never>?
+
+        var isFinished: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return status != nil
+        }
+
+        func finish(_ value: Int32) {
+            lock.lock()
+            guard status == nil else { lock.unlock(); return }
+            status = value
+            let waiter = self.waiter
+            self.waiter = nil
+            lock.unlock()
+            waiter?.resume(returning: value)
+        }
+
+        func wait() async -> Int32 {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                if let status {
+                    lock.unlock()
+                    continuation.resume(returning: status)
+                } else {
+                    waiter = continuation
+                    lock.unlock()
+                }
+            }
+        }
+    }
 }

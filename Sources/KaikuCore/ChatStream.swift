@@ -9,7 +9,7 @@ public enum ChatStreamEvent: Equatable, Sendable {
     /// The tool is using one of its tools, e.g. "Read".
     case tool(String)
     /// The whole answer.
-    case final(String)
+    case answer(String)
     case done
     case error(String)
     case ignored
@@ -28,11 +28,12 @@ public enum ChatAPI {
         ] as [String: Any])
     }
 
-    /// OpenAI-compatible `/chat/completions` body (OpenAI, Groq, OpenRouter), streamed.
-    public static func chatCompletionsBody(model: String, system: String, messages: [ChatMessage]) throws -> Data {
+    /// OpenAI-compatible `/chat/completions` body (OpenAI, Groq, OpenRouter), streamed unless
+    /// `stream` is false.
+    public static func chatCompletionsBody(model: String, system: String, messages: [ChatMessage], stream: Bool = true) throws -> Data {
         try JSONSerialization.data(withJSONObject: [
             "model": model,
-            "stream": true,
+            "stream": stream,
             "messages": [["role": "system", "content": system]]
                 + joined(messages).map { ["role": $0.role.rawValue, "content": $0.text] },
         ] as [String: Any])
@@ -98,7 +99,7 @@ public enum ChatAPI {
         case "result":
             let result = event["result"] as? String ?? ""
             if event["is_error"] as? Bool == true { return .error(result.isEmpty ? "Claude Code failed." : result) }
-            return .final(result)
+            return .answer(result)
         default:
             return .ignored
         }

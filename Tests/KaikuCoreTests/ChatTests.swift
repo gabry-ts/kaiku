@@ -208,7 +208,7 @@ final class ChatTests: XCTestCase {
         XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"stream_event","event":{"type":"message_start","message":{}}}"#), .reset)
         XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Yes"}}}"#), .text("Yes"))
         XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{}}]}}"#), .tool("Read"))
-        XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"result","subtype":"success","is_error":false,"result":"Final"}"#), .final("Final"))
+        XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"result","subtype":"success","is_error":false,"result":"Final"}"#), .answer("Final"))
         XCTAssertEqual(ChatAPI.parseClaudeCode(#"{"type":"result","is_error":true,"result":"Not logged in"}"#), .error("Not logged in"))
         XCTAssertEqual(ChatAPI.parseClaudeCode("plain text"), .ignored)
         XCTAssertTrue(ChatAPI.isOpenCodeToolLine("|  Read     Users/me/transcript.md"))
