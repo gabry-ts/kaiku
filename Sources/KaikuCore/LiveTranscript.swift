@@ -80,8 +80,9 @@ public struct LiveTranscript: Equatable, Sendable {
     }
 
     /// The final lines as transcript segments, the form recordings are saved in.
-    public func segments() -> [Segment] {
-        finals.map { Segment(start: $0.start, end: $0.end, speaker: $0.speaker.label, text: $0.text) }
+    /// - Parameters: me, them: the speaker names to use, by default "Me" and "Them".
+    public func segments(me: String = LiveSpeaker.me.label, them: String = LiveSpeaker.them.label) -> [Segment] {
+        finals.map { Segment(start: $0.start, end: $0.end, speaker: $0.speaker == .me ? me : them, text: $0.text) }
     }
 
     public func result(language: String? = nil) -> TranscriptionResult {

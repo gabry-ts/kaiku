@@ -161,7 +161,8 @@ extension TranscriptionJob {
     /// Saves the text heard live as the call's transcript, in place of a provider run.
     /// The call can still be transcribed again from the library.
     static func saveLive(_ transcript: LiveTranscript, folder: RecordingFolder, engine: LiveEngineKind) async throws {
-        var all = transcript.segments()
+        // Same speaker names as a provider run, so colors and webhooks see one set of names.
+        var all = transcript.segments(me: AppSettings.meLabel, them: AppSettings.othersLabel)
         guard !all.isEmpty else { throw ProviderError(message: "The live transcript is empty") }
         // Mixed file for listening; not fatal if it fails.
         let fm = FileManager.default
@@ -174,7 +175,7 @@ extension TranscriptionJob {
         }
         // Drop the other people's voices picked up by the mic from the speakers.
         if AppSettings.removeEcho, let routes = meta.outputRoutes, routes.contains(where: { !$0.isHeadphones }) {
-            all = EchoFilter.markEchoes(all, meLabel: LiveSpeaker.me.label, routes: routes)
+            all = EchoFilter.markEchoes(all, meLabel: AppSettings.meLabel, routes: routes)
         }
         meta.status = .done
         meta.error = nil
