@@ -822,6 +822,46 @@ final class AppState: ObservableObject {
         libraryVersion += 1
     }
 
+    // MARK: Agents
+
+    /// Reloads the library after kaiku-mcp changed calls on disk.
+    func reloadLibrary() {
+        libraryVersion += 1
+    }
+
+    /// Work an agent asked for through kaiku-mcp with a `kaiku://` URL. Only when the user
+    /// allowed agents to edit calls, and only for calls in the recordings folder.
+    func handleAgentURL(_ url: URL) {
+        guard let request = AgentRequest(url: url) else {
+            Log.app.error("Ignored URL: \(url.absoluteString, privacy: .public)")
+            return
+        }
+        guard AppSettings.agentsAllowEdits else {
+            Log.app.error("Ignored an agent request: editing by agents is off")
+            return
+        }
+        guard let folder = CallLibrary(base: AppSettings.baseFolder).folder(atPath: request.folder) else {
+            Log.app.error("Ignored an agent request for a folder outside the recordings folder: \(request.folder, privacy: .public)")
+            return
+        }
+        guard !isBusy(folder) else { return }
+        switch request {
+        case .transcribe:
+            Log.app.info("An agent asked to transcribe \(folder.url.lastPathComponent, privacy: .public)")
+            transcribe(folder: folder, provider: AppSettings.provider)
+        case .summarize:
+            Log.app.info("An agent asked to summarize \(folder.url.lastPathComponent, privacy: .public)")
+            Task {
+                do {
+                    try await generateSummary(folder)
+                } catch {
+                    lastErrorDetail = error.localizedDescription
+                    Notifier.shared.post(.problem, title: "Summary failed", body: error.localizedDescription, folderPath: folder.url.path)
+                }
+            }
+        }
+    }
+
     private func finishBusy(_ folder: RecordingFolder) {
         jobs[folder.key] = nil
         busyFolders.remove(folder.key)

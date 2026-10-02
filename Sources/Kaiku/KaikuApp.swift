@@ -1,4 +1,5 @@
 import AppKit
+import KaikuCore
 import SwiftUI
 
 @main
@@ -98,11 +99,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.recoverOnLaunch()
             AppState.shared.startAutoCleanup()
             MeetingMonitor.shared.apply()
+            // kaiku-mcp changed calls on disk.
+            _ = DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name(KaikuAgents.libraryChangedNotification), object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { AppState.shared.reloadLibrary() }
+            }
             if !AppSettings.defaults.bool(forKey: Keys.onboardingDone) {
                 WindowManager.shared.showOnboarding()
             } else if !AppSettings.defaults.bool(forKey: Keys.accessibilityAsked) && !Permissions.shared.accessibilityGranted {
                 WindowManager.shared.showOnboarding(accessibilityOnly: true)
             }
+        }
+    }
+
+    /// kaiku:// URLs opened by kaiku-mcp for agents.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated {
+            for url in urls { AppState.shared.handleAgentURL(url) }
         }
     }
 
