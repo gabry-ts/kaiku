@@ -60,6 +60,13 @@ final class AppState: ObservableObject {
     private var currentFolder: RecordingFolder?
     /// The live session of the recording just stopped, while it hands over its last words.
     private var liveFinishing: Task<LiveSession.Outcome, Never>?
+    /// The menu bar panel is open: the level meters run fast only while they can be seen.
+    @Published var panelVisible = false {
+        didSet {
+            guard panelVisible != oldValue, let rec = recorder else { return }
+            startLevelTimer(rec)
+        }
+    }
     /// A write error of the current recording was already shown.
     private var writeErrorShown = false
     private var ticker: Timer?
@@ -896,7 +903,9 @@ final class AppState: ObservableObject {
     private func startLevelTimer(_ rec: CallRecorder) {
         levels.hasMic = rec.hasMic
         levelTimer?.invalidate()
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+        // 12.5 Hz for the meters in the open panel, else once a second for the silence guard.
+        let interval = panelVisible ? 0.08 : 1.0
+        levelTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             Task { @MainActor in
                 let state = AppState.shared
                 guard let rec = state.recorder else { return }
@@ -911,6 +920,8 @@ final class AppState: ObservableObject {
                 }
             }
         }
+        // Lets macOS batch the wakeups with others.
+        levelTimer?.tolerance = interval * 0.2
     }
 
     /// Stops the recording after a long silence or at the maximum length.
@@ -970,6 +981,7 @@ final class AppState: ObservableObject {
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             Task { @MainActor in AppState.shared.now = Date() }
         }
+        ticker?.tolerance = 0.1
     }
 
     private func stopTicker() {

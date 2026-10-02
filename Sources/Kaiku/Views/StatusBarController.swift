@@ -71,6 +71,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         button.highlight(true)
+        AppState.shared.panelVisible = true
     }
 
     func togglePanel() {
@@ -85,6 +86,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         lastClose = Date()
         item?.button?.highlight(false)
+        AppState.shared.panelVisible = false
     }
 
     private func makePopover() -> NSPopover {

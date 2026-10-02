@@ -226,9 +226,13 @@ private struct RecordingCard: View {
     let title: String
     let elapsed: TimeInterval
     let paused: Bool
-    @ObservedObject var levels: AppState.Levels
+    /// Observed by the meters only, so the rest of the card isn't rebuilt at their rate.
+    let levels: AppState.Levels
     let stop: () -> Void
     @Environment(\.colorScheme) private var scheme
+    /// Inputs for the switch menu with whether each is safe to record, read once: listing
+    /// them asks Core Audio for every device and every process using input.
+    @State private var inputs: [(device: AudioDevice, harmless: Bool)] = []
 
     var body: some View {
         let ink = Ink(scheme)
@@ -259,27 +263,28 @@ private struct RecordingCard: View {
                         .accessibilityLabel("Recorded time")
                 }
 
-                VStack(spacing: PUI.Space.s) {
-                    meterRow(symbol: "mic.fill", label: "Microphone", level: levels.mic, active: levels.hasMic, ink: ink)
-                    meterRow(symbol: "speaker.wave.2.fill", label: "Call audio", level: levels.system, active: true, ink: ink)
-                }
-                .opacity(paused ? 0.45 : 1)
+                MeterRows(levels: levels, ink: ink)
+                    .opacity(paused ? 0.45 : 1)
 
                 if let mic = state.currentMic {
                     PopUpMenu(mic.name, symbol: "mic") {
-                        ForEach(AudioDevices.inputs()) { d in
+                        ForEach(inputs, id: \.device.id) { entry in
+                            let d = entry.device
                             Button {
                                 state.switchMicrophone(to: d)
                             } label: {
                                 if d.uid == mic.uid {
                                     Label(d.name, systemImage: "checkmark")
                                 } else {
-                                    Text(d.canRecordWithoutHarm ? d.name : "\(d.name) (Bluetooth, lowers call quality)")
+                                    Text(entry.harmless ? d.name : "\(d.name) (Bluetooth, lowers call quality)")
                                 }
                             }
                         }
                     }
                     .help("Switch microphone without stopping")
+                    .onAppear(perform: readInputs)
+                    .onChange(of: mic.uid) { _, _ in readInputs() }
+                    .onChange(of: state.panelVisible) { _, visible in if visible { readInputs() } }
                 }
 
                 LiveControls(live: state.live)
@@ -331,7 +336,24 @@ private struct RecordingCard: View {
         return global.isEmpty ? "\(text) (\(local))" : "\(text) (\(local), or \(global) from any app)"
     }
 
-    private func meterRow(symbol: String, label: String, level: Float, active: Bool, ink: Ink) -> some View {
+    private func readInputs() {
+        inputs = AudioDevices.inputs().map { ($0, $0.canRecordWithoutHarm) }
+    }
+}
+
+/// The two level meters of the recording card.
+private struct MeterRows: View {
+    @ObservedObject var levels: AppState.Levels
+    let ink: Ink
+
+    var body: some View {
+        VStack(spacing: PUI.Space.s) {
+            meterRow(symbol: "mic.fill", label: "Microphone", level: levels.mic, active: levels.hasMic)
+            meterRow(symbol: "speaker.wave.2.fill", label: "Call audio", level: levels.system, active: true)
+        }
+    }
+
+    private func meterRow(symbol: String, label: String, level: Float, active: Bool) -> some View {
         HStack(spacing: PUI.Space.m) {
             RowSymbol(symbol)
             Text(label).font(PUI.Font.callout).foregroundStyle(ink.primary)
