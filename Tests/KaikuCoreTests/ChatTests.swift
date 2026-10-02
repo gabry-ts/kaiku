@@ -41,6 +41,13 @@ final class ChatTests: XCTestCase {
                        + "Done ([Weekly (sync)](kaiku-chat://cite?call=c3fa9b2)).")
     }
 
+    func testLinksCitationsAsChipsWithoutParentheses() {
+        let text = "Billing moves [c3fa9b2 00:03:42; c3fa9b2 00:04:00]."
+        let out = ChatCitations.linked(text, parentheses: false) { _ in "Weekly" }
+        XCTAssertEqual(out, "Billing moves [Weekly · 3:42](kaiku-chat://cite?call=c3fa9b2&t=222) "
+                       + "[Weekly · 4:00](kaiku-chat://cite?call=c3fa9b2&t=240).")
+    }
+
     func testCitationURLRoundTrip() {
         let c = ChatCitation(ref: "c3fa9b2", time: 3723)
         XCTAssertEqual(ChatCitations.citation(from: ChatCitations.url(for: c)), c)
@@ -173,6 +180,28 @@ final class ChatTests: XCTestCase {
         let title = ChatConversation.title(from: long)
         XCTAssertTrue(title.hasSuffix("…"))
         XCTAssertLessThanOrEqual(title.count, ChatConversation.titleLength + 1)
+    }
+
+    func testSplitsTheTitleLineOffTheAnswer() {
+        let split = ChatTitle.split("Ship it [c3fa9b2 00:01:00].\n\n**Title:** \"Billing moves to November.\"\n")
+        XCTAssertEqual(split.text, "Ship it [c3fa9b2 00:01:00].")
+        XCTAssertEqual(split.title, "Billing moves to November")
+        XCTAssertNil(ChatTitle.split("No title here.\n- a point").title)
+        XCTAssertEqual(ChatTitle.split("No title here.").text, "No title here.")
+    }
+
+    func testHidesATitleLineBeingWritten() {
+        XCTAssertEqual(ChatTitle.hidingTitle("Ship it.\n\nTit"), "Ship it.")
+        XCTAssertEqual(ChatTitle.hidingTitle("Ship it.\nTitle: Bill"), "Ship it.")
+        XCTAssertEqual(ChatTitle.hidingTitle("Ship it.\n- The"), "Ship it.\n- The")
+        XCTAssertEqual(ChatTitle.hidingTitle("Ship"), "Ship")
+    }
+
+    func testAsksForATitleOnlyWhenWanted() {
+        let packing = ChatPacking(included: [], omitted: [], truncated: false)
+        XCTAssertFalse(ChatPrompt.apiSystem(packing).contains(ChatTitle.instruction))
+        XCTAssertTrue(ChatPrompt.apiSystem(packing, asksTitle: true).contains(ChatTitle.instruction))
+        XCTAssertTrue(ChatPrompt.cliPrompt(files: [], history: [], question: "Q?", asksTitle: true).contains(ChatTitle.instruction))
     }
 
     // MARK: Streams

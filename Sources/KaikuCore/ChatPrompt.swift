@@ -123,8 +123,9 @@ public enum ChatPrompt {
     }
 
     /// The system prompt for an HTTP API: instructions, then the transcripts that fit.
-    public static func apiSystem(_ packing: ChatPacking) -> String {
+    public static func apiSystem(_ packing: ChatPacking, asksTitle: Bool = false) -> String {
         var text = instructions(readsFiles: false, exampleRef: packing.included.first?.call.ref ?? "c3fa9b2")
+        if asksTitle { text += "\n" + ChatTitle.instruction }
         if !packing.omitted.isEmpty {
             text += "\nOnly the most recent calls fit; these older ones were left out, so say so if the question is about them: "
                 + packing.omitted.map { "\($0.ref) " + describe($0) }.joined(separator: "; ") + "."
@@ -135,8 +136,11 @@ public enum ChatPrompt {
 
     /// The whole prompt for a command-line tool, which keeps nothing between questions:
     /// instructions, the files of each call, the conversation so far and the question.
-    public static func cliPrompt(files: [ChatCallFiles], history: [ChatMessage], question: String) -> String {
-        var text = instructions(readsFiles: true, exampleRef: files.first?.call.ref ?? "c3fa9b2") + "\n\nCalls:\n"
+    public static func cliPrompt(files: [ChatCallFiles], history: [ChatMessage], question: String,
+                                 asksTitle: Bool = false) -> String {
+        var text = instructions(readsFiles: true, exampleRef: files.first?.call.ref ?? "c3fa9b2")
+        if asksTitle { text += "\n" + ChatTitle.instruction }
+        text += "\n\nCalls:\n"
         for f in files {
             text += "- \(f.call.ref): \(describe(f.call))\n  Transcript: \(f.transcriptPath)\n"
             if let summary = f.summaryPath { text += "  Summary: \(summary)\n" }
@@ -235,7 +239,8 @@ public enum ChatCitations {
 
     /// The text with each citation replaced by a Markdown link to `url(for:)`, labelled
     /// with the call title and time. Citations of unknown calls (`title` returns nil) stay as text.
-    public static func linked(_ text: String, title: (String) -> String?) -> String {
+    /// Without `parentheses` the links of a group are only separated by spaces, to be shown as chips.
+    public static func linked(_ text: String, parentheses: Bool = true, title: (String) -> String?) -> String {
         var out = text
         for found in find(text).reversed() {
             let parts = found.citations.map { c -> String in
@@ -244,7 +249,8 @@ public enum ChatCitations {
                 let label = [escape(shortened(name)), time].compactMap { $0 }.joined(separator: " · ")
                 return "[\(label)](\(url(for: c).absoluteString))"
             }
-            out.replaceSubrange(found.range, with: "(" + parts.joined(separator: ", ") + ")")
+            out.replaceSubrange(found.range, with: parentheses ? "(" + parts.joined(separator: ", ") + ")"
+                                                               : parts.joined(separator: " "))
         }
         return out
     }
@@ -289,6 +295,41 @@ public enum ChatCitations {
     /// Brackets would end the link text early.
     private static func escape(_ title: String) -> String {
         title.replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")")
+    }
+}
+
+/// The short title of a chat, asked of the provider along with the first answer.
+public enum ChatTitle {
+    public static let instruction = "After the answer, on a last line of its own, write \"Title: \" followed by a title of 3 to 6 words for this conversation, in the language of the question."
+
+    private static let longest = 60
+
+    /// The answer without its title line, and the title when there is one.
+    public static func split(_ answer: String) -> (text: String, title: String?) {
+        var lines = answer.components(separatedBy: "\n")
+        while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeLast() }
+        guard let last = lines.last, let title = title(in: last) else { return (answer, nil) }
+        lines.removeLast()
+        let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return (text, title.isEmpty ? nil : title)
+    }
+
+    /// The answer so far, without a title line being written at its end.
+    public static func hidingTitle(_ partial: String) -> String {
+        guard let newline = partial.lastIndex(of: "\n") else { return partial }
+        let last = partial[partial.index(after: newline)...].trimmingCharacters(in: .whitespaces)
+        let bare = last.replacingOccurrences(of: "*", with: "").lowercased()
+        guard !bare.isEmpty, "title:".hasPrefix(bare) || bare.hasPrefix("title:") else { return partial }
+        return String(partial[..<newline]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The title in a `Title: …` line, cleaned of Markdown and quotes; nil for other lines.
+    static func title(in line: String) -> String? {
+        let bare = line.replacingOccurrences(of: "*", with: "").trimmingCharacters(in: .whitespaces)
+        guard bare.lowercased().hasPrefix("title:") else { return nil }
+        var title = bare.dropFirst("title:".count).trimmingCharacters(in: .whitespaces)
+        title = title.trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’`_#.").union(.whitespaces))
+        return title.count > longest ? ChatConversation.title(from: title) : title
     }
 }
 
