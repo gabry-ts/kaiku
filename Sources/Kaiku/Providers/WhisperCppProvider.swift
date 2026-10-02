@@ -27,7 +27,8 @@ struct WhisperCppProvider: TranscriptionProvider {
                 "-m", model, "-f", wav.path,
                 "-l", language ?? "auto",
                 "-t", String(threads),
-                "-oj", "-of", outBase.path, "-np",
+                // Full JSON has the tokens of each segment, with their times.
+                "-oj", "-ojf", "-of", outBase.path, "-np",
             ])
         } catch {
             // whisper.cpp can abort while releasing the Metal device at exit, after the

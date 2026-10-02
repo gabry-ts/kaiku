@@ -5,7 +5,7 @@ import KaikuCore
 ///
 /// Response format is picked from the model name:
 /// - `*diarize*` models: `diarized_json` (speaker labels + timestamps)
-/// - `whisper*` models: `verbose_json` (segment timestamps + language)
+/// - `whisper*` models: `verbose_json` (segment and word timestamps + language)
 /// - anything else (e.g. `gpt-4o-transcribe`): `json` (text only, no timestamps),
 ///   so audio is sent in short chunks to keep the transcript roughly time-aligned.
 struct OpenAICompatibleProvider: TranscriptionProvider {
@@ -45,6 +45,11 @@ struct OpenAICompatibleProvider: TranscriptionProvider {
             form.field("model", model)
             form.field("response_format", responseFormat)
             if isDiarizeModel { form.field("chunking_strategy", "auto") }
+            if responseFormat == "verbose_json" {
+                // Word times for the playback highlight; segments must be asked for too.
+                form.field("timestamp_granularities[]", "word")
+                form.field("timestamp_granularities[]", "segment")
+            }
             if let language { form.field("language", language) }
             try form.file("file", url: chunk.url, mime: "audio/mp4")
 
