@@ -45,11 +45,14 @@ enum Shell {
         if let environment { process.environment = environment }
 
         let timedOut = Flag()
+        let cancelled = Flag()
         let status: Int32 = try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { cont in
                 process.terminationHandler = { p in cont.resume(returning: p.terminationStatus) }
                 do { try process.run() } catch { cont.resume(throwing: error); return }
+                // Cancelled between the check above and the launch: onCancel saw no process.
+                if cancelled.value { process.terminate() }
                 if let timeout {
                     DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                         guard process.isRunning else { return }
@@ -59,6 +62,7 @@ enum Shell {
                 }
             }
         } onCancel: {
+            cancelled.value = true
             if process.isRunning { process.terminate() }
         }
         try? outHandle.close()
@@ -104,7 +108,10 @@ enum AudioTools {
             ]
             let out = try AVAudioFile(forWriting: output, settings: settings,
                                       commonFormat: .pcmFormatFloat32, interleaved: false)
-            while let buffer = try reader.read() { try out.write(from: buffer) }
+            while let buffer = try reader.read() {
+                try Task.checkCancellation()
+                try out.write(from: buffer)
+            }
         }
     }
 
@@ -113,7 +120,10 @@ enum AudioTools {
         try await detached {
             let reader = try PCMReader(url: input, sampleRate: speechRate, channels: 1)
             let out = try speechFile(output)
-            while let buffer = try reader.read() { try out.write(from: buffer) }
+            while let buffer = try reader.read() {
+                try Task.checkCancellation()
+                try out.write(from: buffer)
+            }
         }
     }
 
@@ -141,6 +151,7 @@ enum AudioTools {
             }
 
             while let buffer = try reader.read() {
+                try Task.checkCancellation()
                 var start: AVAudioFrameCount = 0
                 while start < buffer.frameLength {
                     if file == nil {
@@ -179,6 +190,7 @@ enum AudioTools {
                 let out = try aacFile(partial, sampleRate: rate, channels: channels, bitRate: 128_000)
                 var micDone = false, systemDone = false
                 while !(micDone && systemDone) {
+                    try Task.checkCancellation()
                     if Task.isCancelled {
                         try? FileManager.default.removeItem(at: partial)
                         throw CancellationError()

@@ -206,7 +206,7 @@ extension TranscriptionJob {
     /// The original audio is never modified. Falls back to the original on any problem
     /// or when there is little to cut.
     static func prepare(_ url: URL, trim: Bool, options: SilenceTrimmer.Options, dir: URL) async -> Input {
-        await Task.detached(priority: .userInitiated) { () -> Input in
+        let work = Task.detached(priority: .userInitiated) { () -> Input in
             let original = AudioFiles.duration(url) ?? 0
             guard trim else { return Input(url: url, map: nil, seconds: original) }
             do {
@@ -230,7 +230,9 @@ extension TranscriptionJob {
                 Log.transcription.error("Silence trimming skipped: \(error.diagnosticDescription, privacy: .public)")
                 return Input(url: url, map: nil, seconds: original)
             }
-        }.value
+        }
+        // Cancelling the job stops the trimming too; the caller checks for cancellation next.
+        return await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
     }
 }
 

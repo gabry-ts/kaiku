@@ -286,6 +286,7 @@ enum AudioFiles {
         var current: Float = 0
         var inWindow = 0
         while input.framePosition < input.length {
+            try Task.checkCancellation()
             try input.read(into: buffer, frameCount: capacity)
             let n = Int(buffer.frameLength)
             if n == 0 { break }
@@ -327,6 +328,7 @@ enum AudioFiles {
             input.framePosition = start
             var remaining = end - start
             while remaining > 0 {
+                try Task.checkCancellation()
                 try input.read(into: buffer, frameCount: AVAudioFrameCount(min(AVAudioFramePosition(chunk), remaining)))
                 if buffer.frameLength == 0 { break }
                 try out.write(from: buffer)
