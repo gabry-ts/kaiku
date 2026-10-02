@@ -127,9 +127,13 @@ final class AppState: ObservableObject {
         WindowManager.shared.showLibrary()
     }
 
-    /// - Parameter call: the detected call being recorded; nil for a manual recording.
+    /// - Parameters:
+    ///   - call: the detected call being recorded; nil for a manual recording.
+    ///   - autoStarted: started by call detection; `fallbackTitle` is the title to replace
+    ///     once the call window has a better one.
     func startRecording(title rawTitle: String, language rawLanguage: String, event: CalendarEventInfo? = nil,
-                        tags rawTags: [String] = [], call: DetectedCall? = nil) async {
+                        tags rawTags: [String] = [], call: DetectedCall? = nil,
+                        autoStarted: Bool = false, fallbackTitle: String? = nil) async {
         guard !isRecording else { return }
         let date = Date()
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -142,6 +146,8 @@ final class AppState: ObservableObject {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
             return
         }
+        // Another start may have won while the permission was asked.
+        guard !isRecording else { return }
 
         do {
             let folder = try makeFolder(date: date, title: title)
@@ -177,8 +183,9 @@ final class AppState: ObservableObject {
             isPaused = false
             bookmarks = []
             currentEvent = event
-            autoStartedSource = nil
-            autoFallbackTitle = nil
+            // Set together with the start, so a manual recording is never taken for an automatic one.
+            autoStartedSource = autoStarted ? call?.source : nil
+            autoFallbackTitle = autoStarted ? fallbackTitle : nil
             recordingGuard = RecordingGuard()
             currentCallSource = call?.source
             micChosenByHand = false
@@ -641,12 +648,10 @@ final class AppState: ObservableObject {
             let date = Date()
             let title = CallTitle.choose(eventTitle: event?.title, windowTitle: call.windowTitle, source: call.source, date: date)
             usedFallback = title == CallTitle.fallback(source: call.source, date: date)
+            let fallbackTitle = usedFallback ? title : nil
             Task {
-                await startRecording(title: title, language: AppSettings.language, event: event, call: call)
-                if isRecording {
-                    autoStartedSource = call.source
-                    autoFallbackTitle = usedFallback ? title : nil
-                }
+                await startRecording(title: title, language: AppSettings.language, event: event, call: call,
+                                     autoStarted: true, fallbackTitle: fallbackTitle)
             }
             if rule == .new {
                 Notifier.shared.postNewSource(call)
