@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds a self-contained, universal (arm64 + x86_64) whisper-cli from a pinned
-# whisper.cpp release: static libraries, Metal library embedded in the binary.
-# Output: vendor/whisper-bin/whisper-cli and vendor/whisper-bin/LICENSE-whisper.cpp
+# Builds self-contained, universal (arm64 + x86_64) whisper-cli and whisper-server from a
+# pinned whisper.cpp release: static libraries, Metal library embedded in the binaries.
+# Output: vendor/whisper-bin/{whisper-cli,whisper-server} and vendor/whisper-bin/LICENSE-whisper.cpp
 set -euo pipefail
 
 WHISPER_TAG="${WHISPER_TAG:-v1.9.4}"
@@ -18,8 +18,8 @@ if ! command -v cmake >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -x "$OUT/whisper-cli" && -f "$STAMP" && "$(cat "$STAMP")" == "$WHISPER_TAG" ]]; then
-    echo "whisper-cli $WHISPER_TAG already built at $OUT/whisper-cli"
+if [[ -x "$OUT/whisper-cli" && -x "$OUT/whisper-server" && -f "$STAMP" && "$(cat "$STAMP")" == "$WHISPER_TAG" ]]; then
+    echo "whisper.cpp $WHISPER_TAG already built at $OUT"
     exit 0
 fi
 
@@ -56,28 +56,27 @@ build_arch() {
         -DGGML_BLAS=ON \
         -DGGML_OPENMP=OFF \
         -DWHISPER_BUILD_TESTS=OFF \
-        -DWHISPER_BUILD_SERVER=OFF \
+        -DWHISPER_BUILD_SERVER=ON \
         -DWHISPER_SDL2=OFF \
         -DWHISPER_CURL=OFF
-    run_logged cmake --build "$dir" --config Release --target whisper-cli -j "$(sysctl -n hw.ncpu)"
+    run_logged cmake --build "$dir" --config Release --target whisper-cli whisper-server -j "$(sysctl -n hw.ncpu)"
 }
 
 # Built per architecture and merged with lipo: ggml selects CPU features per arch.
 echo "Building whisper.cpp $WHISPER_TAG (arm64, x86_64)..."
 build_arch arm64
 build_arch x86_64
-ARM="$VENDOR/whisper-build-arm64/bin/whisper-cli"
-X86="$VENDOR/whisper-build-x86_64/bin/whisper-cli"
-
 mkdir -p "$OUT"
-lipo -create "$ARM" "$X86" -output "$OUT/whisper-cli"
-strip -x "$OUT/whisper-cli"
+# whisper-server keeps the model loaded for live transcription during a call.
+for tool in whisper-cli whisper-server; do
+    lipo -create "$VENDOR/whisper-build-arm64/bin/$tool" "$VENDOR/whisper-build-x86_64/bin/$tool" -output "$OUT/$tool"
+    strip -x "$OUT/$tool"
+    lipo -info "$OUT/$tool"
+    if otool -L "$OUT/$tool" | grep -E '^\s' | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
+        echo "$tool links libraries outside the system" >&2
+        exit 1
+    fi
+done
 cp "$SRC/LICENSE" "$OUT/LICENSE-whisper.cpp"
 echo "$WHISPER_TAG" > "$STAMP"
-
-lipo -info "$OUT/whisper-cli"
-if otool -L "$OUT/whisper-cli" | grep -E '^\s' | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
-    echo "whisper-cli links libraries outside the system" >&2
-    exit 1
-fi
-echo "Built $OUT/whisper-cli ($WHISPER_TAG)"
+echo "Built $OUT/whisper-cli and $OUT/whisper-server ($WHISPER_TAG)"

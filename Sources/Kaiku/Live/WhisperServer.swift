@@ -5,15 +5,17 @@ import KaikuCore
 /// A `whisper-server` kept running for the whole recording: the model is loaded once,
 /// instead of once per chunk as `whisper-cli` would. Listens on 127.0.0.1 only.
 final class WhisperServer: @unchecked Sendable {
-    /// `whisper-server` next to the whisper-cli in use, or in the usual Homebrew locations.
+    /// `whisper-server` next to the whisper-cli in use (the bundled one, or a custom build),
+    /// the bundled one, or one in the usual Homebrew locations.
     static func detect() -> String? {
         let cli = AppSettings.whisperPath
         let sibling = cli.isEmpty ? nil : ((cli as NSString).deletingLastPathComponent as NSString).appendingPathComponent("whisper-server")
-        return ([sibling].compactMap { $0 } + ["/opt/homebrew/bin/whisper-server", "/usr/local/bin/whisper-server"])
+        let bundled = Bundle.main.path(forAuxiliaryExecutable: "whisper-server")
+        return ([sibling, bundled].compactMap { $0 } + ["/opt/homebrew/bin/whisper-server", "/usr/local/bin/whisper-server"])
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static let missingHelp = "whisper-server not found. Install whisper.cpp with Homebrew (brew install whisper-cpp), which includes it."
+    static let missingHelp = "whisper-server not found. It ships with Kaiku; for a custom whisper-cli, put whisper-server next to it or install whisper.cpp with Homebrew (brew install whisper-cpp)."
 
     private let process: Process
     private let base: URL

@@ -41,8 +41,9 @@ if [[ ! -d "$PARTITI_BUNDLE" ]]; then
 fi
 ditto "$PARTITI_BUNDLE" "$APP/Contents/Resources/PartitiUI_PartitiUI.bundle"
 
-# Bundled whisper.cpp command line tool and its license notice.
+# Bundled whisper.cpp command line tool, server (live transcription) and license notice.
 cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
+cp "$WHISPER_BIN/whisper-server" "$APP/Contents/MacOS/whisper-server"
 {
     echo "Kaiku includes whisper.cpp $(cat "$WHISPER_BIN/.tag") (https://github.com/ggml-org/whisper.cpp),"
     echo "distributed under the MIT License:"
@@ -63,16 +64,17 @@ fi
 CODESIGN+=(-s "$SIGN_IDENTITY")
 
 # Sign inside-out, never with --deep: Sparkle's XPC services and helper tools first,
-# then the framework itself, then the vendored whisper-cli, then the app last.
+# then the framework itself, then the vendored whisper tools, then the app last.
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
 "${CODESIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
 "${CODESIGN[@]}" "$SPARKLE"
 
-# whisper-cli only links Apple frameworks (no vendored dylibs) and embeds its Metal
-# shaders at build time, so it needs no entitlements beyond the hardened runtime.
+# whisper-cli and whisper-server only link Apple frameworks (no vendored dylibs) and embed
+# their Metal shaders at build time, so they need no entitlements beyond the hardened runtime.
 "${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-cli"
+"${CODESIGN[@]}" "$APP/Contents/MacOS/whisper-server"
 
 # Every build needs the audio-input and calendars entitlements, or the hardened runtime
 # silently denies microphone and calendar access. Ad-hoc builds also need
