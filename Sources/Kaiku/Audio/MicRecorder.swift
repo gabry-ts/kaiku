@@ -10,8 +10,13 @@ final class MicRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate 
     private var writer: TrackWriter?
     private var recording = false
     private var observers: [NSObjectProtocol] = []
-    /// The device being recorded.
-    private(set) var device: AudioDevice?
+    private let deviceLock = NSLock()
+    private var _device: AudioDevice?
+    /// The device being recorded. Lock-protected: written on the control queue, read from notifications.
+    private(set) var device: AudioDevice? {
+        get { deviceLock.lock(); defer { deviceLock.unlock() }; return _device }
+        set { deviceLock.lock(); defer { deviceLock.unlock() }; _device = newValue }
+    }
     /// Called (on an arbitrary thread) when the device disappears or the session fails.
     var onLost: (() -> Void)?
 
