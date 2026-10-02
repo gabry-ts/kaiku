@@ -305,6 +305,8 @@ enum Keys {
     static let liveProvider = "liveProvider"
     /// Provider of the library chat; unset uses the summary provider.
     static let chatProvider = "chatProvider"
+    /// Set once Smart search was turned on, so new transcriptions are indexed.
+    static let smartSearchUsed = "smartSearchUsed"
     /// Lets agents change calls through kaiku-mcp; reading is always allowed.
     static let agentsAllowEdits = KaikuAgents.allowEditsKey
     /// Address of the Ollama or custom server.

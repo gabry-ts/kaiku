@@ -64,6 +64,9 @@ final class AppState: ObservableObject {
     /// The library chat, kept here so an answer goes on while the library is closed.
     let chat = ChatModel()
 
+    /// Smart search: the passage index of the calls and its results.
+    let semantic = SemanticSearchModel()
+
     private var levelTimer: Timer?
     private var glyphTimer: Timer?
 
@@ -555,6 +558,7 @@ final class AppState: ObservableObject {
                 }
                 try Task.checkCancellation()
                 finishBusy(folder)
+                semantic.indexPending()
                 if !isRecording { phase = .done(title: title) }
                 Notifier.shared.postTranscriptReady(title: title, folderPath: folder.url.path)
                 if AppSettings.webhookEnabled { await sendWebhook(folder) }
