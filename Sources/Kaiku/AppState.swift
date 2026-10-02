@@ -679,7 +679,8 @@ final class AppState: ObservableObject {
     func meetingStarted(_ call: DetectedCall, rule: SourceRule) -> Bool {
         guard !isRecording else { return false }
         var usedFallback = false
-        if AppSettings.detectAutoStart {
+        let chosen = AppSettings.sourceRules.autoRecords(call.source)
+        if AppSettings.autoRecordMode.records(rule: rule, chosen: chosen) {
             let event = CalendarService.shared.currentEvent()
             let date = Date()
             let title = CallTitle.choose(eventTitle: event?.title, windowTitle: call.windowTitle, source: call.source, date: date)
