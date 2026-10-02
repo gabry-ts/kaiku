@@ -94,14 +94,18 @@ public struct CalendarEventInfo: Codable, Equatable, Sendable {
     public var end: Date
     public var attendees: [Attendee]
     public var isAllDay: Bool?
+    /// Your own address in the event, to tell your company's domain from the others.
+    public var ownEmail: String?
 
-    public init(title: String, calendar: String?, start: Date, end: Date, attendees: [Attendee], isAllDay: Bool? = nil) {
+    public init(title: String, calendar: String?, start: Date, end: Date, attendees: [Attendee], isAllDay: Bool? = nil,
+                ownEmail: String? = nil) {
         self.title = title
         self.calendar = calendar
         self.start = start
         self.end = end
         self.attendees = attendees
         self.isAllDay = isAllDay
+        self.ownEmail = ownEmail
     }
 
     /// Picks the event that best matches a call starting `now`: in progress, or starting
@@ -114,6 +118,31 @@ public struct CalendarEventInfo: Codable, Equatable, Sendable {
             }
             .min { abs($0.start.timeIntervalSince(now)) < abs($1.start.timeIntervalSince(now)) }
     }
+
+    /// Email domains of the other companies in the event, in attendee order: your own
+    /// domain, personal mail providers and calendar resources are left out.
+    public var externalDomains: [String] {
+        let own = ownEmail.flatMap(Self.domain)
+        var out: [String] = []
+        for a in attendees {
+            guard let d = a.email.flatMap(Self.domain), d != own, !Self.personalDomains.contains(d),
+                  !d.hasSuffix("calendar.google.com"), !out.contains(d) else { continue }
+            out.append(d)
+        }
+        return out
+    }
+
+    private static func domain(_ email: String) -> String? {
+        let parts = email.trimmingCharacters(in: .whitespaces).lowercased().split(separator: "@")
+        guard parts.count == 2, parts[1].contains(".") else { return nil }
+        return String(parts[1])
+    }
+
+    private static let personalDomains: Set<String> = [
+        "gmail.com", "googlemail.com", "icloud.com", "me.com", "mac.com", "outlook.com", "hotmail.com",
+        "hotmail.it", "live.com", "live.it", "msn.com", "yahoo.com", "yahoo.it", "libero.it", "virgilio.it",
+        "tiscali.it", "alice.it", "tim.it", "fastwebnet.it", "proton.me", "protonmail.com", "aol.com", "gmx.com",
+    ]
 
     /// Attendee names (or email local parts) for speaker suggestions.
     public var attendeeNames: [String] {

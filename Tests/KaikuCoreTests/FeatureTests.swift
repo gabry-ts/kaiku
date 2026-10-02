@@ -282,6 +282,19 @@ final class MeetingDetectionTests: XCTestCase {
         ])
         XCTAssertEqual(withPeople.attendeeNames, ["Anna Rossi", "marco"])
     }
+
+    func testExternalDomains() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let event = CalendarEventInfo(title: "x", calendar: nil, start: now, end: now, attendees: [
+            .init(name: "Colleague", email: "matteo@ShellOnBack.com"), .init(name: "Client", email: "anna@acme.it"),
+            .init(name: nil, email: "marco@gmail.com"), .init(name: "Room", email: "c_123@resource.calendar.google.com"),
+            .init(name: nil, email: "luca@acme.it"), .init(name: nil, email: "bea@partner.io"), .init(name: "No mail", email: nil),
+        ], ownEmail: "luca@shellonback.com")
+        XCTAssertEqual(event.externalDomains, ["acme.it", "partner.io"])
+        var noOwner = event
+        noOwner.ownEmail = nil
+        XCTAssertEqual(noOwner.externalDomains, ["shellonback.com", "acme.it", "partner.io"])
+    }
 }
 
 final class TagsTests: XCTestCase {

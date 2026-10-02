@@ -34,6 +34,8 @@ enum Webhook {
         var summaryMarkdown: String?
         var estimatedCostUSD: Double?
         var tags: [String] = []
+        /// Domains of the other companies invited to the calendar event.
+        var externalDomains: [String] = []
 
         var bookmarksJSON: [[String: Any]] {
             bookmarks.sorted { $0.time < $1.time }.map { ["time": $0.time, "label": $0.label] }
@@ -60,6 +62,7 @@ enum Webhook {
                 "summary_markdown": summaryMarkdown ?? NSNull(),
                 "estimated_cost_usd": estimatedCostUSD ?? NSNull(),
                 "tags": tags,
+                "external_domains": externalDomains,
             ]
             return try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         }
@@ -85,6 +88,8 @@ enum Webhook {
                 "estimated_cost_usd": .raw(estimatedCostUSD.map { String(format: "%.4f", $0) } ?? "null"),
                 "tags": .string(tags.joined(separator: ", ")),
                 "tags_json": .raw(json(tags)),
+                "external_domains": .string(externalDomains.joined(separator: ", ")),
+                "external_domains_json": .raw(json(externalDomains)),
             ]
         }
 
@@ -109,7 +114,8 @@ enum Webhook {
                 bookmarks: meta.bookmarks ?? [],
                 summaryMarkdown: folder.summary,
                 estimatedCostUSD: meta.estimatedCostUSD,
-                tags: meta.tags ?? [])
+                tags: meta.tags ?? [],
+                externalDomains: meta.calendarEvent?.externalDomains ?? [])
         }
 
         static var sample: Payload {
@@ -123,7 +129,8 @@ enum Webhook {
                 bookmarks: [Bookmark(time: 2, label: "Sample bookmark")],
                 summaryMarkdown: "## Summary\nA sample call.",
                 estimatedCostUSD: 0.0065,
-                tags: ["Sample"])
+                tags: ["Sample"],
+                externalDomains: ["example.com"])
         }
     }
 

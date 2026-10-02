@@ -43,13 +43,22 @@ final class CalendarService {
                 calendar: e.calendar?.title,
                 start: e.startDate,
                 end: e.endDate,
-                attendees: (e.attendees ?? []).filter { !$0.isCurrentUser }.map { p in
-                    let email = p.url.absoluteString.lowercased().hasPrefix("mailto:")
-                        ? String(p.url.absoluteString.dropFirst(7)) : nil
-                    return .init(name: p.name, email: email)
-                },
-                isAllDay: e.isAllDay)
+                attendees: (e.attendees ?? []).filter { !$0.isCurrentUser }.map { .init(name: $0.name, email: Self.email(of: $0)) },
+                isAllDay: e.isAllDay,
+                ownEmail: Self.ownEmail(in: e))
         }
         return CalendarEventInfo.best(events, now: now)
+    }
+
+    private static func email(of participant: EKParticipant) -> String? {
+        let url = participant.url.absoluteString
+        return url.lowercased().hasPrefix("mailto:") ? String(url.dropFirst(7)) : nil
+    }
+
+    /// Your address in the event, else the account's when it is named after it (Google, iCloud).
+    private static func ownEmail(in event: EKEvent) -> String? {
+        if let me = event.attendees?.first(where: \.isCurrentUser), let email = email(of: me) { return email }
+        guard let account = event.calendar?.source.title, account.contains("@") else { return nil }
+        return account
     }
 }
