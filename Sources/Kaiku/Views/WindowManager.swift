@@ -137,6 +137,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         if let size { window.setContentSize(size) }
         window.center()
         windows[id] = window
+        updateDockPresence()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
@@ -144,6 +145,17 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, let id = window.identifier?.rawValue else { return }
         if windows[id] === window { windows[id] = nil }
+        updateDockPresence()
+    }
+
+    /// Windows that put Kaiku in the Dock and the app switcher while open, so they are easy to find again.
+    private static let dockWindows: Set<String> = ["settings", "library"]
+
+    /// A Dock icon while one of `dockWindows` is open (when enabled), else menu bar only.
+    func updateDockPresence() {
+        let show = AppSettings.showInDock && windows.keys.contains { Self.dockWindows.contains($0) }
+        let policy: NSApplication.ActivationPolicy = show ? .regular : .accessory
+        if NSApp.activationPolicy() != policy { NSApp.setActivationPolicy(policy) }
     }
 }
 

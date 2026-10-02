@@ -108,6 +108,7 @@ struct SettingsView: View {
 struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
     @AppStorage(Keys.language) private var language = "auto"
+    @AppStorage(Keys.showInDock) private var showInDock = true
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
@@ -140,6 +141,8 @@ struct GeneralSettings: View {
                 if let loginError {
                     GroupRow { StatusDot(kind: .error, text: loginError) }
                 }
+                SwitchRow("Show in the Dock while Settings or the library is open", isOn: $showInDock)
+                    .onChange(of: showInDock) { _, _ in WindowManager.shared.updateDockPresence() }
             }
 
             StorageSection()

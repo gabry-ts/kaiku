@@ -213,6 +213,7 @@ enum Keys {
     static let pauseHotKey = "pauseHotKey"
     static let trimSilence = "trimSilence"
     static let muteStyle = "muteStyle"
+    static let showInDock = "showInDock"
     /// Model file for live whisper; empty picks a light one.
     static let liveWhisperModel = "liveWhisperModel"
     static let muteVolumePercent = "muteVolumePercent"
@@ -308,6 +309,7 @@ enum AppSettings {
             Keys.alibabaRegion: AlibabaRegion.singapore.rawValue,
             Keys.trimSilence: TrimSilenceMode.cloud.rawValue,
             Keys.muteStyle: MuteStyle.volume.rawValue,
+            Keys.showInDock: true,
             Keys.muteVolumePercent: 1,
             Keys.trimThresholdDB: -45.0,
             Keys.trimMinSilence: 2.0,
@@ -438,6 +440,9 @@ enum AppSettings {
         case .always: return true
         }
     }
+
+    /// Kaiku shows in the Dock and the app switcher while Settings or the library is open.
+    static var showInDock: Bool { defaults.bool(forKey: Keys.showInDock) }
 
     static var muteStyle: MuteStyle {
         MuteStyle(rawValue: defaults.string(forKey: Keys.muteStyle) ?? "") ?? .volume
