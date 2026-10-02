@@ -451,7 +451,7 @@ extension MuteStyle {
 
 struct CallDetectionSection: View {
     @AppStorage(Keys.detectCalls) private var detect = true
-    @AppStorage(Keys.detectAutoStart) private var autoStart = false
+    @AppStorage(Keys.autoRecordMode) private var autoRecord = AutoRecordMode.off.rawValue
     @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 120
     @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
     @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
@@ -486,7 +486,15 @@ struct CallDetectionSection: View {
         SettingsGroup("Call Detection", footer: "Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources, and which notifications you get in Notifications.") {
             SwitchRow("Notice when a call starts", isOn: $detect)
             if detect {
-                SwitchRow("Start recording automatically", isOn: $autoStart)
+                SettingsRow(Text("Record automatically"), subtitle: Text("Chosen sources are set in Sources. Calls that aren't recorded by themselves are offered in a notification.")) {
+                    Picker("Record automatically", selection: $autoRecord) {
+                        Text("Off").tag(AutoRecordMode.off.rawValue)
+                        Text("All calls").tag(AutoRecordMode.all.rawValue)
+                        Text("Chosen sources").tag(AutoRecordMode.selected.rawValue)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
                 SettingsRow(Text("When a call ends"), subtitle: Text(modeDetail)) {
                     Picker("When a call ends", selection: $callEnd) {
                         ForEach(CallEndMode.allCases) { Text($0.title).tag($0.rawValue) }

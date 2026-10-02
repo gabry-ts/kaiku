@@ -319,7 +319,6 @@ enum AppSettings {
             Keys.autoCleanupDays: 30,
             Keys.detectCalls: true,
             Keys.detectDisabledApps: [String](),
-            Keys.detectAutoStart: false,
             Keys.detectAutoStopSeconds: 120,
             Keys.detectCallEndMode: CallEndMode.standard.rawValue,
             Keys.stopAfterSilenceSeconds: 900,
@@ -512,7 +511,6 @@ enum AppSettings {
 
     static var detectCalls: Bool { defaults.bool(forKey: Keys.detectCalls) }
     static var detectDisabledApps: [String] { defaults.stringArray(forKey: Keys.detectDisabledApps) ?? [] }
-    static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
     /// When a detected call starts recording by itself; Off until chosen or migrated.
     static var autoRecordMode: AutoRecordMode {
         defaults.string(forKey: Keys.autoRecordMode).flatMap(AutoRecordMode.init(rawValue:)) ?? .off
