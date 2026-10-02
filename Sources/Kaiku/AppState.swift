@@ -592,6 +592,12 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// The recordings folder was changed in Settings.
+    func baseFolderChanged() {
+        libraryVersion += 1
+        recoverOnLaunch()
+    }
+
     func dismissRecovered(_ folder: RecordingFolder) {
         recoveredFolders.removeAll { $0.key == folder.key }
     }
@@ -633,6 +639,8 @@ final class AppState: ObservableObject {
         var bytes: Int64 = 0
         for t in targets {
             let folder = RecordingFolder(url: URL(fileURLWithPath: t.id, isDirectory: true))
+            // Checked again: a call may have started transcribing since the list was made.
+            guard !isBusy(folder) else { continue }
             do {
                 try trashAudio(folder)
                 count += 1

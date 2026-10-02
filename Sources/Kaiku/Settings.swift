@@ -477,13 +477,19 @@ enum AppSettings {
                              callEndedNotificationEnabled: notificationShown(.callEnded))
     }
 
+    /// Posted when the source rules or the seen sources change, so an open Sources pane reloads.
+    static let sourcesChanged = Notification.Name("kaiku.sourcesChanged")
+
     /// Always/Never choice per call source.
     static var sourceRules: SourceRules {
         get {
             defaults.data(forKey: Keys.detectSourceRules)
                 .flatMap { try? JSONDecoder().decode(SourceRules.self, from: $0) } ?? SourceRules()
         }
-        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectSourceRules) }
+        set {
+            defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectSourceRules)
+            NotificationCenter.default.post(name: sourcesChanged, object: nil)
+        }
     }
 
     /// Apps added by hand in Settings > Sources.
@@ -517,6 +523,7 @@ enum AppSettings {
         let seen = seenSources
         guard !seen.contains(where: { $0.caseInsensitiveCompare(source) == .orderedSame }) else { return }
         defaults.set(seen + [source], forKey: Keys.detectSeenSources)
+        NotificationCenter.default.post(name: sourcesChanged, object: nil)
     }
 
     static var autoCleanupEnabled: Bool { defaults.bool(forKey: Keys.autoCleanupEnabled) }

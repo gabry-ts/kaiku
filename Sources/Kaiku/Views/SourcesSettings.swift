@@ -77,6 +77,8 @@ struct SourcesSettings: View {
             }
         }
         .onAppear(perform: load)
+        // A rule set from a notification ("Never") or a newly seen source while this is open.
+        .onReceive(NotificationCenter.default.publisher(for: AppSettings.sourcesChanged)) { _ in load() }
         .sheet(isPresented: $addingWebsite) {
             AddWebsiteSheet(existing: sources + removed) { site in addWebsite(site) }
                 .puiAccent(.kaiku)
@@ -109,10 +111,11 @@ struct SourcesSettings: View {
     }
 
     private func save() {
-        AppSettings.sourceRules = rules
         AppSettings.customApps = custom
         AppSettings.customWebsites = sites
         AppSettings.removedSources = removed
+        // Last: it reloads this pane, which must find everything else already saved.
+        AppSettings.sourceRules = rules
         refresh()
     }
 

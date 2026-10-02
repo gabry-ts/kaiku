@@ -155,7 +155,11 @@ struct GeneralSettings: View {
         panel.canCreateDirectories = true
         panel.prompt = "Use Folder"
         panel.directoryURL = URL(fileURLWithPath: baseFolder)
-        if panel.runModal() == .OK, let url = panel.url { baseFolder = url.path }
+        if panel.runModal() == .OK, let url = panel.url {
+            baseFolder = url.path
+            // Show the calls of the new folder, and recover any left unfinished there.
+            AppState.shared.baseFolderChanged()
+        }
     }
 }
 
@@ -562,6 +566,8 @@ struct CalendarSection: View {
                                         set: { on in
                                             var set = chosen.isEmpty ? Set(calendars.map(\.id)) : chosen
                                             if on { set.insert(cal.id) } else { set.remove(cal.id) }
+                                            // Empty means "all": the last calendar can't be unchecked.
+                                            guard !set.isEmpty else { return }
                                             chosen = set.count == calendars.count ? [] : set
                                             AppSettings.defaults.set(Array(chosen).sorted(), forKey: Keys.calendarIDs)
                                         })) {
