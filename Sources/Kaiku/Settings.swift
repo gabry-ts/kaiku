@@ -115,6 +115,16 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Tokens of transcript a chat sends at most, kept well under the model's context.
+    var chatContextTokens: Int {
+        switch self {
+        case .openAI: return 120_000
+        case .anthropic: return 150_000
+        case .groq, .openRouter: return 100_000
+        case .claudeCode, .codex, .opencode: return 0
+        }
+    }
+
     /// True when the key is entered with the summary settings, not shared with transcription.
     var hasOwnKey: Bool { self == .anthropic || self == .openRouter }
 
@@ -245,10 +255,13 @@ enum Keys {
     static let liveAssistEnabled = "liveAssistEnabled"
     /// Provider of the live Summary and Ask tabs; unset uses the summary provider.
     static let liveProvider = "liveProvider"
+    /// Provider of the library chat; unset uses the summary provider.
+    static let chatProvider = "chatProvider"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
     static func liveAskModel(_ p: SummaryProviderKind) -> String { "liveAskModel.\(p.rawValue)" }
+    static func chatModel(_ p: SummaryProviderKind) -> String { "chatModel.\(p.rawValue)" }
     static func cliPath(_ t: CLITool) -> String { "cliPath.\(t.rawValue)" }
     static func cliDetected(_ t: CLITool) -> String { "cliDetected.\(t.rawValue)" }
 }
@@ -321,7 +334,8 @@ enum AppSettings {
             Keys.liveAssistEnabled: false,
         ])
         for p in SummaryProviderKind.allCases {
-            defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel])
+            defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,
+                                         Keys.chatModel(p): p.defaultModel])
         }
     }
 
@@ -468,6 +482,16 @@ enum AppSettings {
     static func liveAskModel(for p: SummaryProviderKind) -> String {
         nonEmpty(defaults.string(forKey: Keys.liveAskModel(p)), p.defaultModel)
     }
+
+    /// The library chat, with its own provider.
+    static var chatProvider: SummaryProviderKind {
+        SummaryProviderKind(rawValue: defaults.string(forKey: Keys.chatProvider) ?? "") ?? summaryProvider
+    }
+    static func chatModel(for p: SummaryProviderKind) -> String {
+        nonEmpty(defaults.string(forKey: Keys.chatModel(p)), p.defaultModel)
+    }
+    /// Where chats are saved, one JSON file each. Not a call folder: it has no meta.json.
+    static var chatsFolder: URL { baseFolder.appendingPathComponent("Chats", isDirectory: true) }
 
     static var calendarEnabled: Bool { defaults.bool(forKey: Keys.calendarEnabled) }
     /// Calendar identifiers to use; empty means all.
