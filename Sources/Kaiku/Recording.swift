@@ -130,7 +130,10 @@ struct RecordingFolder: Identifiable, Hashable {
     }
 
     func removePartials() {
-        for url in [micPartialURL, systemPartialURL] { try? FileManager.default.removeItem(at: url) }
+        for url in [micPartialURL, systemPartialURL] {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("chunks.json"))
+        }
     }
 
     func updateMeta(_ change: (inout RecordingMeta) -> Void) {

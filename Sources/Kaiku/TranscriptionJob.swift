@@ -146,7 +146,11 @@ enum TranscriptionJob {
         let input = await prepare(url, trim: trim, options: options, dir: dir)
         try Task.checkCancellation()
         guard !input.skip else { return TrackCache(key: key, segments: [], detectedLanguage: nil, seconds: 0) }
-        let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
+        // Chunked providers save each finished chunk, so a retry only sends what failed.
+        let chunkCache = ChunkCache(url: cache.deletingPathExtension().appendingPathExtension("chunks.json"), key: key)
+        let r = try await ChunkCache.$current.withValue(chunkCache) {
+            try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
+        }
         let result = TrackCache(key: key, segments: input.remap(r.segments), detectedLanguage: r.detectedLanguage, seconds: input.seconds)
         try? JSONEncoder().encode(result).write(to: cache, options: .atomic)
         return result

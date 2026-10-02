@@ -53,7 +53,13 @@ struct AlibabaProvider: TranscriptionProvider {
         let url = URL(string: "https://\(region.host)/compatible-mode/v1/chat/completions")!
         var segments: [Segment] = []
         var detected: String?
-        for chunk in chunks {
+        let cache = ChunkCache.current
+        for (index, chunk) in chunks.enumerated() {
+            if let saved = cache?.result(index: index, offset: chunk.offset) {
+                segments += saved.segments
+                detected = detected ?? saved.detectedLanguage
+                continue
+            }
             let audio = "data:audio/mp4;base64," + (try Data(contentsOf: chunk.url)).base64EncodedString()
             var body: [String: Any] = [
                 "model": model,
@@ -64,6 +70,7 @@ struct AlibabaProvider: TranscriptionProvider {
             let data = try await HTTP.post(url, body: try JSONSerialization.data(withJSONObject: body),
                                            contentType: "application/json", headers: auth)
             let result = try ResponseParsers.alibabaChat(data, offset: chunk.offset, chunkDuration: chunk.duration)
+            cache?.save(result, index: index, offset: chunk.offset)
             segments += result.segments
             detected = detected ?? result.detectedLanguage
         }

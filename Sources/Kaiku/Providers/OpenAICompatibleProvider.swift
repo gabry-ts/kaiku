@@ -34,7 +34,13 @@ struct OpenAICompatibleProvider: TranscriptionProvider {
         let chunks = try await AudioTools.chunks(fileURL, seconds: chunkSeconds, dir: dir)
         var segments: [Segment] = []
         var detected: String?
+        let cache = ChunkCache.current
         for (index, chunk) in chunks.enumerated() {
+            if let saved = cache?.result(index: index, offset: chunk.offset) {
+                segments += saved.segments
+                detected = detected ?? saved.detectedLanguage
+                continue
+            }
             var form = MultipartForm()
             form.field("model", model)
             form.field("response_format", responseFormat)
@@ -55,6 +61,7 @@ struct OpenAICompatibleProvider: TranscriptionProvider {
                 }
             }
             if !diarize { result.segments = result.segments.map { var c = $0; c.speaker = nil; return c } }
+            cache?.save(result, index: index, offset: chunk.offset)
             segments += result.segments
             detected = detected ?? result.detectedLanguage
         }
