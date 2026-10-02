@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import KaikuCore
 
 struct ProcessError: LocalizedError {
     let message: String
@@ -175,39 +176,70 @@ enum AudioTools {
     }
 
     /// Mixes mic and system tracks into one AAC file for listening. The result is as
-    /// long as the longer track; samples are summed without normalization.
+    /// long as the longer track. Each track is first brought to the same loudness (measured
+    /// on its voiced parts), and the mix is scaled down if it would peak above the ceiling.
+    /// Three streaming passes over the files: loudness, mix peak, write.
     static func mix(mic: URL, system: URL, output: URL) async throws {
         try await detached {
             let a = try AVAudioFile(forReading: mic).processingFormat
             let b = try AVAudioFile(forReading: system).processingFormat
             let rate = max(a.sampleRate, b.sampleRate)
             let channels = min(max(a.channelCount, b.channelCount), 2)
-            let micReader = try PCMReader(url: mic, sampleRate: rate, channels: channels)
-            let systemReader = try PCMReader(url: system, sampleRate: rate, channels: channels)
             let partial = output.deletingPathExtension().appendingPathExtension("partial.m4a")
             try? FileManager.default.removeItem(at: partial)
             do {
-                let out = try aacFile(partial, sampleRate: rate, channels: channels, bitRate: 128_000)
-                var micDone = false, systemDone = false
-                while !(micDone && systemDone) {
-                    try Task.checkCancellation()
-                    if Task.isCancelled {
-                        try? FileManager.default.removeItem(at: partial)
-                        throw CancellationError()
+                // Pass 1: loudness of each track.
+                var micMeter = LoudnessMeter(sampleRate: rate), systemMeter = LoudnessMeter(sampleRate: rate)
+                try forEachBlock(mic: mic, system: system, rate: rate, channels: channels) { m, s in
+                    if let m { micMeter.add(channels: (0..<Int(m.format.channelCount)).map { UnsafePointer(m.floatChannelData![$0]) }, count: Int(m.frameLength)) }
+                    if let s { systemMeter.add(channels: (0..<Int(s.format.channelCount)).map { UnsafePointer(s.floatChannelData![$0]) }, count: Int(s.frameLength)) }
+                }
+                let micGain = LoudnessMatch.gain(forLoudness: micMeter.loudness)
+                let systemGain = LoudnessMatch.gain(forLoudness: systemMeter.loudness)
+
+                // Pass 2: peak of the gained mix.
+                var peak: Float = 0
+                try forEachBlock(mic: mic, system: system, rate: rate, channels: channels) { m, s in
+                    guard let sum = PCMReader.sum(m, s, gainA: micGain, gainB: systemGain) else { return }
+                    for c in 0..<Int(sum.format.channelCount) {
+                        let p = sum.floatChannelData![c]
+                        for i in 0..<Int(sum.frameLength) { peak = max(peak, abs(p[i])) }
                     }
-                    let m = micDone ? nil : try micReader.read()
-                    let s = systemDone ? nil : try systemReader.read()
-                    if m == nil { micDone = true }
-                    if s == nil { systemDone = true }
-                    guard let sum = PCMReader.sum(m, s) else { continue }
+                }
+                let scale = LoudnessMatch.limiterScale(peak: peak)
+
+                // Pass 3: write.
+                let out = try aacFile(partial, sampleRate: rate, channels: channels, bitRate: 128_000)
+                try forEachBlock(mic: mic, system: system, rate: rate, channels: channels) { m, s in
+                    guard let sum = PCMReader.sum(m, s, gainA: micGain * scale, gainB: systemGain * scale) else { return }
                     try out.write(from: sum)
                 }
+            } catch {
+                try? FileManager.default.removeItem(at: partial)
+                throw error
             }
             if FileManager.default.fileExists(atPath: output.path) {
                 _ = try FileManager.default.replaceItemAt(output, withItemAt: partial)
             } else {
                 try FileManager.default.moveItem(at: partial, to: output)
             }
+        }
+    }
+
+    /// Reads both tracks in lockstep, calling `body` per block (nil for a track that has ended).
+    private static func forEachBlock(mic: URL, system: URL, rate: Double, channels: AVAudioChannelCount,
+                                     _ body: (AVAudioPCMBuffer?, AVAudioPCMBuffer?) throws -> Void) throws {
+        let micReader = try PCMReader(url: mic, sampleRate: rate, channels: channels)
+        let systemReader = try PCMReader(url: system, sampleRate: rate, channels: channels)
+        var micDone = false, systemDone = false
+        while !(micDone && systemDone) {
+            try Task.checkCancellation()
+            let m = micDone ? nil : try micReader.read()
+            let s = systemDone ? nil : try systemReader.read()
+            if m == nil { micDone = true }
+            if s == nil { systemDone = true }
+            if m == nil && s == nil { break }
+            try body(m, s)
         }
     }
 
@@ -329,10 +361,11 @@ final class PCMReader {
         return out.frameLength > 0 ? out : (ended ? nil : try read())
     }
 
-    /// Sample-wise sum of two buffers in the same format; the result is as long as the longer one.
-    static func sum(_ a: AVAudioPCMBuffer?, _ b: AVAudioPCMBuffer?) -> AVAudioPCMBuffer? {
-        guard let first = a ?? b else { return nil }
-        guard let a, let b else { return first }
+    /// Sample-wise sum of two buffers in the same format, each scaled by its gain; the result
+    /// is as long as the longer one.
+    static func sum(_ a: AVAudioPCMBuffer?, _ b: AVAudioPCMBuffer?, gainA: Float = 1, gainB: Float = 1) -> AVAudioPCMBuffer? {
+        guard a != nil || b != nil else { return nil }
+        guard let a, let b else { return scaled(a ?? b!, by: a != nil ? gainA : gainB) }
         let n = max(a.frameLength, b.frameLength)
         guard let out = AVAudioPCMBuffer(pcmFormat: a.format, frameCapacity: n) else { return nil }
         out.frameLength = n
@@ -341,8 +374,21 @@ final class PCMReader {
             for i in 0..<Int(n) {
                 let x = i < Int(a.frameLength) ? a.floatChannelData![c][i] : 0
                 let y = i < Int(b.frameLength) ? b.floatChannelData![c][i] : 0
-                o[i] = x + y
+                o[i] = x * gainA + y * gainB
             }
+        }
+        return out
+    }
+}
+
+extension PCMReader {
+    /// A copy of `buffer` multiplied by `gain`.
+    fileprivate static func scaled(_ buffer: AVAudioPCMBuffer, by gain: Float) -> AVAudioPCMBuffer? {
+        guard let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else { return nil }
+        out.frameLength = buffer.frameLength
+        for c in 0..<Int(buffer.format.channelCount) {
+            let src = buffer.floatChannelData![c], dst = out.floatChannelData![c]
+            for i in 0..<Int(buffer.frameLength) { dst[i] = src[i] * gain }
         }
         return out
     }
