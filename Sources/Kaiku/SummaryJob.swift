@@ -39,17 +39,13 @@ enum SummaryJob {
                 body: try SummaryAPI.anthropicBody(model: model, prompt: prompt, maxTokens: maxTokens),
                 headers: ["x-api-key": key, "anthropic-version": "2023-06-01"], timeout: timeout)
             return try SummaryAPI.parseAnthropic(data)
-        case .openAI, .groq, .openRouter:
-            let base: String
-            switch kind {
-            case .openAI: base = "https://api.openai.com/v1"
-            case .groq: base = "https://api.groq.com/openai/v1"
-            default: base = "https://openrouter.ai/api/v1"
-            }
+        case .openAI, .groq, .openRouter, .ollama, .custom:
+            guard let base = kind.chatCompletionsBase else { throw ProviderError(message: "No \(kind.displayName) server address yet.") }
             let data = try await HTTP.postJSON(
                 URL(string: base + "/chat/completions")!,
                 body: try SummaryAPI.chatCompletionsBody(model: model, prompt: prompt),
-                headers: ["Authorization": "Bearer \(key)"], timeout: timeout)
+                // Local servers usually take no key.
+                headers: key.isEmpty ? [:] : ["Authorization": "Bearer \(key)"], timeout: timeout)
             return try SummaryAPI.parseChatCompletions(data)
         case .claudeCode, .codex, .opencode:
             throw ProviderError(message: "\(kind.displayName) runs as a command-line tool.")

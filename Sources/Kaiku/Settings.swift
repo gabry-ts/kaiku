@@ -46,7 +46,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
 
 /// Where the optional summary is generated.
 enum SummaryProviderKind: String, CaseIterable, Identifiable {
-    case openAI, anthropic, groq, openRouter, claudeCode, codex, opencode
+    case openAI, anthropic, groq, openRouter, claudeCode, codex, opencode, ollama, custom
     var id: String { rawValue }
 
     var displayName: String {
@@ -58,6 +58,41 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
         case .opencode: return "OpenCode"
+        case .ollama: return "Ollama"
+        case .custom: return "Custom (OpenAI-compatible)"
+        }
+    }
+
+    /// Runs on a server the user controls, usually on this Mac: Ollama or an OpenAI-compatible one.
+    var isLocal: Bool { self == .ollama || self == .custom }
+
+    /// Address of the local server as typed in Settings, empty when unset.
+    var baseURL: String {
+        guard isLocal else { return "" }
+        return AppSettings.defaults.string(forKey: Keys.baseURL(self)) ?? ""
+    }
+
+    /// Hint for the address field.
+    var baseURLPlaceholder: String { self == .ollama ? LocalLLM.ollamaDefaultBase : "http://localhost:1234/v1" }
+
+    /// Base of the OpenAI-style `/chat/completions` endpoint, nil for Anthropic, CLIs and a custom server without an address.
+    var chatCompletionsBase: String? {
+        switch self {
+        case .openAI: return "https://api.openai.com/v1"
+        case .groq: return "https://api.groq.com/openai/v1"
+        case .openRouter: return "https://openrouter.ai/api/v1"
+        case .ollama: return LocalLLM.ollamaChatBase(baseURL)
+        case .custom: return LocalLLM.customChatBase(baseURL)
+        case .anthropic, .claudeCode, .codex, .opencode: return nil
+        }
+    }
+
+    /// A quick GET that answers whenever the local server is running.
+    var probeURL: URL? {
+        switch self {
+        case .ollama: return LocalLLM.ollamaTagsURL(baseURL)
+        case .custom: return LocalLLM.customModelsURL(baseURL)
+        default: return nil
         }
     }
 
@@ -77,12 +112,12 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .openAI: return "gpt-5-mini"
         case .anthropic: return "claude-sonnet-5"
         case .groq: return "openai/gpt-oss-120b"
-        case .openRouter, .claudeCode, .codex, .opencode: return ""
+        case .openRouter, .claudeCode, .codex, .opencode, .ollama, .custom: return ""
         }
     }
 
     /// True when an empty model can't be sent.
-    var requiresModel: Bool { self == .openRouter }
+    var requiresModel: Bool { self == .openRouter || isLocal }
 
     /// Shown in the model field when it's empty.
     var modelPlaceholder: String {
@@ -97,12 +132,14 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .claudeCode: return "Empty uses the CLI default."
         case .codex: return "Empty uses ~/.codex/config.toml."
         case .opencode: return "provider/model; empty uses the CLI default."
+        case .ollama: return "Required, as listed by ollama list."
+        case .custom: return "Required, as the server names it."
         default: return nil
         }
     }
 
     /// True when the model menu has names to offer.
-    var listsModels: Bool { self == .openRouter || self == .claudeCode || self == .opencode }
+    var listsModels: Bool { self == .openRouter || self == .claudeCode || self == .opencode || self == .ollama }
 
     /// Keychain account of the API key. OpenAI and Groq share the transcription keys.
     var keyAccount: String {
@@ -111,7 +148,7 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .anthropic: return "anthropic"
         case .groq: return ProviderKind.groq.rawValue
         case .openRouter: return "openrouter"
-        case .claudeCode, .codex, .opencode: return rawValue
+        case .claudeCode, .codex, .opencode, .ollama, .custom: return rawValue
         }
     }
 
@@ -121,12 +158,14 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .openAI: return 120_000
         case .anthropic: return 150_000
         case .groq, .openRouter: return 100_000
+        // Local models usually run with a smaller context.
+        case .ollama, .custom: return 32_000
         case .claudeCode, .codex, .opencode: return 0
         }
     }
 
     /// True when the key is entered with the summary settings, not shared with transcription.
-    var hasOwnKey: Bool { self == .anthropic || self == .openRouter }
+    var hasOwnKey: Bool { self == .anthropic || self == .openRouter || self == .custom }
 
     var keyURL: URL? {
         switch self {
@@ -134,12 +173,12 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
         case .anthropic: return URL(string: "https://console.anthropic.com/settings/keys")
         case .groq: return ProviderKind.groq.keyURL
         case .openRouter: return URL(string: "https://openrouter.ai/settings/keys")
-        case .claudeCode, .codex, .opencode: return nil
+        case .claudeCode, .codex, .opencode, .ollama, .custom: return nil
         }
     }
 
     var apiKey: String? {
-        guard cli == nil else { return nil }
+        guard cli == nil, self != .ollama else { return nil }
         guard let v = Keychain.get(keyAccount)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty else { return nil }
         return v
     }
@@ -147,6 +186,8 @@ enum SummaryProviderKind: String, CaseIterable, Identifiable {
     /// What is missing before it can be used, nil when ready.
     var problem: String? {
         if let cli { return CLIProviders.locate(cli) == nil ? "\(displayName) CLI not found." : nil }
+        if self == .custom { return LocalLLM.customChatBase(baseURL) == nil ? "No \(displayName) server address yet." : nil }
+        if self == .ollama { return nil }
         return apiKey == nil ? "No \(displayName) API key yet." : nil
     }
 }
@@ -262,6 +303,8 @@ enum Keys {
     static let chatProvider = "chatProvider"
     /// Lets agents change calls through kaiku-mcp; reading is always allowed.
     static let agentsAllowEdits = KaikuAgents.allowEditsKey
+    /// Address of the Ollama or custom server.
+    static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
@@ -336,6 +379,7 @@ enum AppSettings {
             Keys.summaryModel(.openAI): SummaryProviderKind.openAI.defaultModel,
             Keys.summaryModel(.anthropic): SummaryProviderKind.anthropic.defaultModel,
             Keys.summaryModel(.groq): SummaryProviderKind.groq.defaultModel,
+            Keys.baseURL(.ollama): LocalLLM.ollamaDefaultBase,
             Keys.liveAssistEnabled: false,
             Keys.agentsAllowEdits: false,
         ])

@@ -87,10 +87,12 @@ enum ChatJob {
             body = try ChatAPI.anthropicBody(model: model, system: system, messages: messages, maxTokens: answerTokens)
             headers = ["x-api-key": key, "anthropic-version": "2023-06-01"]
             parse = ChatAPI.parseAnthropic
-        case .openAI, .groq, .openRouter:
-            url = URL(string: chatCompletionsBase(kind) + "/chat/completions")!
+        case .openAI, .groq, .openRouter, .ollama, .custom:
+            guard let base = kind.chatCompletionsBase else { throw ProviderError(message: "No \(kind.displayName) server address yet.") }
+            url = URL(string: base + "/chat/completions")!
             body = try ChatAPI.chatCompletionsBody(model: model, system: system, messages: messages)
-            headers = ["Authorization": "Bearer \(key)"]
+            // Local servers usually take no key.
+            headers = key.isEmpty ? [:] : ["Authorization": "Bearer \(key)"]
             parse = ChatAPI.parseChatCompletions
         case .claudeCode, .codex, .opencode:
             throw ProviderError(message: "\(kind.displayName) runs as a command-line tool.")
@@ -136,13 +138,5 @@ enum ChatJob {
         let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw ProviderError(message: "\(kind.displayName) gave an empty answer.") }
         return text
-    }
-
-    private static func chatCompletionsBase(_ kind: SummaryProviderKind) -> String {
-        switch kind {
-        case .openAI: return "https://api.openai.com/v1"
-        case .groq: return "https://api.groq.com/openai/v1"
-        default: return "https://openrouter.ai/api/v1"
-        }
     }
 }
