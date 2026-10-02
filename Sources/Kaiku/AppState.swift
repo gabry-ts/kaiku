@@ -60,6 +60,8 @@ final class AppState: ObservableObject {
     private var currentFolder: RecordingFolder?
     /// The live session of the recording just stopped, while it hands over its last words.
     private var liveFinishing: Task<LiveSession.Outcome, Never>?
+    /// A write error of the current recording was already shown.
+    private var writeErrorShown = false
     private var ticker: Timer?
     private var clock: RecordingClock?
     private var routes: [OutputRoute] = []
@@ -173,10 +175,13 @@ final class AppState: ObservableObject {
             }
             let liveEngine = AppSettings.liveEnabled ? AppSettings.liveEngine?.make() : nil
             if let liveEngine { rec.liveTap = LiveSession.tap(into: liveEngine) }
+            // The clock starts with the tracks, not before the permission prompt.
+            let started = Date()
             try rec.start(micURL: folder.micRawURL, systemURL: folder.systemRawURL, micDevice: micDevice)
             recorder = rec
+            writeErrorShown = false
             currentFolder = folder
-            clock = RecordingClock(start: date)
+            clock = RecordingClock(start: started)
             muteIntervals = MicMuter.shared.isMuted ? [MuteInterval(start: 0)] : []
             if !muteIntervals.isEmpty { folder.updateMeta { $0.muteIntervals = AppState.shared.muteIntervals } }
             currentMic = rec.micDevice
@@ -192,8 +197,8 @@ final class AppState: ObservableObject {
             followingMicUID = nil
             followFailedUID = nil
             AppSettings.lastRecordingFolder = folder.url
-            phase = .recording(title: title, start: date)
-            now = date
+            phase = .recording(title: title, start: started)
+            now = started
             startTicker()
             startLevelTimer(rec)
             libraryVersion += 1
@@ -863,6 +868,15 @@ final class AppState: ObservableObject {
         return RecordingFolder(url: url)
     }
 
+    /// Tells once per recording when audio can't be written (e.g. the disk is full).
+    private func checkWriteErrors(_ rec: CallRecorder) {
+        guard !writeErrorShown, let error = rec.writeErrors.first else { return }
+        writeErrorShown = true
+        lastErrorDetail = "Audio is not being saved:\n\n\(rec.writeErrors.joined(separator: "\n"))"
+        Notifier.shared.post(.problem, title: "Audio is not being saved",
+                             body: "\(error)\nCheck the free space on the disk.", folderPath: currentFolder?.url.path)
+    }
+
     private func startLevelTimer(_ rec: CallRecorder) {
         levels.hasMic = rec.hasMic
         levelTimer?.invalidate()
@@ -875,6 +889,7 @@ final class AppState: ObservableObject {
                 state.levels.mic = mic
                 state.levels.system = max(sys, state.levels.system * 0.8)
                 state.checkLeftRunning(micLevel: mic, systemLevel: sys)
+                state.checkWriteErrors(rec)
                 if sys > 0.002 && !AppSettings.defaults.bool(forKey: Keys.systemAudioVerified) {
                     AppSettings.defaults.set(true, forKey: Keys.systemAudioVerified)
                 }

@@ -10,6 +10,7 @@ final class PauseGate: Sendable {
         var paused = false
         var pausedTotal: Double = 0
         var pausedSince: Double = 0
+        var origin: Double?
     }
     private let state = OSAllocatedUnfairLock(initialState: State())
 
@@ -23,6 +24,15 @@ final class PauseGate: Sendable {
             s.paused = value
         }
     }
+
+    /// Marks the start of the recording: both tracks pad their first buffer back to it,
+    /// so they start together however long each source took to open.
+    func markOrigin() {
+        let now = activeSeconds()
+        state.withLock { $0.origin = now }
+    }
+
+    var origin: Double? { state.withLock { $0.origin } }
 
     /// Monotonic seconds, not counting time spent paused.
     func activeSeconds() -> Double {
@@ -51,6 +61,7 @@ final class TrackWriter: @unchecked Sendable {
     /// Until this active time, any lag is treated as a source change and padded.
     private var gapArmedUntil: Double = 0
     private(set) var paddedSeconds: Double = 0
+    private var error: String?
     /// Gets a copy of every buffer written, with its start in the file in seconds.
     /// Only set when live transcription is on; called on the audio thread.
     private let tap: (@Sendable (AVAudioPCMBuffer, Double) -> Void)?
@@ -67,6 +78,13 @@ final class TrackWriter: @unchecked Sendable {
         defer { lock.unlock() }
         guard let rate = file?.processingFormat.sampleRate else { return 0 }
         return Double(framesWritten) / rate
+    }
+
+    /// The first error that cost audio (file not created, write failed), if any.
+    var writeError: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return error
     }
 
     /// Call when the source is about to change: the next buffers pad the missing time.
@@ -88,6 +106,7 @@ final class TrackWriter: @unchecked Sendable {
                                        commonFormat: buffer.format.commonFormat, interleaved: buffer.format.isInterleaved)
             } catch {
                 failed = true
+                if self.error == nil { self.error = "Could not create \(url.lastPathComponent): \(error.diagnosticDescription)" }
                 Log.audio.error("Could not create \(self.url.lastPathComponent, privacy: .public): \(error.diagnosticDescription, privacy: .public)")
             }
         }
@@ -95,13 +114,23 @@ final class TrackWriter: @unchecked Sendable {
         let target = file.processingFormat
         guard let out = buffer.format == target ? buffer : convert(buffer, to: target), out.frameLength > 0 else { return }
         let rate = target.sampleRate
-        if startActive == nil { startActive = now - Double(out.frameLength) / rate }
+        if startActive == nil {
+            let first = now - Double(out.frameLength) / rate
+            if let origin = gate.origin, first > origin, first - origin < 10 {
+                // Pad back to the shared start, so both tracks line up.
+                startActive = origin
+                gapArmedUntil = now + 1
+            } else {
+                startActive = first
+            }
+        }
         padIfNeeded(now: now, incoming: out.frameLength, file: file)
         do {
             try file.write(from: out)
             if let tap, let copy = Self.copy(out) { tap(copy, Double(framesWritten) / rate) }
             framesWritten += AVAudioFramePosition(out.frameLength)
         } catch {
+            if self.error == nil { self.error = "Write failed for \(url.lastPathComponent): \(error.diagnosticDescription)" }
             Log.audio.error("Write failed for \(self.url.lastPathComponent, privacy: .public): \(error.diagnosticDescription, privacy: .public)")
         }
     }

@@ -161,6 +161,7 @@ final class CallRecorder {
 
     /// - Parameter micDevice: nil records system audio only.
     func start(micURL: URL, systemURL: URL, micDevice: AudioDevice?) throws {
+        gate.markOrigin()
         if let micDevice {
             do {
                 let w = TrackWriter(url: micURL, gate: gate, tap: tap(for: .me))
@@ -194,6 +195,9 @@ final class CallRecorder {
         return gate.isPaused ? 0 : level
     }
     var hasMic: Bool { micStarted }
+
+    /// Errors that cost audio on either track (e.g. the disk is full).
+    var writeErrors: [String] { writers.compactMap(\.writeError) }
 
     /// Drops audio on both tracks while paused.
     func setPaused(_ paused: Bool) { gate.set(paused) }
