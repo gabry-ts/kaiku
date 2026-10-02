@@ -638,6 +638,7 @@ private struct RecordingDetail: View {
                     Text("Written by \(model). Check important details against the transcript.")
                         .font(.caption).foregroundStyle(.tertiary)
                 }
+                if !item.folder.loadActionItems().isEmpty { ActionItemsSection(folder: item.folder) }
             }
             .textSelection(.enabled)
         } else {
