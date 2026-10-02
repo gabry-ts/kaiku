@@ -66,6 +66,13 @@ struct KaikuApp: App {
         // The menu bar item is an NSStatusItem (StatusBarController), so Option-click can
         // mute the microphones; SwiftUI still needs one scene.
         Settings { EmptyView() }
+            .commands {
+                // Cmd+, would otherwise open this empty scene instead of the real Settings window.
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") { WindowManager.shared.showSettings() }
+                        .keyboardShortcut(",", modifiers: .command)
+                }
+            }
     }
 }
 
