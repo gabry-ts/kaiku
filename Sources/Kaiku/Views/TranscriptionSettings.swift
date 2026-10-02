@@ -38,6 +38,7 @@ struct TranscriptionSettings: View {
             SilenceTrimSection()
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
             SummarySettings()
+            ActionItemsSettings()
         }
         .task(id: language) { await refreshSpeechModel() }
     }
