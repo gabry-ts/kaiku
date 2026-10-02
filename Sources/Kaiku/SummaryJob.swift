@@ -13,10 +13,17 @@ enum SummaryJob {
         }
         let meta = folder.loadMeta()
         let model = AppSettings.summaryModel(for: kind)
+        let dayFormat = DateFormatter()
+        dayFormat.dateFormat = "yyyy-MM-dd"
+        let day = dayFormat.string(from: meta?.date ?? Date())
         let prompt = SummaryAPI.renderPrompt(template: AppSettings.summaryPrompt, title: meta?.title ?? "", transcript: transcript)
+            + ActionItems.promptSuffix(callDate: day)
 
-        let text = try await complete(kind: kind, model: model, prompt: prompt)
+        let answer = try await complete(kind: kind, model: model, prompt: prompt)
+        // The action items come as a json block after the summary; without a valid one there are none.
+        let (text, items) = ActionItems.split(answer)
         try (text + "\n").write(to: folder.summaryURL, atomically: true, encoding: .utf8)
+        try? folder.saveActionItems(ActionItems.merge(items, keepingSentFrom: folder.loadActionItems()))
         folder.updateMeta { $0.summaryModel = "\(kind.displayName) (\(model))" }
     }
 

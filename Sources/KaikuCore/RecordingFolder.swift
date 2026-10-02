@@ -97,6 +97,8 @@ public struct RecordingFolder: Identifiable, Hashable, Sendable {
     public static let mixedName = "mixed.m4a"
     public static let segmentsName = "segments.json"
     public static let summaryName = "summary.md"
+    /// Action items taken from the call, with where each was sent.
+    public static let actionItemsName = "action-items.json"
     /// Bullets written by the live window's Summary tab during the call.
     public static let liveSummaryName = "live-summary.md"
     /// Crash-safe files written while recording, converted to .m4a on stop.
@@ -113,6 +115,7 @@ public struct RecordingFolder: Identifiable, Hashable, Sendable {
     public var mixedURL: URL { url.appendingPathComponent(Self.mixedName) }
     public var segmentsURL: URL { url.appendingPathComponent(Self.segmentsName) }
     public var summaryURL: URL { url.appendingPathComponent(Self.summaryName) }
+    public var actionItemsURL: URL { url.appendingPathComponent(Self.actionItemsName) }
     public var liveSummaryURL: URL { url.appendingPathComponent(Self.liveSummaryName) }
     public var micRawURL: URL { url.appendingPathComponent(Self.micRawName) }
     public var systemRawURL: URL { url.appendingPathComponent(Self.systemRawName) }
@@ -162,6 +165,15 @@ public struct RecordingFolder: Identifiable, Hashable, Sendable {
 
     public func saveSegments(_ segments: [Segment]) throws {
         try Self.encoder.encode(segments).write(to: segmentsURL, options: .atomic)
+    }
+
+    public func loadActionItems() -> [ActionItem] {
+        guard let data = try? Data(contentsOf: actionItemsURL) else { return [] }
+        return (try? JSONDecoder().decode([ActionItem].self, from: data)) ?? []
+    }
+
+    public func saveActionItems(_ items: [ActionItem]) throws {
+        try Self.encoder.encode(items).write(to: actionItemsURL, options: .atomic)
     }
 
     public func removePartials() {
