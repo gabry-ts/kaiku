@@ -143,7 +143,7 @@ final class AppState: ObservableObject {
             let micSetting = AppSettings.microphone
             let micDevice = AudioDevices.resolveMicrophone(setting: micSetting)
             if micDevice == nil && micSetting != AudioDevices.none {
-                Log.audio.error("No usable non-Bluetooth microphone found; recording system audio only")
+                Log.audio.error("No usable microphone found; recording system audio only")
             }
             let rec = CallRecorder()
             routes = []

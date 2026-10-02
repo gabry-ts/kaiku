@@ -269,7 +269,7 @@ private struct RecordingCard: View {
                                 if d.uid == mic.uid {
                                     Label(d.name, systemImage: "checkmark")
                                 } else {
-                                    Text(d.isBluetooth ? "\(d.name) (Bluetooth, lowers call quality)" : d.name)
+                                    Text(d.canRecordWithoutHarm ? d.name : "\(d.name) (Bluetooth, lowers call quality)")
                                 }
                             }
                         }

@@ -304,7 +304,7 @@ struct RecordingSettings: View {
     private var microphoneFooter: String {
         microphone == AudioDevices.none
             ? "Only the call audio is recorded, so your own voice won't be in the transcript."
-            : "Automatic uses \(resolved?.name ?? "the built-in microphone"). It never picks a Bluetooth headset, because that lowers call quality."
+            : "Automatic uses \(resolved?.name ?? "the built-in microphone"). It picks a Bluetooth headset only when your call already uses its microphone, since otherwise that lowers call quality."
     }
 
     var body: some View {

@@ -48,6 +48,10 @@ struct AudioDevice: Identifiable, Hashable {
         return running != 0
     }
 
+    /// Recording from it doesn't change call quality: not Bluetooth, or a Bluetooth mic
+    /// some app already uses, so the headset is in call mode anyway.
+    var canRecordWithoutHarm: Bool { !isBluetooth || isRunningSomewhere }
+
     var isAlive: Bool {
         var alive = UInt32(1)
         var size = UInt32(MemoryLayout<UInt32>.size)
@@ -110,16 +114,16 @@ enum AudioDevices {
     static var defaultInput: AudioDevice? { defaultDevice(kAudioHardwarePropertyDefaultInputDevice) }
     static var defaultOutput: AudioDevice? { defaultDevice(kAudioHardwarePropertyDefaultOutputDevice) }
 
-    /// Resolves the microphone setting to a device. Never returns a Bluetooth device in
-    /// automatic mode: opening a Bluetooth headset mic switches it to the low quality
-    /// call profile, which degrades the call for everyone.
+    /// Resolves the microphone setting to a device. In automatic mode a Bluetooth headset
+    /// is only used when another app (the call) already uses its mic: opening it otherwise
+    /// switches it to the low quality call profile, which degrades the call for everyone.
     static func resolveMicrophone(setting: String) -> AudioDevice? {
         let inputs = inputs()
         switch setting {
         case none:
             return nil
         case automatic, "":
-            if let def = defaultInput, !def.isBluetooth { return def }
+            if let def = defaultInput, def.canRecordWithoutHarm { return def }
             return inputs.first(where: \.isBuiltIn) ?? inputs.first { !$0.isBluetooth }
         default:
             return inputs.first { $0.uid == setting } ?? resolveMicrophone(setting: automatic)
@@ -127,10 +131,10 @@ enum AudioDevices {
     }
 
     /// A microphone to switch to when `lostUID` disappears mid-call. Same rules as Automatic:
-    /// never a Bluetooth headset.
+    /// a Bluetooth headset only when the call already uses its mic.
     static func fallbackMicrophone(excluding lostUID: String?) -> AudioDevice? {
         let inputs = inputs().filter { $0.uid != lostUID && !$0.isBluetooth && $0.isAlive }
-        if let def = defaultInput, def.uid != lostUID, !def.isBluetooth, inputs.contains(def) { return def }
+        if let def = defaultInput, def.uid != lostUID, def.canRecordWithoutHarm, def.isAlive { return def }
         return inputs.first(where: \.isBuiltIn) ?? inputs.first
     }
 
