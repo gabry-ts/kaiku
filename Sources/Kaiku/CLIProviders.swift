@@ -80,6 +80,24 @@ enum CLIProviders {
         return try CLITool.parseOutput(stdout: out, lastMessage: try? String(contentsOf: lastMessage, encoding: .utf8))
     }
 
+    /// Runs the tool with `args` (e.g. to change its settings) and returns its output.
+    @discardableResult
+    static func run(_ tool: CLITool, name: String, _ args: [String], timeout: TimeInterval = 30) async throws -> String {
+        guard let binary = await detect(tool) else {
+            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings.")
+        }
+        var env = ProcessInfo.processInfo.environment
+        let dirs = [(binary as NSString).deletingLastPathComponent]
+            + CLITool.searchDirs(home: home, nodeVersions: nodeVersions)
+            + [env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"]
+        env["PATH"] = dirs.joined(separator: ":")
+        do {
+            return try await Shell.run(binary, args, environment: env, timeout: timeout)
+        } catch let error as ProcessError {
+            throw ProviderError(message: CLITool.stripANSI(error.message))
+        }
+    }
+
     /// Answers a chat question with the tool, which reads the call files itself. `update` gets
     /// the whole answer so far as `.answer` (Claude Code as it is written, OpenCode a part at a
     /// time; Codex only answers at the end) and `.tool` while the tool reads.

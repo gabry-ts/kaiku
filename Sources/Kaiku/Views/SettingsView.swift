@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, live, chat, webhook, notifications, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, live, chat, agents, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -16,6 +16,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return "Transcription"
         case .live: return "Live"
         case .chat: return "Chat"
+        case .agents: return "Agents (MCP)"
         case .webhook: return "Webhook"
         case .notifications: return "Notifications"
         case .permissions: return "Permissions"
@@ -33,6 +34,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return "text.quote"
         case .live: return "captions.bubble.fill"
         case .chat: return "bubble.left.and.text.bubble.right.fill"
+        case .agents: return "terminal.fill"
         case .webhook: return "paperplane.fill"
         case .notifications: return "bell.badge.fill"
         case .permissions: return "lock.shield.fill"
@@ -50,6 +52,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return .blue
         case .live: return .pink
         case .chat: return .cyan
+        case .agents: return .mint
         case .webhook: return .purple
         case .notifications: return .red
         case .permissions: return .green
@@ -82,6 +85,7 @@ struct SettingsView: View {
             case .transcription: TranscriptionSettings()
             case .live: LiveSettings()
             case .chat: ChatSettings()
+            case .agents: AgentSettings()
             case .webhook: WebhookSettings()
             case .notifications: NotificationSettings()
             case .permissions: PermissionsSettings()

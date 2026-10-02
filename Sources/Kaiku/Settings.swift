@@ -257,6 +257,8 @@ enum Keys {
     static let liveProvider = "liveProvider"
     /// Provider of the library chat; unset uses the summary provider.
     static let chatProvider = "chatProvider"
+    /// Lets agents change calls through kaiku-mcp; reading is always allowed.
+    static let agentsAllowEdits = KaikuAgents.allowEditsKey
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
@@ -332,6 +334,7 @@ enum AppSettings {
             Keys.summaryModel(.anthropic): SummaryProviderKind.anthropic.defaultModel,
             Keys.summaryModel(.groq): SummaryProviderKind.groq.defaultModel,
             Keys.liveAssistEnabled: false,
+            Keys.agentsAllowEdits: false,
         ])
         for p in SummaryProviderKind.allCases {
             defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,
@@ -492,6 +495,9 @@ enum AppSettings {
     }
     /// Where chats are saved, one JSON file each. Not a call folder: it has no meta.json.
     static var chatsFolder: URL { baseFolder.appendingPathComponent("Chats", isDirectory: true) }
+
+    /// Agents may rename calls, change tags and speakers, and ask for a new transcript or summary.
+    static var agentsAllowEdits: Bool { defaults.bool(forKey: Keys.agentsAllowEdits) }
 
     static var calendarEnabled: Bool { defaults.bool(forKey: Keys.calendarEnabled) }
     /// Calendar identifiers to use; empty means all.
