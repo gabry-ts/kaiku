@@ -32,10 +32,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
         // A full-size content view under a clear title bar, so Partiti UI's floating
         // sidebar runs under the traffic lights and each pane carries its own header.
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: PUI.Window.settings),
-                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                              styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.puiConfigureForSettings()
         window.minSize = PUI.Window.settingsMin
+        // A fixed, small window: no resizing, zoom or full screen.
+        window.styleMask.remove(.resizable)
+        window.collectionBehavior.insert(.fullScreenNone)
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
         present(id: "settings", window: window, view: view, title: "Settings", recreate: false,
                 size: PUI.Window.settings)
     }
