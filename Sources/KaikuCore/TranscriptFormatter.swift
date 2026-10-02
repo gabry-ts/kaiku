@@ -9,6 +9,22 @@ public enum TranscriptFormatter {
 
     /// Sorts segments by start time and merges consecutive segments of the same speaker.
     public static func merge(_ segments: [Segment]) -> [Segment] {
+        turns(segments).map { group in
+            var merged = group[0]
+            for seg in group.dropFirst() {
+                merged.text += " " + seg.text
+                merged.end = max(merged.end, seg.end)
+                if let words = seg.words {
+                    if merged.words == nil { merged.words = words } else { merged.words?.append(contentsOf: words) }
+                }
+            }
+            return merged
+        }
+    }
+
+    /// The segments with text, sorted by start time and grouped into speaker turns:
+    /// each group is the run of consecutive segments that `merge` joins into one.
+    public static func turns(_ segments: [Segment]) -> [[Segment]] {
         let sorted = segments
             .map { s -> Segment in
                 var c = s
@@ -22,17 +38,15 @@ public enum TranscriptFormatter {
             }
             .map(\.element)
 
-        var merged: [Segment] = []
+        var groups: [[Segment]] = []
         for seg in sorted {
-            if var last = merged.last, last.speaker == seg.speaker {
-                last.text += " " + seg.text
-                last.end = max(last.end, seg.end)
-                merged[merged.count - 1] = last
+            if let last = groups.last?.first, last.speaker == seg.speaker {
+                groups[groups.count - 1].append(seg)
             } else {
-                merged.append(seg)
+                groups.append([seg])
             }
         }
-        return merged
+        return groups
     }
 
     /// Renders the transcript body, one paragraph per speaker turn, with bookmarks
@@ -117,14 +131,17 @@ public enum TranscriptFormatter {
                     || (endsSentence && c.end - c.start > softMaxDuration)
                 if split {
                     result.append(c)
-                    current = Segment(start: w.start, end: w.end, speaker: w.speaker, text: token)
+                    current = Segment(start: w.start, end: w.end, speaker: w.speaker, text: token,
+                                      words: [Segment.Word(start: w.start, end: w.end, text: token)])
                 } else {
                     c.text += (isPunctuation(token) ? "" : " ") + token
                     c.end = w.end
+                    c.words?.append(Segment.Word(start: w.start, end: w.end, text: token))
                     current = c
                 }
             } else {
-                current = Segment(start: w.start, end: w.end, speaker: w.speaker, text: token)
+                current = Segment(start: w.start, end: w.end, speaker: w.speaker, text: token,
+                                  words: [Segment.Word(start: w.start, end: w.end, text: token)])
             }
         }
         if let c = current { result.append(c) }

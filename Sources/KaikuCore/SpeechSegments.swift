@@ -34,22 +34,25 @@ public enum SpeechSegments {
     public static func segments(from results: [RecognizedSpeech]) -> [Segment] {
         var out: [Segment] = []
         for result in results {
-            // The text of each sentence, with the times of its first and last timed run.
-            var sentences: [(text: String, start: Double?, end: Double?)] = []
+            // The text of each sentence, with the times of its first and last timed run
+            // and its timed runs as words.
+            var sentences: [(text: String, start: Double?, end: Double?, words: [Segment.Word])] = []
             var open = false
             for run in result.runs {
-                if !open { sentences.append(("", nil, nil)) }
+                if !open { sentences.append(("", nil, nil, [])) }
                 let i = sentences.count - 1
                 sentences[i].text += run.text
                 if let start = finite(run.start), let end = finite(run.end), end >= start {
                     if sentences[i].start == nil { sentences[i].start = start }
                     sentences[i].end = max(sentences[i].end ?? end, end)
+                    let word = run.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !word.isEmpty { sentences[i].words.append(Segment.Word(start: start, end: end, text: word)) }
                 }
                 let last = run.text.trimmingCharacters(in: .whitespacesAndNewlines).last
                 open = !(last.map(sentenceEnds.contains) ?? false)
             }
             sentences = sentences
-                .map { ($0.text.trimmingCharacters(in: .whitespacesAndNewlines), $0.start, $0.end) }
+                .map { ($0.text.trimmingCharacters(in: .whitespacesAndNewlines), $0.start, $0.end, $0.words) }
                 .filter { !$0.text.isEmpty }
 
             // A sentence without times starts where the one before ends; only the last
@@ -59,7 +62,8 @@ public enum SpeechSegments {
                 let start = sentence.start ?? cursor
                 let known = sentence.end ?? (index == sentences.count - 1 ? finite(result.end) : nil)
                 let end = max(start, known ?? start)
-                out.append(Segment(start: start, end: end, text: sentence.text))
+                out.append(Segment(start: start, end: end, text: sentence.text,
+                                   words: sentence.words.isEmpty ? nil : sentence.words))
                 cursor = end
             }
         }

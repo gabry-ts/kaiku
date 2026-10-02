@@ -12,27 +12,77 @@ public enum ParseError: LocalizedError {
 /// Parsers for provider JSON responses. Kept free of networking so they can be tested.
 public enum ResponseParsers {
 
-    // MARK: whisper.cpp (-oj)
+    // MARK: whisper.cpp (-oj, or -ojf with the tokens of each segment)
 
     private struct WhisperCppOutput: Decodable {
         struct Result: Decodable { let language: String? }
+        struct Offsets: Decodable { let from: Double; let to: Double }
+        struct Token: Decodable {
+            let text: String
+            let offsets: Offsets?
+        }
         struct Item: Decodable {
-            struct Offsets: Decodable { let from: Double; let to: Double }
             let offsets: Offsets
             let text: String
+            let tokens: [Token]?
         }
         let result: Result?
         let transcription: [Item]
     }
 
     public static func whisperCpp(_ data: Data) throws -> TranscriptionResult {
+        // Token texts can hold half of a multibyte character, which is not valid UTF-8:
+        // replace those bytes rather than failing the whole transcript.
+        let valid = Data(String(decoding: data, as: UTF8.self).utf8)
         let out: WhisperCppOutput
-        do { out = try JSONDecoder().decode(WhisperCppOutput.self, from: data) }
+        do { out = try JSONDecoder().decode(WhisperCppOutput.self, from: valid) }
         catch { throw ParseError.invalid("whisper.cpp JSON: \(error)") }
-        let segs = out.transcription.map {
-            Segment(start: $0.offsets.from / 1000, end: $0.offsets.to / 1000, text: $0.text)
+        let segs = out.transcription.map { item in
+            Segment(start: item.offsets.from / 1000, end: item.offsets.to / 1000, text: item.text,
+                    words: item.tokens.flatMap { whisperCppWords($0, text: item.text) })
         }
         return TranscriptionResult(segments: segs, detectedLanguage: out.result?.language)
+    }
+
+    /// Joins whisper.cpp tokens into words: a token starting with a space starts a new word,
+    /// special tokens like `[_BEG_]` or `[_TT_42]` are skipped. Nil when the tokens have no times
+    /// (older whisper.cpp, or plain `-oj` output).
+    private static func whisperCppWords(_ tokens: [WhisperCppOutput.Token], text: String) -> [Segment.Word]? {
+        var words: [Segment.Word] = []
+        var startsWord = true
+        for token in tokens {
+            let t = token.text
+            if t.hasPrefix("[_") || t.hasPrefix("<|") { continue }
+            var timed = false
+            var start = 0.0
+            var end = 0.0
+            if let o = token.offsets, o.from >= 0, o.to >= o.from {
+                timed = true
+                start = o.from / 1000
+                end = o.to / 1000
+            }
+            if t.hasPrefix(" ") || words.isEmpty || startsWord {
+                // A token without times can only continue a timed word.
+                guard timed else { continue }
+                words.append(Segment.Word(start: start, end: end, text: t))
+            } else {
+                words[words.count - 1].text += t
+                if timed { words[words.count - 1].end = max(words[words.count - 1].end, end) }
+            }
+            startsWord = t.hasSuffix(" ")
+        }
+        words = words.compactMap { w in
+            var c = w
+            c.text = w.text.replacingOccurrences(of: "\u{FFFD}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return c.text.isEmpty ? nil : c
+        }
+        // The segment text has the exact characters (a token may hold half of one): use it
+        // when it splits into the same words.
+        let spoken = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        if spoken.count == words.count {
+            for i in words.indices { words[i].text = spoken[i] }
+        }
+        return words.isEmpty ? nil : words
     }
 
     // MARK: ElevenLabs Scribe
@@ -74,10 +124,17 @@ public enum ResponseParsers {
             let text: String
             let speaker: String?
         }
+        /// Present with `timestamp_granularities[]=word` (whisper models, verbose_json).
+        struct Word: Decodable {
+            let word: String
+            let start: Double
+            let end: Double
+        }
         let text: String?
         let language: String?
         let duration: Double?
         let segments: [Seg]?
+        let words: [Word]?
     }
 
     /// Parses `json`, `verbose_json` or `diarized_json` responses.
@@ -86,15 +143,35 @@ public enum ResponseParsers {
         let out: OpenAIOutput
         do { out = try JSONDecoder().decode(OpenAIOutput.self, from: data) }
         catch { throw ParseError.invalid("OpenAI-compatible JSON: \(error)") }
+        let words = (out.words ?? []).compactMap { w -> Segment.Word? in
+            let text = w.word.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, w.start.isFinite, w.end.isFinite, w.end >= w.start else { return nil }
+            return Segment.Word(start: offset + w.start, end: offset + w.end, text: text)
+        }
         if let segs = out.segments, !segs.isEmpty {
             let mapped = segs.map {
                 Segment(start: offset + ($0.start ?? 0), end: offset + ($0.end ?? chunkDuration), speaker: $0.speaker, text: $0.text)
             }
-            return TranscriptionResult(segments: mapped, detectedLanguage: out.language)
+            return TranscriptionResult(segments: assign(words, to: mapped), detectedLanguage: out.language)
         }
         let text = (out.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let segs = text.isEmpty ? [] : [Segment(start: offset, end: offset + chunkDuration, text: text)]
+        let segs = text.isEmpty ? [] : [Segment(start: offset, end: offset + chunkDuration, text: text,
+                                               words: words.isEmpty ? nil : words)]
         return TranscriptionResult(segments: segs, detectedLanguage: out.language)
+    }
+
+    /// Gives each word to the segment its middle falls in, or else to the nearest one.
+    static func assign(_ words: [Segment.Word], to segments: [Segment]) -> [Segment] {
+        guard !words.isEmpty, !segments.isEmpty else { return segments }
+        var out = segments
+        for w in words {
+            let mid = (w.start + w.end) / 2
+            func distance(_ s: Segment) -> Double { mid < s.start ? s.start - mid : (mid > s.end ? mid - s.end : 0) }
+            var best = 0
+            for i in out.indices.dropFirst() where distance(out[i]) < distance(out[best]) { best = i }
+            if out[best].words == nil { out[best].words = [w] } else { out[best].words?.append(w) }
+        }
+        return out
     }
 
     // MARK: Alibaba Cloud Model Studio

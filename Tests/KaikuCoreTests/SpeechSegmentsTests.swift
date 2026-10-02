@@ -3,6 +3,7 @@ import XCTest
 
 final class SpeechSegmentsTests: XCTestCase {
     private typealias Run = RecognizedSpeech.Run
+    private typealias Word = Segment.Word
 
     func testOneSegmentPerSentenceWithRunTimes() {
         let result = RecognizedSpeech(start: 0, end: 6, runs: [
@@ -10,8 +11,11 @@ final class SpeechSegmentsTests: XCTestCase {
             Run("Shall", start: 2.1, end: 2.4), Run(" "), Run("we", start: 2.4, end: 2.5), Run(" "), Run("start?", start: 2.5, end: 3.2),
         ])
         XCTAssertEqual(SpeechSegments.segments(from: [result]), [
-            Segment(start: 0.4, end: 1.3, text: "Good morning."),
-            Segment(start: 2.1, end: 3.2, text: "Shall we start?"),
+            Segment(start: 0.4, end: 1.3, text: "Good morning.",
+                    words: [Word(start: 0.4, end: 0.7, text: "Good"), Word(start: 0.7, end: 1.3, text: "morning.")]),
+            Segment(start: 2.1, end: 3.2, text: "Shall we start?",
+                    words: [Word(start: 2.1, end: 2.4, text: "Shall"), Word(start: 2.4, end: 2.5, text: "we"),
+                            Word(start: 2.5, end: 3.2, text: "start?")]),
         ])
     }
 
@@ -33,8 +37,8 @@ final class SpeechSegmentsTests: XCTestCase {
             Run("Okay.", start: 0.2, end: 0.8), Run(" and then", start: 1.5, end: 2.4),
         ])
         XCTAssertEqual(SpeechSegments.segments(from: [result]), [
-            Segment(start: 0.2, end: 0.8, text: "Okay."),
-            Segment(start: 1.5, end: 2.4, text: "and then"),
+            Segment(start: 0.2, end: 0.8, text: "Okay.", words: [Word(start: 0.2, end: 0.8, text: "Okay.")]),
+            Segment(start: 1.5, end: 2.4, text: "and then", words: [Word(start: 1.5, end: 2.4, text: "and then")]),
         ])
     }
 
@@ -44,7 +48,8 @@ final class SpeechSegmentsTests: XCTestCase {
             RecognizedSpeech(start: 1, end: 2, runs: [Run("  "), Run("\n")]),
             RecognizedSpeech(start: 2, end: 4, runs: [Run("Hello", start: 2.5, end: 3)]),
         ]
-        XCTAssertEqual(SpeechSegments.segments(from: results), [Segment(start: 2.5, end: 3, text: "Hello")])
+        XCTAssertEqual(SpeechSegments.segments(from: results),
+                       [Segment(start: 2.5, end: 3, text: "Hello", words: [Word(start: 2.5, end: 3, text: "Hello")])])
     }
 
     func testTimesThatAreNotNumbersFallBack() {

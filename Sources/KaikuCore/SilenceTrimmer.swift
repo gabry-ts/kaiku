@@ -110,11 +110,20 @@ public struct TimeMap: Equatable, Sendable {
     public func remap(_ segments: [Segment]) -> [Segment] {
         segments.map { s in
             var c = s
-            c.start = toOriginal(s.start)
-            // Map the end as the end of the previous instant, so a segment ending exactly
-            // at a cut does not jump over the removed silence.
-            c.end = max(c.start, toOriginal(max(s.start, s.end - 0.001)) + 0.001)
+            (c.start, c.end) = remap(start: s.start, end: s.end)
+            c.words = s.words?.map { w in
+                var m = w
+                (m.start, m.end) = remap(start: w.start, end: w.end)
+                return m
+            }
             return c
         }
+    }
+
+    private func remap(start: Double, end: Double) -> (Double, Double) {
+        let s = toOriginal(start)
+        // Map the end as the end of the previous instant, so a segment ending exactly
+        // at a cut does not jump over the removed silence.
+        return (s, max(s, toOriginal(max(start, end - 0.001)) + 0.001))
     }
 }
