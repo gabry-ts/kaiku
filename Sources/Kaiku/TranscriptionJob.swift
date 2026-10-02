@@ -24,9 +24,12 @@ enum TranscriptionJob {
             // The canceller has already updated meta.json, and may have started a new run.
             if Task.isCancelled { throw CancellationError() }
             Log.transcription.error("Transcription failed: \(error.diagnosticDescription, privacy: .public)")
-            meta.status = .error
-            meta.error = error.diagnosticDescription
-            try? folder.saveMeta(meta)
+            // Re-read, so edits made in the library while this job ran are kept.
+            let message = error.diagnosticDescription
+            folder.updateMeta {
+                $0.status = .error
+                $0.error = message
+            }
             throw error
         }
     }
@@ -109,12 +112,18 @@ enum TranscriptionJob {
             let n = all.filter { $0.droppedAsEcho == true }.count
             if n > 0 { Log.transcription.info("Hid \(n) echoed microphone segments") }
         }
-        // Keep edits made in the library while this job ran.
-        if let latest = folder.loadMeta() {
-            meta.title = latest.title
-            meta.tags = latest.tags
-            meta.bookmarks = latest.bookmarks
-            meta.speakerNames = latest.speakerNames
+        // Keep edits made in the library while this job ran: only the transcription
+        // fields are taken from this run.
+        if var latest = folder.loadMeta() {
+            latest.status = meta.status
+            latest.error = meta.error
+            latest.provider = meta.provider
+            latest.model = meta.model
+            latest.detectedLanguage = meta.detectedLanguage
+            latest.modelID = meta.modelID
+            latest.transcribedSeconds = meta.transcribedSeconds
+            latest.estimatedCostUSD = meta.estimatedCostUSD
+            meta = latest
         }
         try folder.saveSegments(all)
         try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: all)
