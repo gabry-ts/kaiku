@@ -14,12 +14,13 @@ struct OpenError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// The app's preferences. Inside Kaiku.app this binary shares the app's bundle, so its
-/// standard defaults already are the app's.
-let defaults: UserDefaults = Bundle.main.bundleIdentifier == KaikuAgents.bundleID
-    ? .standard : UserDefaults(suiteName: KaikuAgents.bundleID) ?? .standard
+/// The app's saved preferences, read from its persistent domain so that `-key value`
+/// command-line arguments can't override them (the edit switch in particular).
+func savedPreference(_ key: String) -> Any? {
+    UserDefaults.standard.persistentDomain(forName: KaikuAgents.bundleID)?[key]
+}
 
-let base = KaikuAgents.baseFolder(savedPath: defaults.string(forKey: KaikuAgents.baseFolderKey))
+let base = KaikuAgents.baseFolder(savedPath: savedPreference(KaikuAgents.baseFolderKey) as? String)
 let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
 if CommandLine.arguments.contains("--version") {
@@ -29,7 +30,7 @@ if CommandLine.arguments.contains("--version") {
 
 let tools = KaikuToolSet(
     library: CallLibrary(base: base),
-    allowEdits: { defaults.bool(forKey: KaikuAgents.allowEditsKey) },
+    allowEdits: { savedPreference(KaikuAgents.allowEditsKey) as? Bool ?? false },
     openInApp: { request in
         // In the background, launching the app when it isn't running.
         let process = Process()
