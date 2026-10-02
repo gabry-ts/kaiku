@@ -175,11 +175,20 @@ enum MenuBarGlyph {
     }
 
     /// Template crossed-out microphone: all microphones are muted.
+    /// Drawn on the same 22×18 canvas as `idle`, so the menu bar item keeps its width and
+    /// the open panel doesn't shift when muting.
     static func muted() -> NSImage {
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        let image = NSImage(systemSymbolName: "mic.slash.fill", accessibilityDescription: "Microphones muted")?
-            .withSymbolConfiguration(config) ?? idle()
+        guard let symbol = NSImage(systemSymbolName: "mic.slash.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else { return idle() }
+        let image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
+            let size = symbol.size
+            symbol.draw(in: NSRect(x: (rect.width - size.width) / 2, y: (rect.height - size.height) / 2,
+                                   width: size.width, height: size.height))
+            return true
+        }
         image.isTemplate = true
+        image.accessibilityDescription = "Microphones muted"
         return image
     }
 
