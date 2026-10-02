@@ -106,6 +106,9 @@ final class MicRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate 
         writer.write(buffer)
     }
 
+    /// False after a session runtime error stopped the capture.
+    var isCapturing: Bool { session.isRunning }
+
     /// Current average level, 0...1 (from the capture connection meters).
     func readLevel() -> Float {
         guard recording, let channel = output.connections.first?.audioChannels.first else { return 0 }
@@ -224,9 +227,19 @@ final class CallRecorder {
     /// The original mic is not taken back if it returns, to keep the call stable.
     private func handleMicLost() {
         guard micStarted, !stopped, let lost = mic.device else { return }
-        // Ignore a late notification for a device we already left.
         if let still = AudioDevices.inputs().first(where: { $0.uid == lost.uid }), still.isAlive,
-           AVCaptureDevice(uniqueID: lost.uid)?.isConnected == true { return }
+           AVCaptureDevice(uniqueID: lost.uid)?.isConnected == true {
+            // A late notification for a device we already left, or a session error.
+            if mic.isCapturing { return }
+            // The session stopped on an error while the device is still there: reopen it.
+            do {
+                try mic.switchTo(still)
+                Log.audio.info("Microphone \(still.name, privacy: .public) reopened after a session error")
+                return
+            } catch {
+                Log.audio.error("Reopening the microphone failed: \(error.diagnosticDescription, privacy: .public)")
+            }
+        }
         let fallback = AudioDevices.fallbackMicrophone(excluding: lost.uid)
         if let fallback {
             do {
