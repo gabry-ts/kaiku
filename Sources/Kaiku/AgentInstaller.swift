@@ -51,7 +51,7 @@ enum AgentInstaller {
             Log.app.info("Added kaiku-mcp to Claude Code")
             return "Added. Start a new Claude Code session to use it."
         case .codex:
-            let url = codexConfig
+            let url = codexConfig.resolvingSymlinksInPath()
             let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
             let result = try AgentConfig.codex(existing, path: path)
             guard result.change != .unchanged else { return "Already added." }
@@ -60,7 +60,7 @@ enum AgentInstaller {
             Log.app.info("Added kaiku-mcp to \(url.path, privacy: .public)")
             return (result.change == .added ? "Added" : "Updated") + ". Start a new Codex session to use it."
         case .claudeDesktop:
-            let url = claudeDesktopConfig
+            let url = claudeDesktopConfig.resolvingSymlinksInPath()
             let result = try AgentConfig.claudeDesktop(try? Data(contentsOf: url), path: path)
             guard result.change != .unchanged else { return "Already added." }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
