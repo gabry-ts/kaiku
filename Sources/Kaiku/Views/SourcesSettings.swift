@@ -4,8 +4,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 import KaikuCore
 
-/// Which apps and websites can start a recording: Always, Never or New (ask the first
-/// time). Apps can be added from the Finder, websites by words in their window title,
+/// Which apps and websites can start a recording, and which of them record by themselves
+/// (depending on the automatic recording mode). A source never decided is marked New and
+/// asked about the first time. Apps can be added from the Finder, websites by words in their window title,
 /// and any source removed from the list.
 struct SourcesSettings: View {
     @State private var rules = SourceRules()
@@ -15,28 +16,29 @@ struct SourcesSettings: View {
     @State private var removed: [String] = []
     @State private var sources: [String] = []
     @State private var message: String?
+    @State private var mode = AutoRecordMode.off
 
     var body: some View {
         KaikuPane(pane: .sources, subtitle: "Which apps and websites can start a recording.") {
-            SettingsGroup("Sources", footer: "Always records (or asks to record) as usual. Never ignores the source. New records the first time, then asks whether to always record it. The same service is one source in its app and on the web, like WhatsApp and WhatsApp Web. Web calls are told apart by the browser window title, which needs the Accessibility permission.") {
+            SettingsGroup("Sources", footer: "Record automatically starts recording by itself, Offer to record asks first with a notification, and Ignore never reacts to the source. A New source is asked about the first time. The same service is one source in its app and on the web, like WhatsApp and WhatsApp Web. Web calls are told apart by the browser window title, which needs the Accessibility permission.") {
                 ForEach(sources, id: \.self) { source in
                     GroupRow {
                         HStack(spacing: PUI.Space.m + 2) {
                             SourceIcon(source: source, custom: custom)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(source).font(PUI.Font.body)
+                                HStack(spacing: PUI.Space.s) {
+                                    Text(source).font(PUI.Font.body)
+                                    if rules.rule(for: source) == .new {
+                                        Text("New").font(PUI.Font.caption).foregroundStyle(.secondary)
+                                    }
+                                }
                                 Text(kind(of: source)).font(PUI.Font.caption).foregroundStyle(.secondary)
                             }
                             Spacer(minLength: PUI.Space.l)
                             Picker(source, selection: Binding(
-                                get: { rules.rule(for: source) },
-                                set: { rule in
-                                    rules.set(rule, for: source)
-                                    save()
-                                })) {
-                                Text("Always").tag(SourceRule.always)
-                                Text("Never").tag(SourceRule.never)
-                                Text("New (ask)").tag(SourceRule.new)
+                                get: { choice(for: source) },
+                                set: { apply($0, to: source) })) {
+                                ForEach(choices, id: \.self) { Text($0.title(in: mode)).tag($0) }
                             }
                             .labelsHidden()
                             .fixedSize()
@@ -85,6 +87,53 @@ struct SourcesSettings: View {
         }
     }
 
+    /// What a source does when its call starts.
+    private enum Choice: Hashable {
+        case record, offer, ignore
+
+        func title(in mode: AutoRecordMode) -> String {
+            switch self {
+            case .record: return mode == .selected ? "Record automatically" : "Record"
+            case .offer: return "Offer to record"
+            case .ignore: return "Ignore"
+            }
+        }
+    }
+
+    /// The options that make sense in the current mode.
+    private var choices: [Choice] {
+        switch mode {
+        case .selected: return [.record, .offer, .ignore]
+        case .all: return [.record, .ignore]
+        case .off: return [.offer, .ignore]
+        }
+    }
+
+    private func choice(for source: String) -> Choice {
+        let rule = rules.rule(for: source)
+        if rule == .never { return .ignore }
+        switch mode {
+        case .off: return .offer
+        case .all: return .record
+        case .selected: return rule == .always && rules.autoRecords(source) ? .record : .offer
+        }
+    }
+
+    private func apply(_ choice: Choice, to source: String) {
+        switch choice {
+        case .record:
+            rules.set(.always, for: source)
+            rules.setAutoRecord(true, for: source)
+        case .offer:
+            rules.set(.always, for: source)
+            if mode == .selected { rules.setAutoRecord(false, for: source) }
+        case .ignore:
+            rules.set(.never, for: source)
+            rules.setAutoRecord(false, for: source)
+        }
+        save()
+    }
+
     private func kind(of source: String) -> String {
         if custom.contains(where: { $0.name == source }) { return "Added app" }
         if let site = sites.first(where: { $0.name == source }) {
@@ -100,6 +149,7 @@ struct SourcesSettings: View {
 
     private func load() {
         rules = AppSettings.sourceRules
+        mode = AppSettings.autoRecordMode
         custom = AppSettings.customApps
         sites = AppSettings.customWebsites
         removed = AppSettings.removedSources
