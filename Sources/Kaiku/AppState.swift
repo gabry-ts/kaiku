@@ -91,6 +91,9 @@ final class AppState: ObservableObject {
         return (clock ?? RecordingClock(start: start)).recordedTime(at: now)
     }
 
+    /// The call the last error is about, nil when it is about no call (e.g. no mic access).
+    @Published private(set) var errorFolder: RecordingFolder?
+
     var lastFolder: RecordingFolder? {
         guard let url = AppSettings.lastRecordingFolder,
               FileManager.default.fileExists(atPath: url.path) else { return nil }
@@ -483,8 +486,9 @@ final class AppState: ObservableObject {
 
     // MARK: Transcription
 
-    func retryLast() {
-        guard let folder = lastFolder else { return }
+    /// Transcribes again the call the last error is about.
+    func retryFailed() {
+        guard let folder = errorFolder, FileManager.default.fileExists(atPath: folder.url.path) else { return }
         transcribe(folder: folder, provider: AppSettings.provider)
     }
 
@@ -851,7 +855,10 @@ final class AppState: ObservableObject {
     private func fail(_ message: String, folderPath: String?) {
         Log.app.error("\(message, privacy: .public)")
         lastErrorDetail = message
-        if !isRecording { phase = .error(message) }
+        if !isRecording {
+            phase = .error(message)
+            errorFolder = folderPath.map { RecordingFolder(url: URL(fileURLWithPath: $0)) }
+        }
         Notifier.shared.post(.problem, title: "Kaiku error", body: message, folderPath: folderPath)
     }
 

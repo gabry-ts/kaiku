@@ -125,17 +125,17 @@ struct MenuPanel: View {
                         }
                     }
                     HStack(spacing: PUI.Space.s) {
-                        if state.lastFolder != nil {
-                            Button("Try Again") { state.retryLast() }
+                        if state.errorFolder != nil {
+                            Button("Try Again") { state.retryFailed() }
                         }
                         Button("Details…") {
                             closePanel()
                             state.showErrorDetails()
                         }
-                        if let last = state.lastFolder {
+                        if let failed = state.errorFolder {
                             Button("Show Call") {
                                 closePanel()
-                                state.openInLibrary(last)
+                                state.openInLibrary(failed)
                             }
                         }
                         Spacer(minLength: 0)
