@@ -5,6 +5,9 @@ import KaikuCore
 enum TranscriptionJob {
     typealias Progress = @MainActor (String) -> Void
 
+    /// Saved as the error of a call whose transcription was cancelled.
+    static let cancelledMessage = "Transcription cancelled."
+
     /// `provider` replaces the one built from Settings (used by the self-test).
     static func run(folder: RecordingFolder, providerKind: ProviderKind, provider: TranscriptionProvider? = nil,
                     progress: @escaping Progress = { _ in }) async throws {
@@ -18,6 +21,8 @@ enum TranscriptionJob {
         do {
             try await transcribe(folder: folder, meta: &meta, providerKind: providerKind, provider: provider, progress: progress)
         } catch {
+            // The canceller has already updated meta.json, and may have started a new run.
+            if Task.isCancelled { throw CancellationError() }
             Log.transcription.error("Transcription failed: \(error.diagnosticDescription, privacy: .public)")
             meta.status = .error
             meta.error = error.diagnosticDescription
@@ -39,6 +44,7 @@ enum TranscriptionJob {
             try? await AudioTools.mix(mic: folder.micURL, system: folder.systemURL, output: folder.mixedURL)
         }
 
+        try Task.checkCancellation()
         let provider = try injected ?? ProviderFactory.make(providerKind)
         Log.transcription.info("Transcribing \(folder.url.lastPathComponent, privacy: .public) with \(provider.name, privacy: .public)")
         let language: String? = meta.language == "auto" ? nil : meta.language
@@ -62,6 +68,7 @@ enum TranscriptionJob {
             let me = AppSettings.meLabel
             all += r.segments.map { var s = $0; s.speaker = me; return s }
             if let l = r.detectedLanguage { detected.append(l) }
+            try Task.checkCancellation()
         }
         let systemDuration = await Task.detached { AudioFiles.duration(folder.systemURL) }.value
         if hasSystem, (systemDuration ?? 0) > 0.5 {
@@ -78,6 +85,7 @@ enum TranscriptionJob {
             if let l = r.detectedLanguage { detected.append(l) }
         }
 
+        try Task.checkCancellation()
         await progress("Writing transcript…")
         let uniqueDetected = detected.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         meta.status = .done
@@ -127,6 +135,7 @@ enum TranscriptionJob {
             return saved
         }
         let input = await prepare(url, trim: trim, options: options, dir: dir)
+        try Task.checkCancellation()
         guard !input.skip else { return TrackCache(key: key, segments: [], detectedLanguage: nil, seconds: 0) }
         let r = try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
         let result = TrackCache(key: key, segments: input.remap(r.segments), detectedLanguage: r.detectedLanguage, seconds: input.seconds)

@@ -22,6 +22,8 @@ final class AppState: ObservableObject {
     @Published private(set) var busyFolders: Set<String> = []
     /// Full text of the last error or warning, for "Show Error Details".
     @Published private(set) var lastErrorDetail: String?
+    /// Running transcription per folder key, so it can be cancelled.
+    private var jobs: [String: Task<Void, Never>] = [:]
     /// Human readable step per busy folder key, e.g. "Transcribing call audio (2 of 2)…".
     @Published private(set) var busyStage: [String: String] = [:]
     /// Animation frame for the menu bar glyph while transcribing.
@@ -429,7 +431,7 @@ final class AppState: ObservableObject {
         libraryVersion += 1
         updateGlyphTimer()
 
-        Task {
+        let task = Task {
             do {
                 var saved = false
                 if let live, let engine = AppSettings.liveEngine {
@@ -446,6 +448,7 @@ final class AppState: ObservableObject {
                         self?.busyStage[folder.key] = stage
                     }
                 }
+                try Task.checkCancellation()
                 recoveredFolders.removeAll { $0.key == folder.key }
                 if AppSettings.summaryEnabled {
                     busyStage[folder.key] = "Writing summary…"
@@ -454,16 +457,39 @@ final class AppState: ObservableObject {
                         Notifier.shared.post(.problem, title: "Summary failed", body: error.localizedDescription, folderPath: folder.url.path)
                     }
                 }
+                try Task.checkCancellation()
                 finishBusy(folder)
                 if !isRecording { phase = .done(title: title) }
                 Notifier.shared.postTranscriptReady(title: title, folderPath: folder.url.path)
                 if AppSettings.webhookEnabled { await sendWebhook(folder) }
             } catch {
+                // cancelTranscription has already cleaned up.
+                if Task.isCancelled { return }
                 finishBusy(folder)
                 fail("Transcription failed for \"\(title)\": \(error.diagnosticDescription)", folderPath: folder.url.path)
             }
         }
+        jobs[folder.key] = task
     }
+
+    /// Stops a running transcription: no summary and no webhook follow. The call stays
+    /// in the library, ready to be transcribed again or deleted.
+    func cancelTranscription(_ folder: RecordingFolder) {
+        guard let task = jobs[folder.key] else { return }
+        task.cancel()
+        finishBusy(folder)
+        // Cancelling while summarizing keeps the finished transcript.
+        if folder.loadMeta()?.status == .transcribing {
+            folder.updateMeta {
+                $0.status = .error
+                $0.error = TranscriptionJob.cancelledMessage
+            }
+        }
+        if case .transcribing = phase, !anyBusy { phase = .idle }
+        Log.transcription.info("Transcription cancelled: \(folder.url.lastPathComponent, privacy: .public)")
+    }
+
+    func canCancelTranscription(_ folder: RecordingFolder) -> Bool { jobs[folder.key] != nil }
 
     /// Generates (or regenerates) summary.md for a call.
     func generateSummary(_ folder: RecordingFolder) async throws {
@@ -719,6 +745,7 @@ final class AppState: ObservableObject {
     }
 
     private func finishBusy(_ folder: RecordingFolder) {
+        jobs[folder.key] = nil
         busyFolders.remove(folder.key)
         busyStage[folder.key] = nil
         libraryVersion += 1

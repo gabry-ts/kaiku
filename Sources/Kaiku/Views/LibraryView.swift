@@ -459,6 +459,7 @@ private struct RecordingDetail: View {
     @StateObject private var player = AudioPlayerModel()
 
     private var busy: Bool { state.isBusy(item.folder) }
+    private var cancelled: Bool { item.meta.error == TranscriptionJob.cancelledMessage }
     private var hasAudio: Bool { item.meta.audioDeleted != true && !item.folder.audioURLs.isEmpty }
     private var blocks: [TranscriptBlock] { item.transcript.map(TranscriptFormatter.parseBlocks) ?? [] }
 
@@ -697,6 +698,11 @@ private struct RecordingDetail: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if state.canCancelTranscription(item.folder) {
+                    Button("Cancel") { state.cancelTranscription(item.folder) }
+                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.regular))
+                        .help("Stop transcribing. No summary or webhook is sent, and the call can then be deleted.")
+                }
             }
             .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
         } else if item.meta.status == .recovered {
@@ -717,18 +723,21 @@ private struct RecordingDetail: View {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.title3)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Transcription didn't finish").font(.callout.weight(.medium))
-                        Text("Your audio is safe. Fix the problem and try again.").font(.caption).foregroundStyle(.secondary)
+                        Text(cancelled ? "Transcription cancelled" : "Transcription didn't finish").font(.callout.weight(.medium))
+                        Text(cancelled ? "Your audio is safe. Transcribe it again or delete the call." : "Your audio is safe. Fix the problem and try again.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(showErrorDetails ? "Hide Details" : "Show Details") {
-                        withAnimation(.snappy) { showErrorDetails.toggle() }
+                    if !cancelled {
+                        Button(showErrorDetails ? "Hide Details" : "Show Details") {
+                            withAnimation(.snappy) { showErrorDetails.toggle() }
+                        }
                     }
                     Button("Try Again") { state.transcribe(folder: item.folder, provider: AppSettings.provider) }
                         .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
                         .disabled(!hasAudio)
                 }
-                if showErrorDetails, let err = item.meta.error {
+                if showErrorDetails, !cancelled, let err = item.meta.error {
                     Text(err).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                         .transition(.opacity)
                 }
