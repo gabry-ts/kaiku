@@ -22,6 +22,11 @@ let package = Package(
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .executableTarget(
+            name: "kaiku-mcp",
+            dependencies: ["KaikuCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .testTarget(
             name: "KaikuCoreTests",
             dependencies: ["KaikuCore"],
