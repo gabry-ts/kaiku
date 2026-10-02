@@ -45,6 +45,34 @@ if [[ ! -d "$PARTITI_BUNDLE" ]]; then
 fi
 ditto "$PARTITI_BUNDLE" "$APP/Contents/Resources/PartitiUI_PartitiUI.bundle"
 
+# App Intents (Shortcuts, Siri, Spotlight actions): SwiftPM doesn't run Xcode's metadata
+# extraction, so run it by hand on the constant values the universal build already emits.
+# Without Resources/Metadata.appintents the app builds fine but exposes no intents.
+INTENTS_OBJ="$ROOT/.build/apple/Intermediates.noindex/Kaiku.build/Release/Kaiku.build/Objects-normal/arm64"
+INTENTS_TMP="$(mktemp -d)"
+if [[ ! -f "$INTENTS_OBJ/Kaiku-primary.swiftconstvalues" ]]; then
+    echo "error: $INTENTS_OBJ/Kaiku-primary.swiftconstvalues not found" >&2
+    exit 1
+fi
+find "$ROOT/Sources/Kaiku" -name '*.swift' > "$INTENTS_TMP/sources.txt"
+echo "$INTENTS_OBJ/Kaiku-primary.swiftconstvalues" > "$INTENTS_TMP/constvalues.txt"
+xcrun appintentsmetadataprocessor \
+    --output "$APP/Contents/Resources" \
+    --toolchain-dir "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain" \
+    --module-name "$EXEC_NAME" \
+    --sdk-root "$(xcrun --sdk macosx --show-sdk-path)" \
+    --xcode-version "$(xcodebuild -version | awk '/Build version/ { print $3 }')" \
+    --platform-family macOS \
+    --deployment-target 14.2 \
+    --target-triple arm64-apple-macosx14.2 \
+    --source-file-list "$INTENTS_TMP/sources.txt" \
+    --swift-const-vals-list "$INTENTS_TMP/constvalues.txt"
+rm -rf "$INTENTS_TMP"
+if [[ ! -d "$APP/Contents/Resources/Metadata.appintents" ]]; then
+    echo "error: Metadata.appintents was not produced" >&2
+    exit 1
+fi
+
 # Bundled whisper.cpp command line tool, server (live transcription) and license notice.
 cp "$WHISPER_BIN/whisper-cli" "$APP/Contents/MacOS/whisper-cli"
 cp "$WHISPER_BIN/whisper-server" "$APP/Contents/MacOS/whisper-server"
