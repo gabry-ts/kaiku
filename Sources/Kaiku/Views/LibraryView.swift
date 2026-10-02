@@ -1149,14 +1149,15 @@ private struct PlayerCard: View {
         guard spaceMonitor == nil else { return }
         let player = self.player
         spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            MainActor.assumeIsolated { () -> NSEvent? in
+            let handled = MainActor.assumeIsolated { () -> Bool in
                 guard event.charactersIgnoringModifiers == " ",
                       event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty,
                       let window = event.window, window === WindowManager.shared.window("library"),
-                      !(window.firstResponder is NSText) else { return event }
+                      !(window.firstResponder is NSText) else { return false }
                 player.toggle()
-                return nil
+                return true
             }
+            return handled ? nil : event
         }
     }
 
