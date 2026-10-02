@@ -131,4 +131,16 @@ final class TranscriptParseTests: XCTestCase {
         XCTAssertEqual(blocks[1].speaker, "Speaker 1")
         XCTAssertEqual(blocks[1].text, "Sì: ci siamo, **ok**.")
     }
+
+    func testMergeCollapsesInternalBlankLines() {
+        let segs = [
+            Segment(start: 0, end: 2, speaker: "Me", text: "Hello\n\nthere  friend"),
+            Segment(start: 2, end: 4, speaker: "Me", text: " second\nline "),
+        ]
+        let merged = TranscriptFormatter.merge(segs)
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].text, "Hello there friend second line")
+        let blocks = TranscriptFormatter.parseBlocks(TranscriptFormatter.body(merged))
+        XCTAssertEqual(blocks.map(\.text), ["Hello there friend second line"])
+    }
 }

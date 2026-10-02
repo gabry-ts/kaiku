@@ -28,7 +28,8 @@ public enum TranscriptFormatter {
         let sorted = segments
             .map { s -> Segment in
                 var c = s
-                c.text = s.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Collapse internal newlines and whitespace runs so a turn stays one paragraph.
+                c.text = s.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
                 return c
             }
             .filter { !$0.text.isEmpty }
