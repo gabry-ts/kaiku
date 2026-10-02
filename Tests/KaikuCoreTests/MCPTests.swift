@@ -214,6 +214,12 @@ final class MCPTests: XCTestCase {
         XCTAssertThrowsError(try AgentConfig.claudeDesktop(Data(#"{"mcpServers":3}"#.utf8), path: "/k"))
     }
 
+    func testClaudeDesktopSnippetIsTheEntryAddedToTheConfig() throws {
+        let path = "/My \"Apps\"/kaiku-mcp"
+        let snippet = try JSONDecoder().decode(JSONValue.self, from: Data(AgentConfig.claudeDesktopSnippet(path: path).utf8))
+        XCTAssertEqual(snippet["mcpServers"]?["kaiku"], ["command": .string(path), "args": []])
+    }
+
     func testClaudeCommandLineAndShellQuoting() {
         XCTAssertEqual(AgentConfig.claudeCommandLine(path: "/Applications/Kaiku.app/Contents/MacOS/kaiku-mcp"),
                        "claude mcp add --scope user kaiku -- /Applications/Kaiku.app/Contents/MacOS/kaiku-mcp")

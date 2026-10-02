@@ -39,16 +39,9 @@ struct AgentSettings: View {
                 }
 
                 SettingsGroup("Manual Setup", footer: "For other agents, run the server path as a stdio MCP server, with no arguments.") {
-                    GroupRow {
-                        HStack(alignment: .firstTextBaseline, spacing: PUI.Space.s) {
-                            Text(AgentConfig.claudeCommandLine(path: path))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            copyButton("Copy", text: AgentConfig.claudeCommandLine(path: path))
-                        }
-                    }
+                    snippetRow("Claude Code", AgentConfig.claudeCommandLine(path: path))
+                    snippetRow("Codex, in ~/.codex/config.toml", AgentConfig.codexSnippet(path: path))
+                    snippetRow("Claude Desktop, in claude_desktop_config.json", AgentConfig.claudeDesktopSnippet(path: path))
                 }
             }
 
@@ -73,6 +66,22 @@ struct AgentSettings: View {
                 StatusDot(kind: result.ok ? .ok : .error, text: result.message)
                     .lineLimit(3)
                     .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func snippetRow(_ title: String, _ text: String) -> some View {
+        GroupRow {
+            VStack(alignment: .leading, spacing: PUI.Space.xs) {
+                Text(title).font(.system(size: 11, weight: .medium))
+                HStack(alignment: .top, spacing: PUI.Space.s) {
+                    Text(text)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    copyButton("Copy", text: text)
+                }
             }
         }
     }

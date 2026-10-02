@@ -193,6 +193,26 @@ public enum AgentConfig {
 
     // MARK: Claude Desktop
 
+    /// The `mcpServers` entry for claude_desktop_config.json.
+    public static func claudeDesktopSnippet(path: String) -> String {
+        """
+        {
+          "mcpServers": {
+            "\(KaikuAgents.serverName)": {
+              "command": \(jsonString(path)),
+              "args": []
+            }
+          }
+        }
+        """
+    }
+
+    private static func jsonString(_ s: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: [s], options: [.withoutEscapingSlashes])
+        let array = data.map { String(decoding: $0, as: UTF8.self) } ?? "[\"\(s)\"]"
+        return String(array.dropFirst().dropLast())
+    }
+
     public struct ConfigError: LocalizedError, Sendable {
         public let message: String
         public var errorDescription: String? { message }
