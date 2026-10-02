@@ -309,7 +309,7 @@ public struct KaikuToolSet: MCPToolSet {
             return .error("\"\(c.meta.title)\" has no audio left to transcribe.")
         }
         return ask(.transcribe(folder: c.folder.url.path), c,
-                   done: "Kaiku is transcribing \"\(c.meta.title)\" again with the provider chosen in its Settings. It can take a few minutes: get_call shows status \"transcribing\" until it is \"done\".")
+                   done: "Asked Kaiku to transcribe \"\(c.meta.title)\" again with the provider chosen in its Settings. Check get_call: status is \"transcribing\" while it works and \"done\" when finished.")
     }
 
     private func summarizeAgain(_ args: MCPArguments) throws -> MCPToolResult {
@@ -317,7 +317,7 @@ public struct KaikuToolSet: MCPToolSet {
         if let busy = editable(c) { return busy }
         guard c.folder.hasTranscript else { return Self.noTranscript(c) }
         return ask(.summarize(folder: c.folder.url.path), c,
-                   done: "Kaiku is writing a new summary of \"\(c.meta.title)\" with the provider chosen in its Settings. Read it with read_summary in a minute or two.")
+                   done: "Asked Kaiku to write a new summary of \"\(c.meta.title)\" with the provider chosen in its Settings. Check get_call (hasSummary) and read it with read_summary in a minute or two.")
     }
 
     private func ask(_ request: AgentRequest, _ c: CallEntry, done: String) -> MCPToolResult {
