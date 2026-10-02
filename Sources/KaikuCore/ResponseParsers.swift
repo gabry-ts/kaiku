@@ -20,6 +20,8 @@ public enum ResponseParsers {
         struct Token: Decodable {
             let text: String
             let offsets: Offsets?
+            /// DTW time in centiseconds, -1 or absent without `--dtw`.
+            let t_dtw: Double?
         }
         struct Item: Decodable {
             let offsets: Offsets
@@ -39,16 +41,20 @@ public enum ResponseParsers {
         catch { throw ParseError.invalid("whisper.cpp JSON: \(error)") }
         let segs = out.transcription.map { item in
             Segment(start: item.offsets.from / 1000, end: item.offsets.to / 1000, text: item.text,
-                    words: item.tokens.flatMap { whisperCppWords($0, text: item.text) })
+                    words: item.tokens.flatMap { whisperCppWords($0, text: item.text, segmentStart: item.offsets.from / 1000, segmentEnd: item.offsets.to / 1000) })
         }
         return TranscriptionResult(segments: segs, detectedLanguage: out.result?.language)
     }
 
     /// Joins whisper.cpp tokens into words: a token starting with a space starts a new word,
     /// special tokens like `[_BEG_]` or `[_TT_42]` are skipped. Nil when the tokens have no times
-    /// (older whisper.cpp, or plain `-oj` output).
-    private static func whisperCppWords(_ tokens: [WhisperCppOutput.Token], text: String) -> [Segment.Word]? {
+    /// (older whisper.cpp, or plain `-oj` output). With DTW times (`--dtw`) a word starts at the
+    /// DTW time of its first timed token and ends where the next word starts, since the token
+    /// offsets are coarse.
+    private static func whisperCppWords(_ tokens: [WhisperCppOutput.Token], text: String,
+                                        segmentStart: Double, segmentEnd: Double) -> [Segment.Word]? {
         var words: [Segment.Word] = []
+        var dtwStarts: [Double?] = []
         var startsWord = true
         for token in tokens {
             let t = token.text
@@ -65,16 +71,33 @@ public enum ResponseParsers {
                 // A token without times can only continue a timed word.
                 guard timed else { continue }
                 words.append(Segment.Word(start: start, end: end, text: t))
+                dtwStarts.append(nil)
             } else {
                 words[words.count - 1].text += t
                 if timed { words[words.count - 1].end = max(words[words.count - 1].end, end) }
             }
+            if let d = token.t_dtw, d >= 0, !dtwStarts.isEmpty, dtwStarts[dtwStarts.count - 1] == nil {
+                dtwStarts[dtwStarts.count - 1] = d / 100
+            }
             startsWord = t.hasSuffix(" ")
         }
-        words = words.compactMap { w in
+        var kept: [Segment.Word] = []
+        var keptDTW: [Double?] = []
+        for (i, w) in words.enumerated() {
             var c = w
             c.text = w.text.replacingOccurrences(of: "\u{FFFD}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return c.text.isEmpty ? nil : c
+            if c.text.isEmpty { continue }
+            kept.append(c)
+            keptDTW.append(dtwStarts[i])
+        }
+        words = kept
+        if keptDTW.contains(where: { $0 != nil }) {
+            let lo = segmentStart, hi = max(segmentEnd, segmentStart)
+            let starts = words.indices.map { min(max(keptDTW[$0] ?? words[$0].start, lo), hi) }
+            for i in words.indices {
+                words[i].start = starts[i]
+                words[i].end = max(starts[i], i + 1 < words.count ? min(starts[i + 1], hi) : hi)
+            }
         }
         // The segment text has the exact characters (a token may hold half of one): use it
         // when it splits into the same words.
@@ -83,6 +106,26 @@ public enum ResponseParsers {
             for i in words.indices { words[i].text = spoken[i] }
         }
         return words.isEmpty ? nil : words
+    }
+
+    /// The `--dtw` preset of whisper.cpp for a model file such as `ggml-large-v3-turbo-q5_0.bin`,
+    /// nil when the model is not a known one.
+    public static func whisperCppDTWPreset(modelFile: String) -> String? {
+        var name = (modelFile as NSString).lastPathComponent.lowercased()
+        if name.hasPrefix("ggml-") { name.removeFirst(5) }
+        if name.hasSuffix(".bin") { name.removeLast(4) }
+        // Longest names first so that `large-v3-turbo` is not taken for `large-v3`.
+        let presets = ["large-v3-turbo": "large.v3.turbo", "large-v3": "large.v3", "large-v2": "large.v2",
+                       "large-v1": "large.v1", "medium.en": "medium.en", "medium": "medium",
+                       "small.en": "small.en", "small": "small", "base.en": "base.en", "base": "base",
+                       "tiny.en": "tiny.en", "tiny": "tiny"]
+        for (key, preset) in presets.sorted(by: { $0.key.count > $1.key.count }) {
+            guard name.hasPrefix(key) else { continue }
+            let rest = name.dropFirst(key.count)
+            // Only a quantisation suffix (`-q5_0`, `-q8_0`) may follow.
+            if rest.isEmpty || rest.hasPrefix("-q") { return preset }
+        }
+        return nil
     }
 
     // MARK: ElevenLabs Scribe

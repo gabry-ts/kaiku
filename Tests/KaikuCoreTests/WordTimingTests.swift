@@ -42,6 +42,35 @@ final class WordTimingTests: XCTestCase {
         XCTAssertNil(r.segments[1].words)
     }
 
+    func testWhisperCppDTWTimesDriveWords() throws {
+        let json = """
+        {"transcription":[{"offsets":{"from":0,"to":30000},"text":" Thank you.","tokens":[
+        {"text":"[_BEG_]","offsets":{"from":0,"to":0},"t_dtw":-1},
+        {"text":" Thank","offsets":{"from":0,"to":16380},"t_dtw":970},
+        {"text":" you","offsets":{"from":18970,"to":29720},"t_dtw":985},
+        {"text":".","offsets":{"from":29720,"to":29900},"t_dtw":988},
+        {"text":"[_TT_1500]","offsets":{"from":30000,"to":30000},"t_dtw":-1}]}]}
+        """
+        let r = try ResponseParsers.whisperCpp(Data(json.utf8))
+        XCTAssertEqual(r.segments[0].words, [
+            Word(start: 9.7, end: 9.85, text: "Thank"), Word(start: 9.85, end: 30, text: "you."),
+        ])
+    }
+
+    func testWhisperCppDTWPreset() {
+        let p = ResponseParsers.whisperCppDTWPreset
+        XCTAssertEqual(p("ggml-large-v3-turbo.bin"), "large.v3.turbo")
+        XCTAssertEqual(p("/m/ggml-large-v3-turbo-q5_0.bin"), "large.v3.turbo")
+        XCTAssertEqual(p("ggml-large-v3.bin"), "large.v3")
+        XCTAssertEqual(p("ggml-large-v2.bin"), "large.v2")
+        XCTAssertEqual(p("ggml-medium.en.bin"), "medium.en")
+        XCTAssertEqual(p("ggml-small-q8_0.bin"), "small")
+        XCTAssertEqual(p("ggml-base.en-q5_1.bin"), "base.en")
+        XCTAssertEqual(p("ggml-tiny.bin"), "tiny")
+        XCTAssertNil(p("ggml-large-v3-custom.bin"))
+        XCTAssertNil(p("my-model.bin"))
+    }
+
     func testWhisperCppTokensWithoutTimesOrWithHalfCharacters() throws {
         let untimed = """
         {"transcription":[{"offsets":{"from":0,"to":1000},"text":" Ciao","tokens":[{"text":" Ciao","id":1}]}]}

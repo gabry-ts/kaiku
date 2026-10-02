@@ -23,13 +23,18 @@ struct WhisperCppProvider: TranscriptionProvider {
         let threads = max(4, ProcessInfo.processInfo.activeProcessorCount - 2)
         let json = outBase.appendingPathExtension("json")
         do {
-            try await Shell.run(binary, [
+            var args = [
                 "-m", model, "-f", wav.path,
                 "-l", language ?? "auto",
                 "-t", String(threads),
                 // Full JSON has the tokens of each segment, with their times.
                 "-oj", "-ojf", "-of", outBase.path, "-np",
-            ])
+            ]
+            // DTW gives accurate word times; it needs flash attention off.
+            if let preset = ResponseParsers.whisperCppDTWPreset(modelFile: model) {
+                args += ["--dtw", preset, "-nfa"]
+            }
+            try await Shell.run(binary, args)
         } catch {
             // whisper.cpp can abort while releasing the Metal device at exit, after the
             // transcript was written. Accept the output if it is complete and parses.
