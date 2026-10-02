@@ -38,6 +38,11 @@ enum Webhook {
         var externalDomains: [String] = []
         /// Identifies one delivery; identical on every retry so receivers can deduplicate.
         var deliveryID = UUID().uuidString
+        var actionItems: [ActionItem] = []
+
+        var actionItemsJSON: [[String: Any]] {
+            actionItems.map { ["text": $0.text, "owner": $0.owner ?? NSNull(), "due": $0.due ?? NSNull()] }
+        }
 
         var bookmarksJSON: [[String: Any]] {
             bookmarks.sorted { $0.time < $1.time }.map { ["time": $0.time, "label": $0.label] }
@@ -66,6 +71,7 @@ enum Webhook {
                 "estimated_cost_usd": estimatedCostUSD ?? NSNull(),
                 "tags": tags,
                 "external_domains": externalDomains,
+                "action_items": actionItemsJSON,
             ]
             return try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         }
@@ -94,6 +100,7 @@ enum Webhook {
                 "tags_json": .raw(json(tags)),
                 "external_domains": .string(externalDomains.joined(separator: ", ")),
                 "external_domains_json": .raw(json(externalDomains)),
+                "action_items_json": .raw(json(actionItemsJSON)),
             ]
         }
 
@@ -119,7 +126,8 @@ enum Webhook {
                 summaryMarkdown: folder.summary,
                 estimatedCostUSD: meta.estimatedCostUSD,
                 tags: meta.tags ?? [],
-                externalDomains: meta.calendarEvent?.externalDomains ?? [])
+                externalDomains: meta.calendarEvent?.externalDomains ?? [],
+                actionItems: folder.loadActionItems())
         }
 
         static var sample: Payload {
@@ -134,7 +142,8 @@ enum Webhook {
                 summaryMarkdown: "## Summary\nA sample call.",
                 estimatedCostUSD: 0.0065,
                 tags: ["Sample"],
-                externalDomains: ["example.com"])
+                externalDomains: ["example.com"],
+                actionItems: [ActionItem(text: "Send the quote", owner: "Me", due: "2026-10-09")])
         }
     }
 
