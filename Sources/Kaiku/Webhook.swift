@@ -178,7 +178,8 @@ enum Webhook {
             req.httpBody = try payload.defaultBody()
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        for header in AppSettings.webhookHeaders {
+        // A header whose value is empty (or couldn't be read from the Keychain) is left out.
+        for header in AppSettings.webhookHeaders where !header.value.isEmpty {
             req.setValue(header.value, forHTTPHeaderField: header.name.trimmingCharacters(in: .whitespaces))
         }
         return req

@@ -23,6 +23,7 @@ enum ProviderFactory {
         let model = AppSettings.model(for: kind)
         func key() throws -> String {
             guard let k = Keychain.apiKey(for: kind) else {
+                if let problem = Keychain.errors[kind.rawValue] { throw ProviderError(message: problem) }
                 throw ProviderError(message: "Missing API key for \(kind.displayName). Add it in Settings.")
             }
             return k
