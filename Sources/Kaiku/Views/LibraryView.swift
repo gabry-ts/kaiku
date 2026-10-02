@@ -1093,7 +1093,6 @@ private struct TranscriptLineView: View, Equatable {
                 Text(highlighted(shown))
                     .font(.body)
                     .lineSpacing(3)
-                    .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .background(GeometryReader { geo in
                         Color.clear
@@ -1105,6 +1104,14 @@ private struct TranscriptLineView: View, Equatable {
                         seek(time(at: value.location, aligned: String(shown.characters) == line.text))
                     })
             }
+        }
+        .contextMenu {
+            Button("Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("\(line.speaker): \(String(displayed.characters))", forType: .string)
+            }
+            Button("Play from Here") { seek(line.start) }
+                .disabled(!canSeek)
         }
     }
 
