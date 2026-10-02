@@ -11,8 +11,13 @@ public struct KaikuToolSet: MCPToolSet {
     /// Called after a call was changed on disk.
     public var changed: () -> Void
 
+    /// Embeds the query of semantic_search.
+    public var embedder: TextEmbedder
+
     public init(library: CallLibrary, allowEdits: @escaping () -> Bool,
-                openInApp: @escaping (AgentRequest) throws -> Void = { _ in }, changed: @escaping () -> Void = {}) {
+                openInApp: @escaping (AgentRequest) throws -> Void = { _ in }, changed: @escaping () -> Void = {},
+                embedder: TextEmbedder = NLSentenceEmbedder()) {
+        self.embedder = embedder
         self.library = library
         self.allowEdits = allowEdits
         self.openInApp = openInApp
@@ -23,7 +28,7 @@ public struct KaikuToolSet: MCPToolSet {
     Kaiku records and transcribes the user's calls on this Mac. Each call has an id like "c3fa9b2" (the same ids Kaiku's chat cites) and a folder with transcript.md, summary.md when there is one, and meta.json. Use list_calls or search_transcripts to find calls, then read_transcript or read_summary. Transcript lines start with their time as [HH:MM:SS]; cite calls as [id HH:MM:SS]. You can also read transcript.md directly at the path the tools give.
     """
 
-    public static let readToolNames = ["list_calls", "get_call", "read_transcript", "read_summary", "search_transcripts"]
+    public static let readToolNames = ["list_calls", "get_call", "read_transcript", "read_summary", "search_transcripts", "semantic_search"]
     public static let editToolNames = ["rename_call", "set_tags", "rename_speaker", "transcribe_again", "summarize_again"]
 
     public func tools() -> [MCPTool] {
@@ -43,6 +48,7 @@ public struct KaikuToolSet: MCPToolSet {
         case "read_transcript": return try readTranscript(args)
         case "read_summary": return try readSummary(args)
         case "search_transcripts": return try searchTranscripts(args)
+        case "semantic_search": return try semanticSearch(args)
         case "rename_call": return try renameCall(args)
         case "set_tags": return try setTags(args)
         case "rename_speaker": return try renameSpeaker(args)
@@ -223,6 +229,34 @@ public struct KaikuToolSet: MCPToolSet {
         return MCPToolResult(text: JSONValue.object(o).prettyText())
     }
 
+    /// Passages closest in meaning to the query, from the indexes the app keeps in the call folders.
+    private func semanticSearch(_ args: MCPArguments) throws -> MCPToolResult {
+        let query = try args.requiredString("query")
+        let filter = try callFilter(args.removing("query"))
+        let limit = try args.int("limit", default: 10, in: 1...100)
+        let calls = library.calls().filter { filter.matches($0.meta) }
+        let indexed = calls.compactMap { c in c.folder.loadSemanticIndex().map { (call: c, index: $0) } }
+        var vectors: [String: [Float]] = [:]
+        for language in Set(indexed.map(\.index.language)) {
+            if let v = embedder.embed(query, language: language) { vectors[language] = v }
+        }
+        let byID = Dictionary(indexed.map { ($0.call.id, $0.call) }, uniquingKeysWith: { a, _ in a })
+        let matches = SemanticRanker.rank(queries: vectors, indexes: indexed.map { (callID: $0.call.id, index: $0.index) }, limit: limit)
+        var o: [String: JSONValue] = ["query": .string(query), "matches": .array(matches.compactMap { m -> JSONValue? in
+            guard let c = byID[m.callID] else { return nil }
+            return [
+                "id": .string(c.id), "title": .string(c.meta.title), "date": .string(CallDates.format(c.meta.date)),
+                "time": .string(TranscriptFormatter.timestamp(m.passage.start)), "speaker": .optional(m.passage.speaker),
+                "text": .string(m.passage.text), "score": .double(Double(m.score)),
+            ]
+        })]
+        let missing = calls.count - indexed.count
+        if missing > 0 {
+            o["note"] = .string("\(missing) of \(calls.count) calls are not searched by meaning yet: Kaiku indexes them in the background once Smart search was turned on in its Library. search_transcripts finds exact words in all of them.")
+        }
+        return MCPToolResult(text: JSONValue.object(o).prettyText())
+    }
+
     // MARK: Editing
 
     /// Calls being recorded or transcribed are left alone.
@@ -376,6 +410,12 @@ public struct KaikuToolSet: MCPToolSet {
                     "query": ["type": "string", "description": "Words or phrase to find."],
                     "limit": ["type": "integer", "minimum": 1, "maximum": 200, "description": "Matches to return, 20 by default."],
                     "offset": ["type": "integer", "minimum": 0, "description": "Matches to skip, for the next page."],
+                ]), required: ["query"])),
+        MCPTool(name: "semantic_search",
+                description: "Find the passages of the calls closest in meaning to a question or topic, even when the words differ. Returns the best passages with call id, title, time, speaker, text and score. Only calls already indexed by Kaiku are searched.",
+                inputSchema: schema(merging(filterProperties, [
+                    "query": ["type": "string", "description": "A question or topic, in natural language."],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 100, "description": "Passages to return, 10 by default."],
                 ]), required: ["query"])),
     ]
 

@@ -342,6 +342,28 @@ final class KaikuToolsTests: XCTestCase {
         XCTAssertEqual(filtered["matches"]?.arrayValue?.first?["time"], "00:00:03")
     }
 
+    func testSemanticSearchUsesTheStoredIndexes() throws {
+        struct Letters: TextEmbedder {
+            func supports(language: String) -> Bool { language == "en" }
+            func embed(_ text: String, language: String) -> [Float]? {
+                ["b", "k", "w"].map { l in Float(text.lowercased().filter { String($0) == l }.count) }
+            }
+        }
+        let embedder = Letters()
+        let library = CallLibrary(base: base)
+        let weekly = try XCTUnwrap(library.calls().first { $0.meta.title == "Weekly sync" })
+        XCTAssertNotNil(SemanticIndexer.build(weekly.folder, meta: weekly.meta, embedder: embedder))
+        let tools = KaikuToolSet(library: library, allowEdits: { false }, embedder: embedder)
+
+        let found = try json(tools.call("semantic_search", arguments: ["query": "budget"]))
+        XCTAssertEqual(found["matches"]?.arrayValue?.map { $0["title"] }, ["Weekly sync"])
+        XCTAssertEqual(found["matches"]?.arrayValue?.first?["time"], "00:00:05")
+        XCTAssertNotNil(found["note"]?.stringValue)
+        let none = try json(tools.call("semantic_search", arguments: ["query": "budget", "tag": "Atlas"]))
+        XCTAssertEqual(none["matches"]?.arrayValue?.count, 0)
+        XCTAssertThrowsError(try tools.call("semantic_search", arguments: [:]))
+    }
+
     func testEditToolsOnlyWhenAllowed() throws {
         XCTAssertEqual(tools.tools().map(\.name), KaikuToolSet.readToolNames)
         let refused = try tools.call("rename_call", arguments: ["id": .string(kickoffID), "title": "New"])
