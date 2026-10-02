@@ -748,10 +748,7 @@ final class AppState: ObservableObject {
     var lastTags: [String] { AppSettings.defaults.stringArray(forKey: Keys.lastTags) ?? [] }
 
     func setTags(_ folder: RecordingFolder, _ tags: [String]) {
-        guard var meta = folder.loadMeta() else { return }
-        meta.tags = Tags.normalize(tags).nilIfEmpty
-        try? folder.saveMeta(meta)
-        if let raw = folder.loadSegments() { _ = try? TranscriptWriter.write(folder: folder, meta: meta, rawSegments: raw) }
+        folder.setTags(tags)
         libraryVersion += 1
     }
 
@@ -769,14 +766,7 @@ final class AppState: ObservableObject {
     // MARK: Library actions
 
     func rename(_ folder: RecordingFolder, to newTitle: String) {
-        let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        folder.updateMeta { $0.title = title }
-        if var text = try? String(contentsOf: folder.transcriptURL, encoding: .utf8), text.hasPrefix("# ") {
-            let firstLineEnd = text.firstIndex(of: "\n") ?? text.endIndex
-            text.replaceSubrange(text.startIndex..<firstLineEnd, with: "# \(title)")
-            try? text.write(to: folder.transcriptURL, atomically: true, encoding: .utf8)
-        }
+        guard folder.rename(to: newTitle) else { return }
         libraryVersion += 1
     }
 
@@ -828,16 +818,7 @@ final class AppState: ObservableObject {
 
     /// Stores display names for raw speaker labels and regenerates transcript.md.
     func renameSpeakers(_ folder: RecordingFolder, names: [String: String]) throws {
-        guard var meta = folder.loadMeta(), let raw = folder.loadSegments() else {
-            throw ProviderError(message: "This recording has no segments.json; re-transcribe it first.")
-        }
-        let clean = names.compactMapValues { v -> String? in
-            let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
-            return t.isEmpty ? nil : t
-        }.filter { $0.key != $0.value }
-        meta.speakerNames = clean.isEmpty ? nil : clean
-        try folder.saveMeta(meta)
-        try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: raw)
+        try folder.renameSpeakers(names)
         libraryVersion += 1
     }
 

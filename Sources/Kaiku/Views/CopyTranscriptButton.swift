@@ -1,3 +1,4 @@
+import KaikuCore
 import SwiftUI
 
 /// One-click copy of the full transcript (speaker names applied), with a short
