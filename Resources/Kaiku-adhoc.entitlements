@@ -6,6 +6,8 @@
 	<true/>
 	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
+	<key>com.apple.security.personal-information.reminders</key>
+	<true/>
 	<!-- Only used for local ad-hoc builds (SIGN_IDENTITY=-): two independently
 	     ad-hoc signed binaries have no Team ID to compare, so the hardened
 	     runtime's library validation refuses to load Sparkle.framework unless

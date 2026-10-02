@@ -41,6 +41,8 @@
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Kaiku adds the action items of a call to the Reminders list you choose, when you send them.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
