@@ -60,6 +60,44 @@ public enum AgentRequest: Equatable, Sendable {
     }
 }
 
+/// Commands from other tools (the Raycast extension) with a `kaiku://` URL. None of them
+/// changes a saved call, so they don't depend on the setting for agents to edit calls.
+public enum ControlRequest: Equatable, Sendable {
+    case startRecording(title: String?)
+    case stopRecording
+    case togglePause
+    case addBookmark
+    case toggleMute
+    /// Selects a call, by its folder, in the Library.
+    case openCall(folder: String)
+    case chat(question: String, tag: String?, source: String?, days: Int?)
+
+    public init?(url: URL) {
+        guard url.scheme?.lowercased() == AgentRequest.scheme,
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        func value(_ name: String) -> String? {
+            let v = parts.queryItems?.first(where: { $0.name == name })?.value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (v ?? "").isEmpty ? nil : v
+        }
+        let path = parts.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        switch (parts.host?.lowercased(), path) {
+        case ("record", "start"): self = .startRecording(title: value("title"))
+        case ("record", "stop"): self = .stopRecording
+        case ("record", "pause"): self = .togglePause
+        case ("record", "bookmark"): self = .addBookmark
+        case ("mute", "toggle"): self = .toggleMute
+        case ("open", ""):
+            guard let folder = value("folder") else { return nil }
+            self = .openCall(folder: folder)
+        case ("chat", ""):
+            guard let question = value("q") else { return nil }
+            self = .chat(question: question, tag: value("tag"), source: value("source"),
+                         days: value("days").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil })
+        default: return nil
+        }
+    }
+}
+
 /// Adds the MCP server to the configuration of Claude Code, Codex and Claude Desktop.
 public enum AgentConfig {
     public enum Change: Equatable, Sendable {

@@ -31,6 +31,8 @@ final class AppState: ObservableObject {
     @Published var librarySelection: String?
     /// A call to show in the library and the moment to play, asked for by a chat citation.
     @Published var librarySeek: LibrarySeek?
+    /// Set when a `kaiku://chat` URL asked for the chat; the library opens it and clears this.
+    @Published var chatRequested = false
     /// True while the current recording is paused.
     @Published private(set) var isPaused = false
     /// Bookmarks of the current recording.
@@ -845,9 +847,49 @@ final class AppState: ObservableObject {
         libraryVersion += 1
     }
 
+    /// Commands from other tools, e.g. the Raycast extension. They never change a saved call.
+    private func handleControl(_ request: ControlRequest) {
+        switch request {
+        case .startRecording(let title):
+            guard !isRecording else { return }
+            Task { await startRecording(title: title ?? "", language: AppSettings.language) }
+        case .stopRecording:
+            stopRecording()
+        case .togglePause:
+            togglePause()
+        case .addBookmark:
+            addBookmark()
+        case .toggleMute:
+            MicMuter.shared.toggle()
+        case .openCall(let path):
+            guard let folder = CallLibrary(base: AppSettings.baseFolder).folder(atPath: path) else {
+                Log.app.error("Ignored a request to open a folder outside the recordings folder: \(path, privacy: .public)")
+                return
+            }
+            openInLibrary(folder)
+            showInLibrary(folder, at: nil)
+        case .chat(let question, let tag, let source, let days):
+            let from = days.flatMap { Calendar.current.date(byAdding: .day, value: -$0, to: Date()) }
+            let filter = CallFilter(tag: tag, source: source, from: from)
+            let calls = CallLibrary(base: AppSettings.baseFolder).calls()
+                .filter { filter.matches($0.meta) && $0.folder.hasTranscript }
+                .map { ChatCall(ref: ChatPrompt.ref(forFolderName: $0.folder.url.lastPathComponent), path: $0.folder.key,
+                                title: $0.meta.title, date: $0.meta.date, duration: $0.meta.durationSeconds) }
+            chat.start(with: calls)
+            chat.draft = question
+            chat.send()
+            chatRequested = true
+            openInLibrary(nil)
+        }
+    }
+
     /// Work an agent asked for through kaiku-mcp with a `kaiku://` URL. Only when the user
     /// allowed agents to edit calls, and only for calls in the recordings folder.
     func handleAgentURL(_ url: URL) {
+        if let control = ControlRequest(url: url) {
+            handleControl(control)
+            return
+        }
         guard let request = AgentRequest(url: url) else {
             Log.app.error("Ignored URL: \(url.absoluteString, privacy: .public)")
             return

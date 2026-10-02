@@ -177,7 +177,9 @@ struct LibraryView: View {
         .onAppear {
             reload()
             if let sel = state.librarySelection { selection = [sel] }
+            openRequestedChat()
         }
+        .onChange(of: state.chatRequested) { _, _ in openRequestedChat() }
         .onChange(of: state.libraryVersion) { _, _ in reload() }
         .onChange(of: search) { _, v in if smartSearch { state.semantic.search(v) } }
         .onChange(of: smartSearch) { _, on in
@@ -310,6 +312,12 @@ struct LibraryView: View {
             state.chat.start(with: items.filter { keys.contains($0.id) && $0.folder.hasTranscript }.map { ChatCall($0) })
             showChat = true
         }
+    }
+
+    private func openRequestedChat() {
+        guard state.chatRequested else { return }
+        state.chatRequested = false
+        showChat = true
     }
 
     private func perform(_ action: () throws -> Void) {

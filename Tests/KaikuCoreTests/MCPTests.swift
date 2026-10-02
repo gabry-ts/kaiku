@@ -226,6 +226,22 @@ final class MCPTests: XCTestCase {
         XCTAssertEqual(AgentConfig.shellQuoted("/My Apps/it's"), #"'/My Apps/it'\''s'"#)
     }
 
+    func testControlRequestURLs() {
+        func parse(_ s: String) -> ControlRequest? { URL(string: s).flatMap(ControlRequest.init(url:)) }
+        XCTAssertEqual(parse("kaiku://record/start?title=Weekly%20sync"), .startRecording(title: "Weekly sync"))
+        XCTAssertEqual(parse("kaiku://record/start"), .startRecording(title: nil))
+        XCTAssertEqual(parse("kaiku://record/stop"), .stopRecording)
+        XCTAssertEqual(parse("kaiku://record/pause"), .togglePause)
+        XCTAssertEqual(parse("kaiku://record/bookmark"), .addBookmark)
+        XCTAssertEqual(parse("kaiku://mute/toggle"), .toggleMute)
+        XCTAssertEqual(parse("kaiku://open?folder=%2Ftmp%2Fa"), .openCall(folder: "/tmp/a"))
+        XCTAssertEqual(parse("kaiku://chat?q=what%20was%20decided&tag=work&days=7"),
+                       .chat(question: "what was decided", tag: "work", source: nil, days: 7))
+        XCTAssertNil(parse("kaiku://chat"))
+        XCTAssertNil(parse("kaiku://record/erase"))
+        XCTAssertNil(parse("kaiku://transcribe?folder=%2Ftmp%2Fa"))
+    }
+
     func testAgentRequestURLsRoundTrip() {
         let path = "/Users/me/Documents/Kaiku/2026-09-23_1430_a&b=c #1"
         for request in [AgentRequest.transcribe(folder: path), .summarize(folder: path)] {
