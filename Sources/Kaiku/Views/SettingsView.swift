@@ -405,7 +405,7 @@ struct MuteSection: View {
 struct CallDetectionSection: View {
     @AppStorage(Keys.detectCalls) private var detect = true
     @AppStorage(Keys.detectAutoStart) private var autoStart = false
-    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
+    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 120
     @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
     @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
     @ObservedObject private var permissions = Permissions.shared

@@ -291,7 +291,7 @@ enum AppSettings {
             Keys.detectCalls: true,
             Keys.detectDisabledApps: [String](),
             Keys.detectAutoStart: false,
-            Keys.detectAutoStopSeconds: 0,
+            Keys.detectAutoStopSeconds: 120,
             Keys.detectCallEndMode: CallEndMode.standard.rawValue,
             Keys.calendarEnabled: true,
             Keys.calendarIDs: [String](),

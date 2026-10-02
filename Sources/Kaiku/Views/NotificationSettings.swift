@@ -7,7 +7,7 @@ import SwiftUI
 struct NotificationSettings: View {
     @ObservedObject private var permissions = Permissions.shared
     @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
-    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 0
+    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 120
     @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
 
     private static let calls: [NotificationKind] = [.callDetected, .newSource, .recordingStarted, .callEnded, .recordingStopped]
