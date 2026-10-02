@@ -23,11 +23,11 @@ struct MenuPanel: View {
                 .accessibilityLabel("Open recordings folder")
             }
         } content: {
-            if muter.isMuted {
-                MutedBanner(unsupported: muter.unsupported) { muter.unmute() }
-            }
-
             let sections = PopoverLayout.visible(AppSettings.popoverItems(from: layout))
+            // Muted microphones always show, even with the mute section switched off.
+            if muter.isMuted && !sections.contains(.mute) {
+                MuteCard(muter: muter)
+            }
             ForEach(sections, id: \.self) { section in
                 switch section {
                 case .record:
@@ -348,55 +348,58 @@ private struct RecordingCard: View {
     }
 }
 
-/// Shown while every microphone is muted.
-private struct MutedBanner: View {
-    let unsupported: [String]
-    let unmute: () -> Void
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let ink = Ink(scheme)
-        Card(tint: ink.orange) {
-            VStack(alignment: .leading, spacing: PUI.Space.s) {
-                HStack(spacing: PUI.Space.m) {
-                    Image(systemName: "mic.slash.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(ink.orange)
-                    StatusText("Microphones muted", detail: "Others hear silence, even if your call app shows you unmuted.")
-                    Spacer(minLength: 0)
-                    Button("Unmute", action: unmute)
-                        .buttonStyle(PrimaryButtonStyle(height: PUI.Control.small, fullWidth: false))
-                }
-                if !unsupported.isEmpty {
-                    Label("\(unsupported.count) microphone\(unsupported.count == 1 ? " can't" : "s can't") be muted: \(unsupported.joined(separator: ", "))",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .font(PUI.Font.caption)
-                        .foregroundStyle(ink.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-}
-
-/// The Mute all microphones switch at the bottom of the panel.
+/// The Mute all microphones switch: the whole card toggles it, and while muted it turns
+/// orange and says so, instead of a separate banner that would resize the panel.
 private struct MuteCard: View {
     @ObservedObject var muter: MicMuter
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Card(padding: PUI.Space.m + 2) {
-            HStack(spacing: PUI.Space.m) {
-                RowSymbol(muter.isMuted ? "mic.slash.fill" : "mic.slash")
-                Text("Mute all microphones").font(PUI.Font.body).foregroundStyle(Ink(scheme).primary)
-                Spacer(minLength: PUI.Space.m)
-                Toggle("Mute all microphones",
-                       isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
-                    .toggleStyle(PUISwitchStyle(mini: true, showsLabel: false))
+        let ink = Ink(scheme)
+        let muted = muter.isMuted
+        Button(action: toggle) {
+            Card(tint: muted ? ink.orange : nil) {
+                VStack(alignment: .leading, spacing: PUI.Space.s) {
+                    HStack(spacing: PUI.Space.m) {
+                        if muted {
+                            Image(systemName: "mic.slash.fill")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(ink.orange)
+                            StatusText("Microphones muted", detail: "Others hear silence, even if your call app shows you unmuted.")
+                        } else {
+                            RowSymbol("mic.slash")
+                            Text("Mute all microphones").font(PUI.Font.body).foregroundStyle(ink.primary)
+                        }
+                        Spacer(minLength: PUI.Space.m)
+                        // Drawn only: the whole card handles the click.
+                        Toggle("Mute all microphones", isOn: .constant(muted))
+                            .toggleStyle(PUISwitchStyle(mini: true, showsLabel: false))
+                            .allowsHitTesting(false)
+                    }
+                    if muted && !muter.unsupported.isEmpty {
+                        Label("\(muter.unsupported.count) microphone\(muter.unsupported.count == 1 ? " can't" : "s can't") be muted: \(muter.unsupported.joined(separator: ", "))",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(PUI.Font.caption)
+                            .foregroundStyle(ink.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, PUI.Space.xxs)
             }
-            .padding(.horizontal, PUI.Space.xxs)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Mute all microphones")
+        .accessibilityValue(muted ? "On" : "Off")
         .help("Call apps still show you as unmuted but send silence. Option-click the menu bar icon to toggle.")
+    }
+
+    private func toggle() {
+        // No animation, so the card and the panel size don't spring.
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { muter.toggle() }
     }
 }
 

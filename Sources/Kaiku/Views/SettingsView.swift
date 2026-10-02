@@ -395,13 +395,39 @@ struct RecordingSettings: View {
 
 struct MuteSection: View {
     @ObservedObject private var muter = MicMuter.shared
+    @AppStorage(Keys.muteStyle) private var style = MuteStyle.volume.rawValue
+    @AppStorage(Keys.muteVolumePercent) private var percent = 1
 
     var body: some View {
-        SettingsGroup("Mute", footer: "Silences every microphone on this Mac, including the one your call app uses, while the app still shows you as unmuted. Option-click the menu bar icon to toggle it. Your previous settings come back when you unmute or quit. Tip: turn off \"Automatically adjust microphone volume\" in Zoom, so it doesn't fight the mute.") {
+        SettingsGroup("Mute", footer: "Silences every microphone on this Mac, including the one your call app uses, while the app still shows you as unmuted. Option-click the menu bar icon to toggle it. Your previous settings come back when you unmute or quit. Teams can drop a microphone that is hardware-muted or fully silent: turning the volume down to 1% keeps it working. Changes apply the next time you mute. Tip: turn off \"Automatically adjust microphone volume\" in Zoom, so it doesn't fight the mute.") {
             SwitchRow("Mute all microphones", isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
+            SettingsRow("Mute by") {
+                Picker("Mute by", selection: $style) {
+                    ForEach(MuteStyle.allCases) { Text($0.displayName).tag($0.rawValue) }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if style == MuteStyle.volume.rawValue {
+                SettingsRow("Volume while muted") {
+                    HStack(spacing: PUI.Space.s) {
+                        ValueText("\(percent)%")
+                        Stepper("Volume while muted", value: $percent, in: 0...10).labelsHidden()
+                    }
+                }
+            }
             if !muter.unsupported.isEmpty {
                 GroupRow { StatusDot(kind: .warning, text: "Can't be muted: \(muter.unsupported.joined(separator: ", "))") }
             }
+        }
+    }
+}
+
+extension MuteStyle {
+    var displayName: String {
+        switch self {
+        case .hardware: return "Mute switch"
+        case .volume: return "Turning the volume down"
         }
     }
 }

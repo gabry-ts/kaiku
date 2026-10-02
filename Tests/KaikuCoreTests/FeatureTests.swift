@@ -375,6 +375,18 @@ final class MicMuteTests: XCTestCase {
         XCTAssertEqual(MutePlanner.method(.init(muteSettable: false, masterVolumeSettable: false, channelVolumeSettable: [])), .unsupported)
     }
 
+    func testVolumeStylePrefersVolume() {
+        XCTAssertEqual(MutePlanner.method(.init(muteSettable: true, masterVolumeSettable: true, channelVolumeSettable: [1]), style: .volume), .volume(elements: [0]))
+        XCTAssertEqual(MutePlanner.method(.init(muteSettable: true, masterVolumeSettable: false, channelVolumeSettable: [2, 1]), style: .volume), .volume(elements: [1, 2]))
+        XCTAssertEqual(MutePlanner.method(.init(muteSettable: true, masterVolumeSettable: false, channelVolumeSettable: []), style: .volume), .mute)
+        XCTAssertEqual(MutePlanner.method(.init(muteSettable: false, masterVolumeSettable: false, channelVolumeSettable: []), style: .volume), .unsupported)
+    }
+
+    func testReapplyAboveFloor() {
+        XCTAssertFalse(MutePlanner.needsReapply(.volume(elements: [0]), mute: nil, volumes: [0: 0.0125], floor: 0.0125))
+        XCTAssertTrue(MutePlanner.needsReapply(.volume(elements: [0]), mute: nil, volumes: [0: 0.5], floor: 0.0125))
+    }
+
     func testReapplyWhenRaised() {
         XCTAssertFalse(MutePlanner.needsReapply(.mute, mute: 1, volumes: [:]))
         XCTAssertTrue(MutePlanner.needsReapply(.mute, mute: 0, volumes: [:]))

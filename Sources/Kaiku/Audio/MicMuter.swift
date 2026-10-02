@@ -4,7 +4,8 @@ import KaikuCore
 
 /// Mutes every microphone on the Mac at the hardware-property level, so call apps still
 /// show you as unmuted but send silence. Only device properties are changed (mute switch,
-/// or input volume 0): no device is opened, so Bluetooth headsets don't switch profile.
+/// or input volume turned down to the configured level): no device is opened, so Bluetooth
+/// headsets don't switch profile.
 /// The previous state is saved per device before changing anything, restored on unmute,
 /// on quit, and on the next launch after a crash.
 @MainActor
@@ -20,7 +21,8 @@ final class MicMuter: ObservableObject {
     private static let savedKey = "mutedDevicesState"
     private static let mutedKey = "micsMuted"
 
-    private var methods: [String: (id: AudioObjectID, method: MuteMethod)] = [:]
+    /// `level` is the volume we set, `floor` the volume the device reports after that.
+    private var methods: [String: (id: AudioObjectID, method: MuteMethod, level: Float, floor: Float)] = [:]
     private var listeners: [(id: AudioObjectID, address: AudioObjectPropertyAddress, block: AudioObjectPropertyListenerBlock)] = []
     private var deviceListListener: AudioObjectPropertyListenerBlock?
 
@@ -36,6 +38,9 @@ final class MicMuter: ObservableObject {
 
     /// How a device is being silenced right now, if it is.
     func method(for uid: String) -> MuteMethod? { methods[uid]?.method }
+
+    /// The volume a device was left at when muted by turning it down.
+    func mutedVolume(for uid: String) -> Float { methods[uid]?.floor ?? 0 }
 
     func mute() {
         guard !isMuted else { return }
@@ -71,9 +76,11 @@ final class MicMuter: ObservableObject {
         var toSave: [MicDeviceState] = []
         var failing: [String] = []
         var fresh: [(device: AudioDevice, caps: MuteCapabilities)] = []
+        let style = AppSettings.muteStyle
+        let level = AppSettings.muteVolume
         for device in Self.inputDevices() where methods[device.uid] == nil {
             let caps = Self.capabilities(device)
-            if MutePlanner.method(caps) == .unsupported {
+            if MutePlanner.method(caps, style: style) == .unsupported {
                 failing.append(device.name)
                 continue
             }
@@ -84,20 +91,31 @@ final class MicMuter: ObservableObject {
         }
         saved = MutePlanner.merge(saved, adding: toSave)
         for (device, caps) in fresh {
-            var method = MutePlanner.method(caps)
-            apply(method, to: device.id)
+            var method = MutePlanner.method(caps, style: style)
+            var fellBack = false
+            apply(method, to: device.id, level: level)
             if method == .mute && Self.muteValue(device.id) != 1 {
+                fellBack = true
                 // Accepted but ignored (some virtual devices): turn the volume down instead.
                 Self.setUInt32(device.id, kAudioDevicePropertyMute, 0, Self.savedMute(device.uid, in: saved) ?? 0)
                 method = MutePlanner.fallback(caps)
-                apply(method, to: device.id)
-                let silent = !MutePlanner.needsReapply(method, mute: nil, volumes: Self.volumes(id: device.id, elements: Self.elements(method)))
-                if method == .unsupported || !silent {
+                apply(method, to: device.id, level: level)
+            }
+            var floor: Float = 0
+            if case .volume = method {
+                // Devices round the volume to their own steps: remember what really stuck.
+                let read = Self.volumes(id: device.id, elements: Self.elements(method)).values.max() ?? (fellBack ? 1 : level)
+                if read > level + 0.05 {
                     failing.append(device.name)
                     continue
                 }
+                floor = max(level, read)
             }
-            methods[device.uid] = (device.id, method)
+            if method == .unsupported {
+                failing.append(device.name)
+                continue
+            }
+            methods[device.uid] = (device.id, method, level, floor)
             addListeners(uid: device.uid, id: device.id, method: method)
         }
         unsupported = Array(Set(unsupported + failing)).sorted()
@@ -130,10 +148,10 @@ final class MicMuter: ObservableObject {
         Log.audio.info("Microphones restored (\(states.count) devices)")
     }
 
-    private func apply(_ method: MuteMethod, to id: AudioObjectID) {
+    private func apply(_ method: MuteMethod, to id: AudioObjectID, level: Float) {
         switch method {
         case .mute: Self.setUInt32(id, kAudioDevicePropertyMute, 0, 1)
-        case .volume(let elements): elements.forEach { Self.setFloat(id, kAudioDevicePropertyVolumeScalar, $0, 0) }
+        case .volume(let elements): elements.forEach { Self.setFloat(id, kAudioDevicePropertyVolumeScalar, $0, level) }
         case .unsupported: break
         }
     }
@@ -142,9 +160,9 @@ final class MicMuter: ObservableObject {
     private func enforce(_ uid: String) {
         guard isMuted, let entry = methods[uid] else { return }
         let volumes = Self.volumes(id: entry.id, elements: Self.elements(entry.method))
-        if MutePlanner.needsReapply(entry.method, mute: Self.muteValue(entry.id), volumes: volumes) {
+        if MutePlanner.needsReapply(entry.method, mute: Self.muteValue(entry.id), volumes: volumes, floor: entry.floor) {
             Log.audio.info("Microphone \(uid, privacy: .public) was unmuted by another app; muting again")
-            apply(entry.method, to: entry.id)
+            apply(entry.method, to: entry.id, level: entry.level)
         }
     }
 

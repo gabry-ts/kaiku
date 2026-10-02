@@ -24,10 +24,20 @@ public struct MuteCapabilities: Equatable, Sendable {
     }
 }
 
+/// What the user prefers for silencing a microphone.
+public enum MuteStyle: String, CaseIterable, Identifiable, Sendable {
+    /// The device mute switch, falling back to the input volume.
+    case hardware
+    /// The input volume turned down to a small level, falling back to the mute switch.
+    /// Some call apps (Teams) drop a microphone that is hardware-muted or fully silent.
+    case volume
+    public var id: String { rawValue }
+}
+
 /// How a device is silenced.
 public enum MuteMethod: Equatable, Sendable {
     case mute
-    /// Volume set to 0 on these elements (0 = master).
+    /// Volume turned down on these elements (0 = master).
     case volume(elements: [UInt32])
     case unsupported
 }
@@ -49,19 +59,22 @@ public struct MicDeviceState: Codable, Equatable, Sendable {
 }
 
 public enum MutePlanner {
-    /// Prefer the mute switch; else master volume; else every settable channel.
-    public static func method(_ caps: MuteCapabilities) -> MuteMethod {
-        if caps.muteSettable { return .mute }
+    /// Hardware style: the mute switch, else master volume, else every settable channel.
+    /// Volume style: master volume, else every settable channel, else the mute switch.
+    public static func method(_ caps: MuteCapabilities, style: MuteStyle = .hardware) -> MuteMethod {
+        if style == .hardware && caps.muteSettable { return .mute }
         if caps.masterVolumeSettable { return .volume(elements: [0]) }
         if !caps.channelVolumeSettable.isEmpty { return .volume(elements: caps.channelVolumeSettable.sorted()) }
+        if caps.muteSettable { return .mute }
         return .unsupported
     }
 
-    /// True when something (an app's automatic gain control) undid our mute.
-    public static func needsReapply(_ method: MuteMethod, mute: UInt32?, volumes: [UInt32: Float]) -> Bool {
+    /// True when something (an app's automatic gain control) undid our mute. `floor` is
+    /// the volume actually read back after turning it down (devices round to their steps).
+    public static func needsReapply(_ method: MuteMethod, mute: UInt32?, volumes: [UInt32: Float], floor: Float = 0) -> Bool {
         switch method {
         case .mute: return mute != 1
-        case .volume(let elements): return elements.contains { (volumes[$0] ?? 1) > 0.0001 }
+        case .volume(let elements): return elements.contains { (volumes[$0] ?? 1) > floor + 0.0001 }
         case .unsupported: return false
         }
     }
