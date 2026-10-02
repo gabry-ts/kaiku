@@ -125,10 +125,18 @@ enum TranscriptionJob {
             latest.estimatedCostUSD = meta.estimatedCostUSD
             meta = latest
         }
+        autoNameSpeaker(&meta, segments: all)
         try folder.saveSegments(all)
         try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: all)
         try? folder.saveMeta(meta)
         folder.removePartials()
+    }
+
+    /// Names the only other speaker after the only other attendee of the calendar event.
+    private static func autoNameSpeaker(_ meta: inout RecordingMeta, segments: [Segment]) {
+        guard let found = SpeakerAutoName.assignment(event: meta.calendarEvent, speakers: TranscriptWriter.speakers(in: segments),
+                                                     meLabel: AppSettings.meLabel, existing: meta.speakerNames) else { return }
+        meta.speakerNames = (meta.speakerNames ?? [:]).merging([found.speaker: found.name]) { _, new in new }
     }
 
     /// Transcribes one track. The result is saved to `cache` so that, if a later step fails,
@@ -185,6 +193,7 @@ extension TranscriptionJob {
         meta.modelID = nil
         meta.transcribedSeconds = nil
         meta.estimatedCostUSD = 0
+        autoNameSpeaker(&meta, segments: all)
         try folder.saveSegments(all)
         try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: all)
         try folder.saveMeta(meta)
