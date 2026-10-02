@@ -151,9 +151,15 @@ struct AlibabaProvider: TranscriptionProvider {
             body: body, contentType: "application/json", headers: headers))
 
         let taskURL = api.appendingPathComponent("tasks/\(submitted.output.task_id)")
+        let deadline = Date().addingTimeInterval(Self.taskTimeout)
+        var unknownPolls = 0
         while true {
             try await Task.sleep(nanoseconds: 3_000_000_000)
-            let output = try decode(TaskResponse.self, try await get(taskURL, headers: auth)).output
+            guard Date() < deadline else {
+                throw ProviderError(message: "Alibaba Cloud task \(submitted.output.task_id) didn't finish in \(Int(Self.taskTimeout / 60)) minutes.")
+            }
+            // A network blip while polling must not throw away a task already paid for.
+            let output = try decode(TaskResponse.self, try await get(taskURL, headers: auth, retries: 3)).output
             switch output.task_status {
             case "SUCCEEDED":
                 let result = output.result ?? output.results?.first
@@ -165,13 +171,43 @@ struct AlibabaProvider: TranscriptionProvider {
                 return url
             case "FAILED", "CANCELED", "UNKNOWN":
                 throw ProviderError(message: "Alibaba Cloud task \(output.task_status.lowercased()): \(output.message ?? output.code ?? "no details")")
+            case "PENDING", "RUNNING":
+                unknownPolls = 0
             default:
-                continue
+                // A status we don't know (e.g. SUSPENDED): give it a minute, then give up.
+                unknownPolls += 1
+                if unknownPolls >= 20 {
+                    throw ProviderError(message: "Alibaba Cloud task stuck in status \(output.task_status): \(output.message ?? output.code ?? "no details")")
+                }
             }
         }
     }
 
+    /// Longest wait for a file transcription task.
+    private static let taskTimeout: Double = 2 * 60 * 60
+
     // MARK: Helpers
+
+    /// GET, retrying network errors, 429 and 5xx up to `retries` times (2 s, 4 s, 8 s…).
+    private func get(_ url: URL, headers: [String: String], retries: Int) async throws -> Data {
+        var attempt = 0
+        while true {
+            do {
+                return try await get(url, headers: headers)
+            } catch {
+                attempt += 1
+                guard attempt <= retries, Self.isTransient(error) else { throw error }
+                Log.transcription.info("Retrying \(url.lastPathComponent, privacy: .public) after: \(error.diagnosticDescription, privacy: .public)")
+                try await Task.sleep(nanoseconds: UInt64(1 << attempt) * 1_000_000_000)
+            }
+        }
+    }
+
+    private static func isTransient(_ error: Error) -> Bool {
+        if let e = error as? URLError { return e.code != .cancelled }
+        if let e = error as? ProviderError, let status = e.httpStatus { return status == 429 || (500...599).contains(status) }
+        return false
+    }
 
     private func get(_ url: URL, headers: [String: String]) async throws -> Data {
         var req = URLRequest(url: url, timeoutInterval: 60)
@@ -180,7 +216,7 @@ struct AlibabaProvider: TranscriptionProvider {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let text = String(data: data.prefix(600), encoding: .utf8) ?? ""
-            throw ProviderError(message: "HTTP \(status) from \(url.host ?? ""): \(text)")
+            throw ProviderError(message: "HTTP \(status) from \(url.host ?? ""): \(text)", httpStatus: status)
         }
         return data
     }

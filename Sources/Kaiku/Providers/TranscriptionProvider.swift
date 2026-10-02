@@ -13,6 +13,8 @@ protocol TranscriptionProvider {
 
 struct ProviderError: LocalizedError {
     let message: String
+    /// The HTTP status, when the error is an HTTP response.
+    var httpStatus: Int? = nil
     var errorDescription: String? { message }
 }
 
