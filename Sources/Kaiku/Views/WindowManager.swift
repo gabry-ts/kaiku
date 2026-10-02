@@ -11,6 +11,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     private var windows: [String: NSWindow] = [:]
 
+    /// The open window with this id, if any.
+    func window(_ id: String) -> NSWindow? { windows[id] }
+
     func showTitlePrompt(title: String, event: CalendarEventInfo?, call: DetectedCall? = nil) {
         let view = TitlePromptView(onDone: { [weak self] in self?.close("title") }, initialTitle: title, event: event, call: call)
             .environmentObject(AppState.shared)

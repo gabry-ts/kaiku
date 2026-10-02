@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import PartitiUI
 import SwiftUI
@@ -966,6 +967,7 @@ final class AudioPlayerModel: ObservableObject {
 private struct PlayerCard: View {
     @ObservedObject var player: AudioPlayerModel
     var bookmarks: [Bookmark] = []
+    @State private var spaceMonitor: Any?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -977,7 +979,6 @@ private struct PlayerCard: View {
                     .background(AppAccent.kaiku.color.gradient, in: Circle())
             }
             .buttonStyle(.plain)
-            .keyboardShortcut(.space, modifiers: [])
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
             Text(TranscriptFormatter.timestamp(player.time))
@@ -1014,6 +1015,27 @@ private struct PlayerCard: View {
             .help("Playback speed")
         }
         .padding(PUI.Space.l).puiSurface(radius: PUI.Radius.group)
+        .onAppear(perform: watchSpace)
+        .onDisappear {
+            if let spaceMonitor { NSEvent.removeMonitor(spaceMonitor) }
+            spaceMonitor = nil
+        }
+    }
+
+    /// Space plays and pauses in the library window, except while typing in a text field.
+    private func watchSpace() {
+        guard spaceMonitor == nil else { return }
+        let player = self.player
+        spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { () -> NSEvent? in
+                guard event.charactersIgnoringModifiers == " ",
+                      event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty,
+                      let window = event.window, window === WindowManager.shared.window("library"),
+                      !(window.firstResponder is NSText) else { return event }
+                player.toggle()
+                return nil
+            }
+        }
     }
 
     /// Bookmark ticks under the scrubber; click one to jump there.
