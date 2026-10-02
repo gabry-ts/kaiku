@@ -570,17 +570,49 @@ final class ProviderAccess: ObservableObject {
             refresh()
         }
     }
+    /// Address of the Ollama or custom server.
+    @Published var baseURL = "" {
+        didSet {
+            guard !loading, kind.isLocal else { return }
+            AppSettings.defaults.set(baseURL.trimmingCharacters(in: .whitespaces), forKey: Keys.baseURL(kind))
+            checkServer()
+        }
+    }
     /// Where the CLI was found, nil when it wasn't.
     @Published private(set) var found: String?
+    /// Whether the local server answers, nil while checking.
+    @Published private(set) var serverRunning: Bool?
     private var loading = false
+    private var probe: Task<Void, Never>?
 
     func load(_ kind: SummaryProviderKind) {
         loading = true
         self.kind = kind
         key = kind.hasOwnKey ? (Keychain.get(kind.keyAccount) ?? "") : ""
         path = kind.cli.map { AppSettings.defaults.string(forKey: Keys.cliPath($0)) ?? "" } ?? ""
+        baseURL = kind.isLocal ? kind.baseURL : ""
         loading = false
         refresh()
+        checkServer()
+    }
+
+    /// Asks the local server for something small, giving up after a few seconds.
+    private func checkServer() {
+        probe?.cancel()
+        guard kind.isLocal else { serverRunning = nil; return }
+        serverRunning = nil
+        let kind = kind
+        probe = Task {
+            // Lets typing settle before asking.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled, let url = kind.probeURL else { return }
+            var req = URLRequest(url: url, timeoutInterval: 3)
+            if let key = kind.apiKey { req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+            // Any HTTP answer, even a refusal, means something is listening.
+            let up = (try? await URLSession.shared.data(for: req))?.1 is HTTPURLResponse
+            guard !Task.isCancelled, self.kind == kind else { return }
+            self.serverRunning = up
+        }
     }
 
     /// Clears the custom path and searches again, login shell included.
@@ -631,6 +663,16 @@ final class ModelCatalog: ObservableObject {
                 throw ProviderError(message: "Couldn't load the OpenRouter models.")
             }
             return try SummaryAPI.parseModelIDs(data)
+        case .ollama:
+            guard let url = LocalLLM.ollamaTagsURL(kind.baseURL) else { throw ProviderError(message: "Check the Ollama address.") }
+            let data: Data
+            let response: URLResponse
+            do { (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 5)) }
+            catch { throw ProviderError(message: "Ollama is not running.") }
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw ProviderError(message: "Couldn't load the Ollama models.")
+            }
+            return try LocalLLM.parseOllamaTags(data)
         case .opencode:
             guard let binary = await CLIProviders.detect(.opencode) else { throw ProviderError(message: "OpenCode CLI not found.") }
             return CLITool.parseOpenCodeModels(try await Shell.run(binary, ["models"], timeout: 30))
@@ -701,9 +743,18 @@ struct ProviderAccessRows: View {
 
     var body: some View {
         let kind = access.kind
+        if kind.isLocal {
+            SettingsRow("Server address") {
+                TextField("Server address", text: $access.baseURL, prompt: Text(kind.baseURLPlaceholder))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .font(.body.monospaced())
+                    .frame(maxWidth: 280)
+            }
+        }
         if kind.hasOwnKey {
             SettingsRow("API key") {
-                SecureField("API key", text: $access.key, prompt: Text("Paste your key"))
+                SecureField("API key", text: $access.key, prompt: Text(kind.isLocal ? "Optional" : "Paste your key"))
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .font(.body.monospaced())
@@ -730,6 +781,18 @@ struct ProviderAccessRows: View {
                 StatusDot(kind: .ok, text: "Uses your own sign-in, no API key. Found at \(found)")
             } else {
                 StatusDot(kind: .warning, text: "\(kind.displayName) CLI not found. Install it, or set its path.")
+            }
+        } else if kind.isLocal {
+            if kind.problem != nil {
+                StatusDot(kind: .warning, text: "Add the address of the server.")
+            } else if access.serverRunning == false {
+                StatusDot(kind: .warning, text: "Not running at this address. Start \(kind == .ollama ? "Ollama" : "the server") and check it.")
+            } else if modelMissing {
+                StatusDot(kind: .warning, text: "Model required")
+            } else {
+                StatusDot(kind: .ok, text: kind == .ollama
+                          ? "Runs on this Mac, nothing leaves it. No API key."
+                          : "Talks only to this address, so nothing leaves your Mac while it runs here.")
             }
         } else if kind.apiKey == nil && access.key.isEmpty {
             StatusDot(kind: .warning, text: kind.hasOwnKey ? "API key missing" : "No \(kind.displayName) key yet. Add it under Transcription > Provider.")
