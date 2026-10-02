@@ -151,6 +151,13 @@ final class MeetingMonitor {
         return result
     }
 
+    /// Devices other processes are recording from right now (aggregates included as is).
+    nonisolated static func inputDevicesInUse(excluding pid: pid_t) -> [AudioObjectID] {
+        processObjects()
+            .filter { uint32($0, kAudioProcessPropertyIsRunningInput) != 0 && pidOf($0) != pid }
+            .flatMap { inputDevices(of: $0) }
+    }
+
     /// Bundle ids of every process using audio input (for diagnostics).
     nonisolated static func inputProcessBundleIDs() -> [String] {
         processObjects().filter { uint32($0, kAudioProcessPropertyIsRunningInput) != 0 }

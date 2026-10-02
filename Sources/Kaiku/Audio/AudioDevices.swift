@@ -48,9 +48,19 @@ struct AudioDevice: Identifiable, Hashable {
         return running != 0
     }
 
+    /// True while another process records from this device, directly or through an
+    /// aggregate (apps with voice processing create one). Playback doesn't count.
+    var isInputInUseElsewhere: Bool {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return MeetingMonitor.inputDevicesInUse(excluding: pid).contains {
+            $0 == id || AudioDevices.microphone(behind: $0)?.id == id
+        }
+    }
+
     /// Recording from it doesn't change call quality: not Bluetooth, or a Bluetooth mic
-    /// some app already uses, so the headset is in call mode anyway.
-    var canRecordWithoutHarm: Bool { !isBluetooth || isRunningSomewhere }
+    /// some app already records from, so the headset is in call mode anyway. Playing audio
+    /// through the headset doesn't count: it is still in the high quality profile then.
+    var canRecordWithoutHarm: Bool { !isBluetooth || isInputInUseElsewhere }
 
     var isAlive: Bool {
         var alive = UInt32(1)
