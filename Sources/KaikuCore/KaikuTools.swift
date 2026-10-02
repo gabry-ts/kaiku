@@ -365,7 +365,7 @@ public struct KaikuToolSet: MCPToolSet {
                     "id": id,
                     "unit": ["type": "string", "enum": ["turns", "characters"], "description": "Page by speaker turns (default) or by characters of transcript.md."],
                     "offset": ["type": "integer", "minimum": 0, "description": "First turn or character, from 0."],
-                    "limit": ["type": "integer", "minimum": 1, "description": "Turns (default 200) or characters (default 40000) to return."],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 400_000, "description": "Turns (default 200, at most 2000) or characters (default 40000, at most 400000) to return."],
                 ], required: ["id"])),
         MCPTool(name: "read_summary",
                 description: "Read a call's summary (summary.md), when one was written.",
