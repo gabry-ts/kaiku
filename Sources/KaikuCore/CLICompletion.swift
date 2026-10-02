@@ -40,6 +40,39 @@ public enum CLITool: String, CaseIterable, Sendable {
         }
     }
 
+    /// Replaces the coding-agent prompt of Claude Code when chatting with calls.
+    public static let chatSystemPrompt = "You are a concise assistant that answers questions about the user's call transcripts. Follow the user's instructions exactly."
+
+    /// Read-only file tools Claude Code may use to read the calls.
+    public static let claudeReadTools = "Read,Grep,Glob"
+
+    /// Arguments for one chat answer that reads the call files itself, read-only.
+    /// - Parameters:
+    ///   - workDir: the folder the tool runs in; for OpenCode, the one holding the calls.
+    ///   - readableDirs: the call folders, which Claude Code may read.
+    public func chatArguments(model: String, workDir: String, outputFile: String, readableDirs: [String]) -> [String] {
+        let model = model.trimmingCharacters(in: .whitespaces)
+        switch self {
+        case .claude:
+            // Streams the answer as it is written, and may only read.
+            var args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+                        "--tools", Self.claudeReadTools, "--allowedTools", Self.claudeReadTools,
+                        "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "",
+                        "--system-prompt", Self.chatSystemPrompt]
+            if !model.isEmpty { args += ["--model", model] }
+            if !readableDirs.isEmpty { args += ["--add-dir"] + readableDirs }
+            return args
+        case .codex:
+            // The read-only sandbox can read any file.
+            return arguments(model: model, workDir: workDir, outputFile: outputFile)
+        case .opencode:
+            // The plan agent reads but doesn't edit.
+            var args = ["run", "--pure", "--dir", workDir, "--agent", "plan"]
+            if !model.isEmpty { args += ["-m", model] }
+            return args
+        }
+    }
+
     /// Folders where these tools are usually installed. Apps opened from the Finder
     /// get a minimal PATH, so these are searched directly.
     /// - Parameter nodeVersions: folder names under `~/.nvm/versions/node`, newest first.
