@@ -184,6 +184,7 @@ enum Keys {
     static let whisperPath = "whisperPath"
     static let whisperModel = "whisperModel"
     static let microphone = "microphone"
+    static let followCallMicrophone = "followCallMicrophone"
     /// Shortcut presets used before shortcuts could be recorded (read once to migrate).
     static let hotKey = "hotKey"
     static let systemAudioVerified = "systemAudioVerified"
@@ -271,6 +272,7 @@ enum AppSettings {
             Keys.whisperPath: "",
             Keys.whisperModel: NSHomeDirectory() + "/Library/Application Support/Kaiku/models/ggml-large-v3-turbo.bin",
             Keys.microphone: AudioDevices.automatic,
+            Keys.followCallMicrophone: true,
             Keys.systemAudioVerified: false,
             Keys.onboardingDone: false,
             Keys.webhookEnabled: false,
@@ -361,6 +363,10 @@ enum AppSettings {
     static var whisperModel: String { expand(defaults.string(forKey: Keys.whisperModel)) }
     /// "auto", "none" or a Core Audio device UID.
     static var microphone: String { defaults.string(forKey: Keys.microphone) ?? AudioDevices.automatic }
+    /// In automatic mode, record from the microphone the call app uses, and follow it.
+    static var followCallMicrophone: Bool {
+        (microphone == AudioDevices.automatic || microphone.isEmpty) && defaults.bool(forKey: Keys.followCallMicrophone)
+    }
     static var webhookEnabled: Bool { defaults.bool(forKey: Keys.webhookEnabled) }
     static var webhookURL: String { defaults.string(forKey: Keys.webhookURL) ?? "" }
     static var webhookMethod: String { nonEmpty(defaults.string(forKey: Keys.webhookMethod), "POST") }

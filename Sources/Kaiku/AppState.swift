@@ -68,6 +68,14 @@ final class AppState: ObservableObject {
     /// Fallback title given to the current auto-started recording, replaced if the
     /// call window gets a meaningful title soon after.
     private var autoFallbackTitle: String?
+    /// Source of the call being recorded; nil for a manual recording.
+    private(set) var currentCallSource: String?
+    /// The microphone was picked in the panel, so it no longer follows the call's.
+    private var micChosenByHand = false
+    /// Microphone being switched to by following the call, while the switch runs.
+    private var followingMicUID: String?
+    /// Call microphone that couldn't be opened, not tried again during this recording.
+    private var followFailedUID: String?
     /// Stops the current recording when it was clearly left running.
     private var recordingGuard = RecordingGuard()
 
@@ -141,7 +149,9 @@ final class AppState: ObservableObject {
                 source: call?.source ?? CallSource.manual, sourceApp: call?.app))
             if !rawTags.isEmpty { AppSettings.defaults.set(Tags.normalize(rawTags), forKey: Keys.lastTags) }
             let micSetting = AppSettings.microphone
-            let micDevice = AudioDevices.resolveMicrophone(setting: micSetting)
+            let callMic = AppSettings.followCallMicrophone ? MeetingMonitor.shared.callMicrophone(source: call?.source) : nil
+            let micDevice = callMic ?? AudioDevices.resolveMicrophone(setting: micSetting)
+            if let callMic { Log.audio.info("Recording from the call's microphone: \(callMic.name, privacy: .public)") }
             if micDevice == nil && micSetting != AudioDevices.none {
                 Log.audio.error("No usable microphone found; recording system audio only")
             }
@@ -171,6 +181,10 @@ final class AppState: ObservableObject {
             autoStartedSource = nil
             autoFallbackTitle = nil
             recordingGuard = RecordingGuard()
+            currentCallSource = call?.source
+            micChosenByHand = false
+            followingMicUID = nil
+            followFailedUID = nil
             AppSettings.lastRecordingFolder = folder.url
             phase = .recording(title: title, start: date)
             now = date
@@ -331,13 +345,37 @@ final class AppState: ObservableObject {
 
     /// Mic picker in the panel. Uses the same hot-swap as the automatic fallback.
     func switchMicrophone(to device: AudioDevice) {
-        guard let rec = recorder else { return }
+        micChosenByHand = true
+        swapMicrophone(to: device)
+    }
+
+    /// The call app now records from `device`: record from it too, unless a microphone
+    /// was picked by hand during this recording.
+    func followCallMicrophone(_ device: AudioDevice) {
+        guard isRecording, !micChosenByHand, followingMicUID == nil, device.uid != currentMic?.uid,
+              device.uid != followFailedUID else { return }
+        followingMicUID = device.uid
+        Log.audio.info("Following the call's microphone: \(device.name, privacy: .public)")
+        swapMicrophone(to: device) { ok in
+            AppState.shared.followingMicUID = nil
+            if !ok { AppState.shared.followFailedUID = device.uid }
+            if ok {
+                Notifier.shared.post(.deviceChanged, title: "Microphone changed", body: "Now recording from \(device.name), like your call.", folderPath: nil)
+            }
+        }
+    }
+
+    private func swapMicrophone(to device: AudioDevice, done: @escaping @MainActor (Bool) -> Void = { _ in }) {
+        guard let rec = recorder else { return done(false) }
         Task {
             let result = await Task.detached { Result { try rec.switchMicrophone(to: device) } }.value
             switch result {
-            case .success: currentMic = device
+            case .success:
+                currentMic = device
+                done(true)
             case .failure(let error):
                 fail("Couldn't switch to \(device.name): \(error.diagnosticDescription)", folderPath: nil)
+                done(false)
             }
         }
     }

@@ -14,6 +14,8 @@ final class MeetingMonitor {
     private var cache = SourceCache()
     /// Auto-started recording still waiting for a meaningful call window title.
     private var retitle: (source: String, user: MicUser, until: Date)?
+    /// Process of each detected call at the last check, by source.
+    private var callOwners: [String: MicUser] = [:]
     /// Processes using audio input at the last change, for the log.
     private var lastInputs: Set<String> = []
     private let ownPID = getpid()
@@ -28,6 +30,8 @@ final class MeetingMonitor {
         let pid: pid_t
         let bundlePrefixes: [String]
         let isBrowser: Bool
+        /// Devices the process records from.
+        let inputDevices: [AudioObjectID]
     }
 
     /// Starts or stops polling to match the setting.
@@ -38,6 +42,7 @@ final class MeetingMonitor {
             cache = SourceCache()
             retitle = nil
             lastInputs = []
+            callOwners = [:]
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
                 Task { @MainActor in MeetingMonitor.shared.tick() }
             }
@@ -60,6 +65,7 @@ final class MeetingMonitor {
             calls[source] = DetectedCall(source: source, app: users[key]!.appName)
             owners[source] = users[key]!
         }
+        callOwners = owners
         let state = AppState.shared
         // Asking depends on notifications being allowed, which can change during the call.
         if state.isRecording, AppSettings.callEndMode == .ask { Permissions.shared.refreshNotifications() }
@@ -80,6 +86,15 @@ final class MeetingMonitor {
             }
         }
         retryTitle(now: now)
+        if state.isRecording, AppSettings.followCallMicrophone, let mic = callMicrophone(source: state.currentCallSource) {
+            state.followCallMicrophone(mic)
+        }
+    }
+
+    /// Microphone used by the call of `source`, else by the only call going on.
+    func callMicrophone(source: String?) -> AudioDevice? {
+        let user = source.flatMap { callOwners[$0] } ?? (callOwners.count == 1 ? callOwners.values.first : nil)
+        return user?.inputDevices.lazy.compactMap(AudioDevices.microphone(behind:)).first
     }
 
     /// Logs which processes use audio input whenever that changes, so a call that never
@@ -124,10 +139,10 @@ final class MeetingMonitor {
             let user: MicUser
             if let native = CallSource.native(bundleID: bundle, custom: custom) {
                 user = MicUser(key: native.name, appName: native.name, bundleID: bundle, pid: processPID,
-                               bundlePrefixes: native.bundlePrefixes, isBrowser: false)
+                               bundlePrefixes: native.bundlePrefixes, isBrowser: false, inputDevices: inputDevices(of: process))
             } else if let browser = MeetingApp.match(bundleID: bundle), browser.isBrowser {
                 user = MicUser(key: browser.id, appName: browser.name, bundleID: bundle, pid: processPID,
-                               bundlePrefixes: browser.bundlePrefixes, isBrowser: true)
+                               bundlePrefixes: browser.bundlePrefixes, isBrowser: true, inputDevices: inputDevices(of: process))
             } else {
                 continue
             }
@@ -151,6 +166,15 @@ final class MeetingMonitor {
         guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
         var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
         guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids
+    }
+
+    private nonisolated static func inputDevices(of process: AudioObjectID) -> [AudioObjectID] {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyDevices, mScope: kAudioObjectPropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(process, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(process, &addr, 0, nil, &size, &ids) == noErr else { return [] }
         return ids
     }
 

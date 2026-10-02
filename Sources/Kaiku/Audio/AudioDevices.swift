@@ -138,6 +138,21 @@ enum AudioDevices {
         return inputs.first(where: \.isBuiltIn) ?? inputs.first
     }
 
+    /// The microphone behind a device an app records from: the device itself, or for an
+    /// aggregate (apps with voice processing create one) its first sub-device with input.
+    static func microphone(behind id: AudioObjectID) -> AudioDevice? {
+        let inputs = inputs()
+        if let d = inputs.first(where: { $0.id == id }) { return d }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioAggregateDevicePropertyActiveSubDeviceList,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return nil }
+        var subs = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &subs) == noErr else { return nil }
+        return subs.lazy.compactMap { sub in inputs.first { $0.id == sub } }.first
+    }
+
     private static func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioDevice? {
         var id = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)

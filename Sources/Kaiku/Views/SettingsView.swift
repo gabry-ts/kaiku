@@ -286,6 +286,7 @@ struct StorageSection: View {
 
 struct RecordingSettings: View {
     @AppStorage(Keys.microphone) private var microphone = AudioDevices.automatic
+    @AppStorage(Keys.followCallMicrophone) private var followCall = true
     @AppStorage(Keys.meLabel) private var meLabel = "Me"
     @AppStorage(Keys.othersLabel) private var othersLabel = "Others"
     @AppStorage(Keys.systemAudioVerified) private var systemAudioVerified = false
@@ -304,6 +305,7 @@ struct RecordingSettings: View {
     private var microphoneFooter: String {
         microphone == AudioDevices.none
             ? "Only the call audio is recorded, so your own voice won't be in the transcript."
+            : microphone == AudioDevices.automatic && followCall ? "Automatic records from the microphone your call uses, and switches when the call does. Without a call, it uses \(resolved?.name ?? "the built-in microphone"). Picking a microphone in the panel stops following for that recording."
             : "Automatic uses \(resolved?.name ?? "the built-in microphone"). It picks a Bluetooth headset only when your call already uses its microphone, since otherwise that lowers call quality."
     }
 
@@ -323,6 +325,9 @@ struct RecordingSettings: View {
                         .labelsHidden()
                         .fixedSize()
                         .onChange(of: microphone) { _, _ in monitor.stop() }
+                    }
+                    if microphone == AudioDevices.automatic {
+                        SwitchRow("Use the same microphone as the call", isOn: $followCall)
                     }
 
                     if selectedIsBluetooth {
