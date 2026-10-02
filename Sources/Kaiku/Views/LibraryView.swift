@@ -30,6 +30,7 @@ enum PendingAction {
     case deleteAudio([RecordingFolder])
     case renameSpeakers(RecordingFolder, RecordingMeta)
     case addTag([RecordingFolder])
+    case chat([RecordingFolder])
 }
 
 struct LibraryView: View {
@@ -47,6 +48,7 @@ struct LibraryView: View {
     @State private var tagTargets: [RecordingFolder] = []
     @State private var speakersTarget: LibraryItem?
     @State private var errorMessage: String?
+    @State private var showChat = false
 
     private var allTags: [String] {
         Tags.byRecency(items.map { ($0.meta.date, $0.meta.tags ?? []) })
@@ -145,6 +147,18 @@ struct LibraryView: View {
                                        description: Text("Pick a call to read its transcript and listen back. Select several with ⌘ or ⇧ to act on them together."))
             }
         }
+        .inspector(isPresented: $showChat) {
+            ChatPanel(chat: state.chat, items: items, selected: selectedItems, tags: allTags, sources: allSources)
+                .inspectorColumnWidth(min: 300, ideal: 360, max: 560)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showChat.toggle() } label: {
+                    Label("Chat", systemImage: "bubble.left.and.text.bubble.right")
+                }
+                .help(showChat ? "Hide the chat" : "Chat with your calls")
+            }
+        }
         .navigationTitle("Recordings")
         .frame(minWidth: 820, minHeight: 520)
         .puiAccent(.kaiku)
@@ -158,6 +172,16 @@ struct LibraryView: View {
         }
         .onChange(of: selection) { _, v in
             if v.count == 1, let only = v.first, state.librarySelection != only { state.librarySelection = only }
+        }
+        // A chat citation: show its call, even when the filters hide it.
+        .onChange(of: state.librarySeek) { _, v in
+            guard let v else { return }
+            if !filtered.contains(where: { $0.id == v.key }) {
+                search = ""
+                tagFilter = nil
+                sourceFilter = nil
+            }
+            if selection != [v.key] { selection = [v.key] }
         }
         .confirmationDialog(deleteCallTargets.count == 1 ? "Move this call to the Trash?" : "Move \(deleteCallTargets.count) calls to the Trash?",
                             isPresented: isPresent($deleteCallTargets)) {
@@ -251,6 +275,10 @@ struct LibraryView: View {
         case .deleteAudio(let f): deleteAudioTargets = f.filter { !$0.allAudioURLs.isEmpty }
         case .renameSpeakers(let f, let m): speakersTarget = LibraryItem(folder: f, meta: m, transcript: nil)
         case .addTag(let f): tagTargets = f
+        case .chat(let f):
+            let keys = Set(f.map(\.key))
+            state.chat.start(with: items.filter { keys.contains($0.id) && $0.folder.hasTranscript }.map { ChatCall($0) })
+            showChat = true
         }
     }
 
@@ -301,6 +329,8 @@ struct BulkActions: View {
         }
         .disabled(!items.contains { $0.folder.hasTranscript })
         Button("Add Tag…") { request(.addTag(folders)) }
+        Button(items.count == 1 ? "Chat About This Call" : "Chat About These Calls") { request(.chat(folders)) }
+            .disabled(!items.contains { $0.folder.hasTranscript })
         Menu("Transcribe Again") {
             ForEach(ProviderKind.available) { kind in
                 Button(kind.displayName + (kind == AppSettings.provider ? " (default)" : "")) {
@@ -515,7 +545,9 @@ private struct RecordingDetail: View {
             bytes = item.folder.totalBytes
             if item.folder.hasSummary && (!item.folder.hasTranscript || LibraryView.preferSummaryTab) { tab = .summary }
             loadAudio()
+            follow(state.librarySeek)
         }
+        .onChange(of: state.librarySeek) { _, v in follow(v) }
         .onDisappear { player.pause() }
         // Re-transcribed calls and renamed speakers rewrite transcript.md.
         .onChange(of: item.transcript, initial: true) { _, _ in loadLines() }
@@ -552,6 +584,15 @@ private struct RecordingDetail: View {
             }
         }
         lines = PlaybackTranscript.lines(from: blocks)
+    }
+
+    /// Plays from the moment a chat citation asked for, when it is about this call.
+    private func follow(_ request: LibrarySeek?) {
+        guard let request, request.key == item.id else { return }
+        state.librarySeek = nil
+        tab = .transcript
+        guard let time = request.time, hasAudio else { return }
+        Task { await player.play(from: time) }
     }
 
     private func loadAudio() {
@@ -1079,6 +1120,16 @@ final class AudioPlayerModel: ObservableObject {
         time = seconds
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         if play { self.play() }
+    }
+
+    /// Plays from `seconds` once the audio just loaded is ready, waiting up to five seconds.
+    func play(from seconds: Double) async {
+        var waited = 0
+        while player.currentItem?.status != .readyToPlay, waited < 50 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waited += 1
+        }
+        seek(to: seconds, play: true)
     }
 
     deinit {

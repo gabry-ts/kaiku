@@ -30,6 +30,8 @@ final class AppState: ObservableObject {
     @Published private(set) var glyphFrame = 0
     /// Recording to select when the library opens.
     @Published var librarySelection: String?
+    /// A call to show in the library and the moment to play, asked for by a chat citation.
+    @Published var librarySeek: LibrarySeek?
     /// True while the current recording is paused.
     @Published private(set) var isPaused = false
     /// Bookmarks of the current recording.
@@ -52,6 +54,9 @@ final class AppState: ObservableObject {
 
     /// Live transcript of the current recording, kept separate like the levels.
     let live = LiveSession()
+
+    /// The library chat, kept here so an answer goes on while the library is closed.
+    let chat = ChatModel()
 
     private var levelTimer: Timer?
     private var glyphTimer: Timer?
@@ -137,6 +142,12 @@ final class AppState: ObservableObject {
         libraryVersion += 1
         if let folder { librarySelection = folder.key }
         WindowManager.shared.showLibrary()
+    }
+
+    /// Selects `folder` in the library and plays it from `time` when given (a chat citation).
+    func showInLibrary(_ folder: RecordingFolder, at time: Double?) {
+        librarySelection = folder.key
+        librarySeek = LibrarySeek(key: folder.key, time: time)
     }
 
     /// - Parameters:
@@ -1000,4 +1011,12 @@ final class AppState: ObservableObject {
 
 extension Array {
     var nilIfEmpty: Self? { isEmpty ? nil : self }
+}
+
+/// A call to select in the library, and the time to play it from.
+struct LibrarySeek: Equatable {
+    let key: String
+    let time: Double?
+    /// Tells two requests for the same moment apart.
+    let id = UUID()
 }
