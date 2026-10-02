@@ -31,6 +31,15 @@ enum AgentInstaller {
         Bundle.main.path(forAuxiliaryExecutable: KaikuAgents.executableName)
     }
 
+    /// Why the server path can't be given to agents yet: it would break once the app moves.
+    static var locationProblem: String? {
+        guard let path = serverPath else { return nil }
+        if path.contains("/AppTranslocation/") || path.hasPrefix("/Volumes/") {
+            return "Kaiku is running from a temporary or disk image location. Move it to /Applications and reopen it before adding agents."
+        }
+        return nil
+    }
+
     private static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
     static var codexConfig: URL { home.appendingPathComponent(".codex/config.toml") }
     static var claudeDesktopConfig: URL {

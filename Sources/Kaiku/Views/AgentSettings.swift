@@ -33,6 +33,9 @@ struct AgentSettings: View {
                     clientRow(.claudeCode, path: path)
                     clientRow(.codex, path: path)
                     clientRow(.claudeDesktop, path: path)
+                    if let problem = AgentInstaller.locationProblem {
+                        GroupRow { StatusDot(kind: .warning, text: problem) }
+                    }
                 }
 
                 SettingsGroup("Manual Setup", footer: "For other agents, run the server path as a stdio MCP server, with no arguments.") {
@@ -62,7 +65,7 @@ struct AgentSettings: View {
                 if installing == client { ProgressView().controlSize(.small) }
                 Button("Add to \(client.displayName)") { install(client, path: path) }
                     .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                    .disabled(installing != nil)
+                    .disabled(installing != nil || AgentInstaller.locationProblem != nil)
             }
         }
         if let result = results[client] {
