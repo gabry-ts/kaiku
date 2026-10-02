@@ -127,6 +127,10 @@ enum AudioTools {
             var file: AVAudioFile?
             var written: AVAudioFramePosition = 0
             var total: AVAudioFramePosition = 0
+            // A last part under a second stays with the one before: providers reject very short audio.
+            let totalFrames = AudioFiles.duration(input).map { AVAudioFramePosition($0 * speechRate) }
+            let minLast = AVAudioFramePosition(speechRate)
+            var extendLast = false
 
             func finish() {
                 guard let f = file else { return }
@@ -143,13 +147,15 @@ enum AudioTools {
                         let name = String(format: "chunk_%03d.m4a", result.count)
                         file = try speechFile(dir.appendingPathComponent(name))
                     }
-                    let room = AVAudioFrameCount(perChunk - written)
-                    let n = min(room, buffer.frameLength - start)
+                    let left = buffer.frameLength - start
+                    let n = extendLast ? left : min(AVAudioFrameCount(perChunk - written), left)
                     try file?.write(from: buffer.slice(from: start, count: n))
                     start += n
                     written += AVAudioFramePosition(n)
                     total += AVAudioFramePosition(n)
-                    if written >= perChunk { finish() }
+                    if written >= perChunk && !extendLast {
+                        if let totalFrames, totalFrames - total < minLast { extendLast = true } else { finish() }
+                    }
                 }
             }
             finish()
