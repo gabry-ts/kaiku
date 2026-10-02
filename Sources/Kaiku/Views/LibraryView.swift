@@ -49,6 +49,13 @@ struct LibraryView: View {
     @State private var speakersTarget: LibraryItem?
     @State private var errorMessage: String?
     @State private var showChat = false
+    /// Search by meaning instead of by the words typed.
+    @State private var smartSearch = false
+
+    /// Smart search is on and something was typed: passages are listed instead of calls.
+    private var showingPassages: Bool {
+        smartSearch && !search.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     private var allTags: [String] {
         Tags.byRecency(items.map { ($0.meta.date, $0.meta.tags ?? []) })
@@ -65,7 +72,7 @@ struct LibraryView: View {
             let tags = item.meta.tags ?? []
             if let tagFilter, !Tags.contains(tags, tagFilter) { return false }
             if let sourceFilter, !Tags.contains([item.meta.source].compactMap { $0 }, sourceFilter) { return false }
-            guard !q.isEmpty else { return true }
+            guard !q.isEmpty, !smartSearch else { return true }
             return item.meta.title.localizedCaseInsensitiveContains(q)
                 || tags.contains { $0.localizedCaseInsensitiveContains(q) }
                 || (item.meta.source?.localizedCaseInsensitiveContains(q) ?? false)
@@ -108,6 +115,7 @@ struct LibraryView: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
+                    smartSearchBar
                     if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
                     if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
                 }
@@ -117,6 +125,10 @@ struct LibraryView: View {
             .overlay {
                 if items.isEmpty {
                     Text("No recordings").foregroundStyle(.tertiary)
+                } else if showingPassages {
+                    SmartResults(semantic: state.semantic, selected: selection) { hit in
+                        state.showInLibrary(hit.folder, at: hit.passage.start)
+                    }
                 } else if filtered.isEmpty {
                     if search.isEmpty {
                         ContentUnavailableView("No Matching Calls", systemImage: "line.3.horizontal.decrease.circle",
@@ -167,6 +179,12 @@ struct LibraryView: View {
             if let sel = state.librarySelection { selection = [sel] }
         }
         .onChange(of: state.libraryVersion) { _, _ in reload() }
+        .onChange(of: search) { _, v in if smartSearch { state.semantic.search(v) } }
+        .onChange(of: smartSearch) { _, on in
+            guard on else { return }
+            state.semantic.activate()
+            state.semantic.search(search)
+        }
         .onChange(of: state.librarySelection) { _, v in
             if let v, selection != [v] { selection = [v] }
         }
@@ -234,6 +252,18 @@ struct LibraryView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
         }
+        .background(.bar)
+    }
+
+    /// The switch for Smart search, with how far the indexing of the calls is.
+    private var smartSearchBar: some View {
+        HStack(spacing: 8) {
+            filterChip("Smart search", selected: smartSearch) { smartSearch.toggle() }
+                .help("Find passages by meaning, not only by the words typed")
+            if smartSearch { SmartSearchStatus(semantic: state.semantic) }
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
         .background(.bar)
     }
 
@@ -429,6 +459,78 @@ func copy(_ folder: RecordingFolder) {
     guard let t = try? String(contentsOf: folder.transcriptURL, encoding: .utf8) else { return }
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(t, forType: .string)
+}
+
+/// How far the indexing of the calls is, or why Smart search can't work.
+private struct SmartSearchStatus: View {
+    @ObservedObject var semantic: SemanticSearchModel
+
+    var body: some View {
+        if semantic.unavailable {
+            Text("No language model on this Mac").font(.caption).foregroundStyle(.secondary)
+        } else if let p = semantic.progress {
+            Text("Indexing \(min(p.done + 1, p.total)) of \(p.total)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The passages Smart search found, best first; a click opens the call at that moment.
+private struct SmartResults: View {
+    @ObservedObject var semantic: SemanticSearchModel
+    let selected: Set<String>
+    let open: (SemanticSearchModel.Hit) -> Void
+
+    var body: some View {
+        Group {
+            if semantic.results.isEmpty {
+                if semantic.isSearching {
+                    ProgressView().controlSize(.small)
+                } else {
+                    ContentUnavailableView(semantic.progress == nil ? "No Matching Passages" : "Indexing Your Calls",
+                                           systemImage: "sparkle.magnifyingglass",
+                                           description: Text(semantic.progress == nil ? "Try describing it in other words."
+                                                             : "Results appear as calls are indexed."))
+                }
+            } else {
+                List(semantic.results) { hit in
+                    Button { open(hit) } label: { SmartResultRow(hit: hit, selected: selected.contains(hit.folder.key)) }
+                        .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
+    }
+}
+
+private struct SmartResultRow: View {
+    let hit: SemanticSearchModel.Hit
+    let selected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(hit.title).font(.body.weight(.medium)).lineLimit(1)
+            Text(hit.passage.text).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+            HStack(spacing: 4) {
+                Text(TranscriptFormatter.timestamp(hit.passage.start))
+                    .monospacedDigit()
+                    .foregroundStyle(AppAccent.kaiku.color)
+                Text("·")
+                Text(hit.date, format: .dateTime.day().month(.abbreviated))
+                if let speaker = hit.passage.speaker {
+                    Text("·")
+                    Text(speaker).lineLimit(1)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected ? AppAccent.kaiku.color.opacity(0.12) : .clear)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
 }
 
 private struct LibraryRow: View {
