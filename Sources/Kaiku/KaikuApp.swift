@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Shortcuts.migratePresets()
         AppSettings.registerDefaults()
         Migration.migrateSourceRules()
+        Migration.migrateAutoRecordMode()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

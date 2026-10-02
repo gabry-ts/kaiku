@@ -116,6 +116,14 @@ enum Migration {
         d.set(true, forKey: Keys.sourceRulesMigrated)
     }
 
+    /// The old "start recording automatically" switch becomes All calls (on) or Off.
+    /// Runs only if the new setting was never saved.
+    static func migrateAutoRecordMode() {
+        let d = AppSettings.defaults
+        guard d.object(forKey: Keys.autoRecordMode) == nil else { return }
+        d.set((d.bool(forKey: Keys.detectAutoStart) ? AutoRecordMode.all : .off).rawValue, forKey: Keys.autoRecordMode)
+    }
+
     private static func move(_ from: URL, to: URL, _ c: Context) -> Bool {
         do {
             try FileManager.default.createDirectory(at: to.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -225,7 +225,9 @@ enum Keys {
     static let lastAutoCleanup = "lastAutoCleanup"
     static let detectCalls = "detectCalls"
     static let detectDisabledApps = "detectDisabledApps"
+    /// The old "start recording automatically" switch (read once to migrate to `autoRecordMode`).
     static let detectAutoStart = "detectAutoStart"
+    static let autoRecordMode = "autoRecordMode"
     /// "Ask to stop when the call ends", before notifications had their own switches
     /// (read to carry it over).
     static let detectEndNotify = "detectEndNotify"
@@ -511,6 +513,10 @@ enum AppSettings {
     static var detectCalls: Bool { defaults.bool(forKey: Keys.detectCalls) }
     static var detectDisabledApps: [String] { defaults.stringArray(forKey: Keys.detectDisabledApps) ?? [] }
     static var detectAutoStart: Bool { defaults.bool(forKey: Keys.detectAutoStart) }
+    /// When a detected call starts recording by itself; Off until chosen or migrated.
+    static var autoRecordMode: AutoRecordMode {
+        defaults.string(forKey: Keys.autoRecordMode).flatMap(AutoRecordMode.init(rawValue:)) ?? .off
+    }
     static var detectAutoStopSeconds: Int { defaults.integer(forKey: Keys.detectAutoStopSeconds) }
     static var callEndMode: CallEndMode { CallEndMode(saved: defaults.string(forKey: Keys.detectCallEndMode)) }
     static var stopAfterSilenceSeconds: Int { defaults.integer(forKey: Keys.stopAfterSilenceSeconds) }
