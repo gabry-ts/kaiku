@@ -460,7 +460,10 @@ private struct RecordingDetail: View {
     @State private var showErrorDetails = false
     @State private var webhookStatus: (ok: Bool, text: String)?
     @State private var sendingWebhook = false
-    @StateObject private var player = AudioPlayerModel()
+    @State private var lines: [PlaybackLine] = []
+    @StateObject private var holder = PlayerHolder()
+
+    private var player: AudioPlayerModel { holder.player }
 
     private var busy: Bool { state.isBusy(item.folder) }
     private var cancelled: Bool { item.meta.error == TranscriptionJob.cancelledMessage }
@@ -514,6 +517,8 @@ private struct RecordingDetail: View {
             loadAudio()
         }
         .onDisappear { player.pause() }
+        // Re-transcribed calls and renamed speakers rewrite transcript.md.
+        .onChange(of: item.transcript, initial: true) { _, _ in loadLines() }
         // The audio files appear when a call shown while recording is saved.
         .onChange(of: hasAudio) { _, has in
             bytes = item.folder.totalBytes
@@ -534,6 +539,20 @@ private struct RecordingDetail: View {
     }
 
     private var bookmarks: [Bookmark] { (item.meta.bookmarks ?? []).sorted { $0.time < $1.time } }
+
+    /// The turns of transcript.md, with word times from segments.json when the provider gave them.
+    private func loadLines() {
+        let blocks = self.blocks
+        if let raw = item.folder.loadSegments() {
+            let timed = PlaybackTranscript.lines(from: TranscriptWriter.displaySegments(meta: item.meta, rawSegments: raw, merge: false))
+            // transcript.md is written from the same segments: use them only while both agree.
+            if timed.count == blocks.count {
+                lines = timed
+                return
+            }
+        }
+        lines = PlaybackTranscript.lines(from: blocks)
+    }
 
     private func loadAudio() {
         guard hasAudio, let url = [item.folder.mixedURL, item.folder.micURL, item.folder.systemURL]
@@ -772,15 +791,7 @@ private struct RecordingDetail: View {
                     .frame(maxWidth: .infinity)
             }
         } else {
-            let colors = Brand.speakerColors(blocks.map(\.speaker))
-            LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                    TranscriptBlockView(block: block, color: colors[block.speaker] ?? .secondary,
-                                        search: search, canSeek: hasAudio) {
-                        player.seek(to: block.start, play: true)
-                    }
-                }
-            }
+            TranscriptLinesView(lines: lines, player: player, search: search, canSeek: hasAudio)
         }
     }
 
@@ -862,58 +873,165 @@ private struct CompactLabelStyle: LabelStyle {
     }
 }
 
-private struct TranscriptBlockView: View {
-    let block: TranscriptBlock
+/// The speaker turns. While the call plays, the word being said is highlighted (or the
+/// phrase, when the provider gave no word times); double-click one to play from there.
+private struct TranscriptLinesView: View {
+    let lines: [PlaybackLine]
+    let player: AudioPlayerModel
+    let search: String
+    let canSeek: Bool
+    @State private var position: PlaybackTranscript.Position?
+
+    var body: some View {
+        let colors = Brand.speakerColors(lines.map(\.speaker))
+        LazyVStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                let active = position?.line == index
+                TranscriptLineView(line: line, color: colors[line.speaker] ?? .secondary, search: search, canSeek: canSeek,
+                                   active: active, activeSpan: active ? position?.span : nil, seek: seek)
+                    .equatable()
+            }
+        }
+        // Only the position is kept here, so a time update redraws the turns whose highlight changed.
+        .onReceive(player.$time) { follow($0) }
+        .onChange(of: lines) { _, _ in follow(player.time) }
+    }
+
+    private func seek(_ time: Double) {
+        player.seek(to: time, play: true)
+    }
+
+    private func follow(_ time: Double) {
+        let p = time > 0 ? PlaybackTranscript.position(at: time, in: lines) : nil
+        if p != position { position = p }
+    }
+}
+
+/// One speaker turn. Equatable so that it is redrawn only when its own highlight changes.
+private struct TranscriptLineView: View, Equatable {
+    let line: PlaybackLine
     let color: Color
     let search: String
     let canSeek: Bool
-    let seek: () -> Void
+    let active: Bool
+    let activeSpan: Int?
+    let seek: (Double) -> Void
     @State private var hover = false
+    @State private var width: CGFloat = 0
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.line == b.line && a.color == b.color && a.search == b.search && a.canSeek == b.canSeek
+            && a.active == b.active && a.activeSpan == b.activeSpan
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
-            Button(action: seek) {
+            Button { seek(line.start) } label: {
                 HStack(spacing: 3) {
-                    Text(TranscriptFormatter.timestamp(block.start))
+                    Text(TranscriptFormatter.timestamp(line.start))
                     Image(systemName: "play.fill").font(.system(size: 7)).opacity(hover && canSeek ? 1 : 0)
                 }
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(hover && canSeek ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.tertiary))
+                .foregroundStyle((hover && canSeek) || active ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
             .onHover { hover = $0 }
             .disabled(!canSeek)
             .help(canSeek ? "Play from here" : "")
-            .accessibilityLabel("Play from \(TranscriptFormatter.timestamp(block.start))")
+            .accessibilityLabel("Play from \(TranscriptFormatter.timestamp(line.start))")
             .frame(width: 58, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(block.speaker)
+                Text(line.speaker)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(color)
-                Text(highlighted)
+                let shown = displayed
+                Text(highlighted(shown))
                     .font(.body)
                     .lineSpacing(3)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                    .background(GeometryReader { geo in
+                        Color.clear
+                            .onAppear { width = geo.size.width }
+                            .onChange(of: geo.size.width) { _, w in width = w }
+                    })
+                    .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { value in
+                        guard canSeek else { return }
+                        seek(time(at: value.location, aligned: String(shown.characters) == line.text))
+                    })
             }
         }
     }
 
-    private var highlighted: AttributedString {
-        var text = (try? AttributedString(markdown: block.text)) ?? AttributedString(block.text)
+    /// The text with its Markdown styles, as before.
+    private var displayed: AttributedString {
+        (try? AttributedString(markdown: line.text)) ?? AttributedString(line.text)
+    }
+
+    private func highlighted(_ shown: AttributedString) -> AttributedString {
+        var text = shown
         let q = search.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return text }
-        var searchRange = text.startIndex..<text.endIndex
-        while let r = text[searchRange].range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) {
-            text[r].backgroundColor = Color.yellow.opacity(0.45)
-            searchRange = r.upperBound..<text.endIndex
+        if !q.isEmpty {
+            var searchRange = text.startIndex..<text.endIndex
+            while let r = text[searchRange].range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) {
+                text[r].backgroundColor = Color.yellow.opacity(0.45)
+                searchRange = r.upperBound..<text.endIndex
+            }
         }
+        guard let i = activeSpan, line.spans.indices.contains(i) else { return text }
+        let span = line.spans[i]
+        let highlight = AppAccent.kaiku.color.opacity(span.isWord ? 0.3 : 0.15)
+        // Span offsets count the characters of the transcript text: when Markdown changed
+        // them, highlight the whole turn instead.
+        let count = text.characters.count
+        guard String(text.characters) == line.text, span.range.upperBound <= count else {
+            text[text.startIndex..<text.endIndex].backgroundColor = highlight
+            return text
+        }
+        let lower = text.characters.index(text.startIndex, offsetBy: span.range.lowerBound)
+        let upper = text.characters.index(lower, offsetBy: span.range.count)
+        text[lower..<upper].backgroundColor = highlight
         return text
+    }
+
+    /// Where to play from for a double-click at `point` in the text.
+    private func time(at point: CGPoint, aligned: Bool) -> Double {
+        guard aligned, let offset = TranscriptHitTest.characterOffset(at: point, in: line.text, width: width) else {
+            return line.start
+        }
+        return line.seekTime(atCharacter: offset)
+    }
+}
+
+/// Finds the character under a click in transcript text. SwiftUI doesn't expose how it laid
+/// the text out, so it is laid out again with TextKit in the same font, spacing and width.
+@MainActor
+enum TranscriptHitTest {
+    static func characterOffset(at point: CGPoint, in text: String, width: CGFloat) -> Int? {
+        guard width > 0, !text.isEmpty else { return nil }
+        let style = NSMutableParagraphStyle()
+        style.lineSpacing = 3
+        let storage = NSTextStorage(string: text, attributes: [.font: NSFont.preferredFont(forTextStyle: .body), .paragraphStyle: style])
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        let index = layout.characterIndexForGlyph(at: layout.glyphIndex(for: point, in: container))
+        let ns = text as NSString
+        guard index < ns.length, let range = Range(ns.rangeOfComposedCharacterSequence(at: index), in: text) else { return nil }
+        return text.distance(from: text.startIndex, to: range.lowerBound)
     }
 }
 
 // MARK: - Player
+
+/// Owns the player without observing it, so the call detail isn't redrawn on every time update.
+@MainActor
+private final class PlayerHolder: ObservableObject {
+    let player = AudioPlayerModel()
+}
 
 @MainActor
 final class AudioPlayerModel: ObservableObject {
@@ -928,7 +1046,8 @@ final class AudioPlayerModel: ObservableObject {
 
     func load(_ url: URL) {
         player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] t in
+        // Often enough to follow word by word in the transcript; it only runs while playing.
+        observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] t in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if !self.scrubbing { self.time = t.seconds }
