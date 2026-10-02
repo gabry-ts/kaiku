@@ -80,8 +80,15 @@ public struct CallSource: Equatable, Sendable {
     }
 
     /// Title split on " – " / " - " / " — " / " | ", without the unread counter and
-    /// the browser name. Empty parts are dropped.
+    /// the browser name. Empty parts are dropped, and so is Chrome's camera or microphone
+    /// indicator with everything after it, which is the profile name.
     public static func titleParts(_ title: String) -> [String] {
+        let parts = splitTitle(title)
+        guard let indicator = parts.firstIndex(where: isMediaIndicator) else { return parts }
+        return Array(parts[..<indicator])
+    }
+
+    private static func splitTitle(_ title: String) -> [String] {
         var t = title.replacingOccurrences(of: "\u{200B}", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let counter = t.range(of: #"^\(\d+\+?\)\s*"#, options: .regularExpression) {
@@ -101,6 +108,17 @@ public struct CallSource: Equatable, Sendable {
         (MeetingApp.known.filter(\.isBrowser).map(\.name) + ["Mozilla Firefox"]).map { $0.lowercased() })
 
     private static func isBrowserName(_ s: String) -> Bool { browserNames.contains(s.lowercased()) }
+
+    /// What Chrome adds to the window title while a tab uses the camera or microphone,
+    /// e.g. "Weekly sync - Camera and microphone recording - Work".
+    private static let mediaIndicators: Set<String> = [
+        "camera and microphone recording", "camera or microphone recording",
+        "microphone recording", "camera recording",
+        "registrazione con videocamera e microfono", "registrazione con videocamera o microfono",
+        "registrazione con microfono", "registrazione con videocamera",
+    ]
+
+    private static func isMediaIndicator(_ s: String) -> Bool { mediaIndicators.contains(s.lowercased()) }
 
     /// Whether `text` contains the words of `keyword` in a row, so "Meet" matches
     /// "Google Meet" but not "Meeting notes".

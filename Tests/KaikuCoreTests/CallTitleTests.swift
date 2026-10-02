@@ -21,6 +21,13 @@ final class CallTitleTests: XCTestCase {
         XCTAssertNil(CallTitle.clean("Client Portal - Google Chrome", source: "Client Portal"))
     }
 
+    func testChromeRecordingIndicatorAndProfileAreDropped() {
+        XCTAssertEqual(CallTitle.clean("Matteo / Luca - Registrazione con videocamera e microfono - Luca (shellonback.com)", source: "Google Meet"),
+                       "Matteo / Luca")
+        XCTAssertEqual(CallTitle.clean("Meet – Weekly sync - Camera and microphone recording - Work", source: "Google Meet"), "Weekly sync")
+        XCTAssertNil(CallTitle.clean("Meet – abc-defg-hij - Microphone recording - Work", source: "Google Meet"))
+    }
+
     func testLongTitlesAreCut() {
         let long = String(repeating: "a", count: 150)
         XCTAssertEqual(CallTitle.clean(long, source: "Zoom")?.count, 100)
