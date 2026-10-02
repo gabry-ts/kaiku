@@ -173,6 +173,10 @@ enum AudioTools {
                 let out = try aacFile(partial, sampleRate: rate, channels: channels, bitRate: 128_000)
                 var micDone = false, systemDone = false
                 while !(micDone && systemDone) {
+                    if Task.isCancelled {
+                        try? FileManager.default.removeItem(at: partial)
+                        throw CancellationError()
+                    }
                     let m = micDone ? nil : try micReader.read()
                     let s = systemDone ? nil : try systemReader.read()
                     if m == nil { micDone = true }
@@ -221,8 +225,10 @@ enum AudioTools {
 
     // MARK: - Helpers
 
+    /// Runs `work` off the caller's actor; cancelling the caller cancels it too.
     private static func detached<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
-        try await Task.detached(priority: .userInitiated) { try work() }.value
+        let task = Task.detached(priority: .userInitiated) { try work() }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
     }
 
     /// Mono 16 kHz AAC at 32 kbps.
