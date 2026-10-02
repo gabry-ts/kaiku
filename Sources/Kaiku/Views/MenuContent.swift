@@ -392,7 +392,12 @@ private struct MuteCard: View {
                 Text("Mute all microphones").font(PUI.Font.body).foregroundStyle(Ink(scheme).primary)
                 Spacer(minLength: PUI.Space.m)
                 Toggle("Mute all microphones",
-                       isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
+                       isOn: Binding(get: { muter.isMuted }, set: { on in
+                           // The switch animates its change, which would also spring the banner and the panel size.
+                           var t = Transaction()
+                           t.disablesAnimations = true
+                           withTransaction(t) { on ? muter.mute() : muter.unmute() }
+                       }))
                     .toggleStyle(PUISwitchStyle(mini: true, showsLabel: false))
             }
             .padding(.horizontal, PUI.Space.xxs)
