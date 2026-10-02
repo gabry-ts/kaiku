@@ -10,7 +10,7 @@ public enum WebhookTemplate {
     }
 
     public static let placeholders = [
-        "title", "date", "duration_seconds", "language", "provider",
+        "title", "date", "delivery_id", "duration_seconds", "language", "provider",
         "folder_path", "transcript_path", "transcript_markdown", "segments_json", "audio_paths_json",
         "bookmarks_json", "summary_markdown", "estimated_cost_usd", "tags", "tags_json",
         "external_domains", "external_domains_json",

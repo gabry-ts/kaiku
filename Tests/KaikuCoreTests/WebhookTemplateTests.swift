@@ -29,4 +29,10 @@ final class WebhookTemplateTests: XCTestCase {
     func testEscape() {
         XCTAssertEqual(WebhookTemplate.escapeJSONString("a\"b\nc/d"), #"a\"b\nc/d"#)
     }
+
+    func testDeliveryIDPlaceholder() {
+        XCTAssertTrue(WebhookTemplate.placeholders.contains("delivery_id"))
+        let body = WebhookTemplate.render(#"{"id": "{{delivery_id}}"}"#, values: ["delivery_id": .string("abc-123")], jsonEscape: true)
+        XCTAssertEqual(body, #"{"id": "abc-123"}"#)
+    }
 }

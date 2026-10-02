@@ -36,6 +36,8 @@ enum Webhook {
         var tags: [String] = []
         /// Domains of the other companies invited to the calendar event.
         var externalDomains: [String] = []
+        /// Identifies one delivery; identical on every retry so receivers can deduplicate.
+        var deliveryID = UUID().uuidString
 
         var bookmarksJSON: [[String: Any]] {
             bookmarks.sorted { $0.time < $1.time }.map { ["time": $0.time, "label": $0.label] }
@@ -49,6 +51,7 @@ enum Webhook {
             let dict: [String: Any] = [
                 "title": title,
                 "date": date,
+                "delivery_id": deliveryID,
                 "duration_seconds": durationSeconds,
                 "language": language,
                 "provider": provider,
@@ -75,6 +78,7 @@ enum Webhook {
             return [
                 "title": .string(title),
                 "date": .string(date),
+                "delivery_id": .string(deliveryID),
                 "duration_seconds": .raw(String(durationSeconds)),
                 "language": .string(language),
                 "provider": .string(provider),
@@ -138,7 +142,7 @@ enum Webhook {
         try await send(payload: try Payload.from(folder: folder))
     }
 
-    /// Sends with up to 3 retries (1 s, 2 s, 4 s) on network errors, 429 and 5xx.
+    /// Sends with up to 3 retries (1 s, 2 s, 4 s) on network errors (except timeouts), 429 and 5xx.
     static func send(payload: Payload) async throws -> WebhookResult {
         let request = try makeRequest(payload: payload)
         var lastError: Error?
@@ -155,6 +159,8 @@ enum Webhook {
             } catch {
                 lastError = WebhookError(statusCode: nil, message: error.localizedDescription)
                 Log.app.error("Webhook attempt \(attempt + 1) failed: \(error.localizedDescription, privacy: .public)")
+                // The server may have processed a timed-out request; retrying would duplicate it.
+                if (error as? URLError)?.code == .timedOut { break }
             }
         }
         throw lastError ?? WebhookError(statusCode: nil, message: "unknown error")
@@ -178,6 +184,7 @@ enum Webhook {
             req.httpBody = try payload.defaultBody()
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
+        req.setValue(payload.deliveryID, forHTTPHeaderField: "X-Kaiku-Delivery")
         // A header whose value is empty (or couldn't be read from the Keychain) is left out.
         for header in AppSettings.webhookHeaders where !header.value.isEmpty {
             req.setValue(header.value, forHTTPHeaderField: header.name.trimmingCharacters(in: .whitespaces))
