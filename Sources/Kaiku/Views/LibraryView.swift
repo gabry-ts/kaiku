@@ -507,15 +507,21 @@ private struct RecordingDetail: View {
             tags = item.meta.tags ?? []
             bytes = item.folder.totalBytes
             if item.folder.hasSummary && (!item.folder.hasTranscript || LibraryView.preferSummaryTab) { tab = .summary }
-            if hasAudio, let url = [item.folder.mixedURL, item.folder.micURL, item.folder.systemURL]
-                .first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
-                player.load(url)
-            }
+            loadAudio()
         }
         .onDisappear { player.pause() }
+        // The audio files appear when a call shown while recording is saved.
+        .onChange(of: hasAudio) { _, has in
+            bytes = item.folder.totalBytes
+            if has { loadAudio() }
+        }
         .onChange(of: tags) { _, v in
             if v != (item.meta.tags ?? []) { state.setTags(item.folder, v) }
         }
+        // Changes made elsewhere (context menu, renames) while this call stays selected.
+        .onChange(of: item.meta.tags) { _, v in if (v ?? []) != tags { tags = v ?? [] } }
+        .onChange(of: item.meta.title) { _, v in if !editingTitle { title = v } }
+        .onChange(of: item.meta.source) { _, v in if !editingSource { source = v ?? "" } }
         .alert("Export failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
             Button("OK") {}
         } message: {
@@ -524,6 +530,12 @@ private struct RecordingDetail: View {
     }
 
     private var bookmarks: [Bookmark] { (item.meta.bookmarks ?? []).sorted { $0.time < $1.time } }
+
+    private func loadAudio() {
+        guard hasAudio, let url = [item.folder.mixedURL, item.folder.micURL, item.folder.systemURL]
+            .first(where: { FileManager.default.fileExists(atPath: $0.path) }) else { return }
+        player.load(url)
+    }
 
     /// Copy (labeled, always visible), Export and Summary.
     private var actionRow: some View {
