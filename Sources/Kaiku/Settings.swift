@@ -408,6 +408,7 @@ enum AppSettings {
             defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,
                                          Keys.chatModel(p): p.defaultModel])
         }
+        DictationConfig.registerDefaults()
     }
 
     static var defaultBaseFolder: URL {
