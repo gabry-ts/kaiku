@@ -593,6 +593,11 @@ final class AppState: ObservableObject {
 
     func canCancelTranscription(_ folder: RecordingFolder) -> Bool { jobs[folder.key] != nil }
 
+    /// Returns once the transcription of `folder` has ended, at once if none is running.
+    func waitForTranscription(_ folder: RecordingFolder) async {
+        await jobs[folder.key]?.value
+    }
+
     /// Generates (or regenerates) summary.md for a call.
     func generateSummary(_ folder: RecordingFolder) async throws {
         guard !busyFolders.contains(folder.key) else { return }
@@ -971,7 +976,7 @@ final class AppState: ObservableObject {
         Notifier.shared.post(.problem, title: "Kaiku error", body: message, folderPath: folderPath)
     }
 
-    private func makeFolder(date: Date, title: String) throws -> RecordingFolder {
+    func makeFolder(date: Date, title: String) throws -> RecordingFolder {
         let base = AppSettings.baseFolder
         let name = Naming.folderName(date: date, title: title)
         var url = base.appendingPathComponent(name, isDirectory: true)
