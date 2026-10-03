@@ -5,7 +5,7 @@ import KaikuCore
 /// the words people use for them.
 enum SettingsIndex {
     static let all: [SettingsSearchEntry] = general + menuBar + recording + callDetection + transcription
-        + ai + accounts + integrations + notifications + permissions + about
+        + dictation + ai + accounts + integrations + notifications + permissions + about
 
     /// The pane and row an entry leads to.
     static func target(of entry: SettingsSearchEntry) -> SettingsTarget? {
@@ -92,6 +92,23 @@ enum SettingsIndex {
         e(.transcription, "advanced", "Advanced", "Cost estimate", ["price", "cost", "dollars", "billing"]),
     ]
 
+    private static let dictationWords = ["dictate", "dictation", "voice", "speak", "type", "wispr", "superwhisper"]
+
+    private static let dictation = [
+        e(.dictation, "dictation", "Dictation", "Dictate with a shortcut in any app", dictationWords),
+        e(.dictation, "activation", "Shortcut", "Activation", dictationWords + ["hold", "push to talk", "toggle"]),
+        e(.dictation, "activation", "Shortcut", "Dictate", dictationWords + ["hotkey", "keyboard", "shortcut"]),
+        e(.dictation, "activation", "Shortcut", "Switch dictation mode", dictationWords + ["hotkey", "keyboard", "shortcut", "mode"]),
+        e(.dictation, "speech", "Speech to Text", "Dictation provider", dictationWords + ["whisper", "apple", "openai", "groq", "elevenlabs"]),
+        e(.dictation, "speech", "Speech to Text", "Dictation language", dictationWords + ["language", "italian", "english"]),
+        e(.dictation, "speech", "Speech to Text", "Keep the model loaded", dictationWords + ["whisper", "warm", "fast", "memory"]),
+        e(.dictation, "polish", "Polish", "Polish the text before inserting it", dictationWords + ["ai", "punctuation", "filler", "cleanup", "llm"]),
+        e(.dictation, "polishPrompt", "Polish", "Customize Prompt", dictationWords + ["prompt", "instructions"]),
+        e(.dictation, "modes", "Modes", "Dictation modes", dictationWords + ["mode", "email", "message", "code comment", "prompt"]),
+        e(.dictation, "insertion", "Insertion", "Paste where the cursor is", dictationWords + ["paste", "clipboard", "accessibility", "insert"]),
+        e(.dictation, "history", "Recent Dictations", "Recent dictations", dictationWords + ["history", "copy again"]),
+    ]
+
     private static let ai = [
         e(.ai, "summaries", "Summaries", "Summarize every call after transcription", ["summary", "summarize", "recap", "notes"]),
         e(.ai, "summaryProvider", "Summaries", "Summary provider", ["gpt", "claude", "anthropic", "openrouter", "ollama", "llama", "local llm", "codex", "opencode", "cli"]),
@@ -154,7 +171,7 @@ enum SettingsIndex {
         e(.permissions, "systemAudio", "Permissions", "System Audio Recording", ["permission", "privacy", "call audio"]),
         e(.permissions, "notifications", "Permissions", "Notifications access", ["permission", "privacy"]),
         e(.permissions, "calendar", "Permissions", "Calendar access", ["permission", "privacy"]),
-        e(.permissions, "accessibility", "Permissions", "Accessibility", ["permission", "privacy", "browser", "window title"]),
+        e(.permissions, "accessibility", "Permissions", "Accessibility", ["permission", "privacy", "browser", "window title", "dictation", "paste"]),
         e(.permissions, "reminders", "Permissions", "Reminders access", ["permission", "privacy"]),
     ]
 
