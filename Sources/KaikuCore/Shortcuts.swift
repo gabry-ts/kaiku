@@ -74,7 +74,8 @@ public enum KeyNames {
 
 /// Global shortcuts the user can assign.
 public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
-    case record, pause, bookmark, muteMicrophones, openLibrary, showPanel
+    // New actions go at the end: the hot key id is the position in this list.
+    case record, pause, bookmark, muteMicrophones, openLibrary, showPanel, dictate, dictationMode
 
     public var id: String { rawValue }
 
@@ -86,8 +87,13 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .muteMicrophones: return "Mute or unmute all microphones"
         case .openLibrary: return "Open Kaiku"
         case .showPanel: return "Show panel"
+        case .dictate: return "Dictate"
+        case .dictationMode: return "Switch dictation mode"
         }
     }
+
+    /// Only registered while dictation is on.
+    public var isDictation: Bool { self == .dictate || self == .dictationMode }
 
     /// Carbon hot key id (stable, non-zero).
     public var hotKeyID: UInt32 { UInt32(Self.allCases.firstIndex(of: self)! + 1) }
@@ -103,7 +109,8 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .record: return KeyCombo(keyCode: 0x0F, modifiers: mods) // R
         case .pause: return KeyCombo(keyCode: 0x23, modifiers: mods) // P
         case .bookmark: return KeyCombo(keyCode: 0x0B, modifiers: mods) // B
-        case .muteMicrophones, .openLibrary, .showPanel: return nil
+        case .dictate: return KeyCombo(keyCode: 0x31, modifiers: [.option]) // Space
+        case .muteMicrophones, .openLibrary, .showPanel, .dictationMode: return nil
         }
     }
 

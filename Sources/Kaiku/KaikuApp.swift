@@ -107,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MicMuter.shared.onChange = { muted in AppState.shared.microphonesMuted(muted) }
             StatusBarController.shared.install()
             HotKeyManager.apply()
+            DictationWhisper.shared.apply()
             Permissions.shared.refresh()
             AppState.shared.recoverOnLaunch()
             AppState.shared.startAutoCleanup()

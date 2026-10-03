@@ -14,7 +14,7 @@ extension ShortcutAction {
         case .record: return Keys.hotKey
         case .pause: return Keys.pauseHotKey
         case .bookmark: return Keys.bookmarkHotKey
-        case .muteMicrophones, .openLibrary, .showPanel: return nil
+        case .muteMicrophones, .openLibrary, .showPanel, .dictate, .dictationMode: return nil
         }
     }
 }
@@ -70,7 +70,8 @@ enum HotKeyManager {
         unregisterAll()
         guard !suspended else { return }
         installHandlerIfNeeded()
-        for action in ShortcutAction.allCases {
+        // Dictation shortcuts exist only while dictation is on.
+        for action in ShortcutAction.allCases where !action.isDictation || DictationConfig.enabled {
             guard let combo = Shortcuts.combo(for: action) else { continue }
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: OSType(0x4B61_696B), id: action.hotKeyID) // "Kaik"
@@ -100,30 +101,65 @@ enum HotKeyManager {
         failed = []
     }
 
+    /// Id of Esc while a dictation can be cancelled; outside the range of `ShortcutAction`.
+    private static let escapeID: UInt32 = 100
+    private static var escapeRef: EventHotKeyRef?
+
+    /// Takes Esc from every app until `releaseEscape`, so a dictation can be cancelled
+    /// without Kaiku taking the focus.
+    static func claimEscape() {
+        guard escapeRef == nil else { return }
+        installHandlerIfNeeded()
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: OSType(0x4B61_696B), id: escapeID)
+        if RegisterEventHotKey(UInt32(kVK_Escape), 0, id, GetApplicationEventTarget(), 0, &ref) == noErr { escapeRef = ref }
+    }
+
+    static func releaseEscape() {
+        if let escapeRef { UnregisterEventHotKey(escapeRef) }
+        escapeRef = nil
+    }
+
     private static func installHandlerIfNeeded() {
         guard !handlerInstalled else { return }
         handlerInstalled = true
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        // Releases too: hold-to-talk dictation stops when the shortcut is let go.
+        var specs = [EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+                     EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))]
         InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
             var hotKey = EventHotKeyID()
             GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKey)
             let id = hotKey.id
+            let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
             DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    switch ShortcutAction(hotKeyID: id) {
-                    case .record: AppState.shared.toggleRecording()
-                    case .pause: AppState.shared.togglePause()
-                    case .bookmark: AppState.shared.addBookmark()
-                    case .muteMicrophones: MicMuter.shared.toggle()
-                    case .openLibrary: WindowManager.shared.showLibrary()
-                    case .showPanel: StatusBarController.shared.togglePanel()
-                    case nil: break
-                    }
-                }
+                MainActor.assumeIsolated { HotKeyManager.handle(id: id, pressed: pressed) }
             }
             return noErr
-        }, 1, &spec, nil, nil)
+        }, specs.count, &specs, nil, nil)
+    }
+
+    private static func handle(id: UInt32, pressed: Bool) {
+        if id == escapeID {
+            if pressed { DictationController.shared.cancel() }
+            return
+        }
+        guard let action = ShortcutAction(hotKeyID: id) else { return }
+        if action == .dictate {
+            pressed ? DictationController.shared.shortcutPressed() : DictationController.shared.shortcutReleased()
+            return
+        }
+        guard pressed else { return }
+        switch action {
+        case .record: AppState.shared.toggleRecording()
+        case .pause: AppState.shared.togglePause()
+        case .bookmark: AppState.shared.addBookmark()
+        case .muteMicrophones: MicMuter.shared.toggle()
+        case .openLibrary: WindowManager.shared.showLibrary()
+        case .showPanel: StatusBarController.shared.togglePanel()
+        case .dictationMode: DictationController.shared.cycleMode()
+        case .dictate: break
+        }
     }
 }
 

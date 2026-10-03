@@ -45,6 +45,14 @@ final class ShortcutTests: XCTestCase {
         XCTAssertNil(ShortcutAction.muteMicrophones.defaultCombo)
         XCTAssertNil(ShortcutAction.openLibrary.defaultCombo)
         XCTAssertNil(ShortcutAction.showPanel.defaultCombo)
+        XCTAssertEqual(ShortcutAction.dictate.defaultCombo?.display, "⌥Space")
+        XCTAssertNil(ShortcutAction.dictationMode.defaultCombo)
+        // Ids of the existing actions never change.
+        XCTAssertEqual(ShortcutAction.record.hotKeyID, 1)
+        XCTAssertEqual(ShortcutAction.showPanel.hotKeyID, 6)
+        XCTAssertEqual(ShortcutAction.allCases.filter(\.isDictation), [.dictate, .dictationMode])
+        let defaults = ShortcutAction.allCases.compactMap(\.defaultCombo)
+        XCTAssertEqual(Set(defaults).count, defaults.count)
         for a in ShortcutAction.allCases { XCTAssertEqual(ShortcutAction(hotKeyID: a.hotKeyID), a) }
         XCTAssertNil(ShortcutAction(hotKeyID: 0))
         XCTAssertNil(ShortcutAction(hotKeyID: 99))
