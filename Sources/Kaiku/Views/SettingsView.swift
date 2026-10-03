@@ -665,6 +665,7 @@ struct AboutSettings: View {
                     checksAutomatically: $checksAutomatically,
                     onCheckForUpdates: { UpdaterManager.shared.checkForUpdates() },
                     onBuyMeACoffee: { BuyMeACoffee.open() })
+                    .settingsAnchor("updates")
 
                 SettingsGroup("Help") {
                     SettingsRow("Welcome guide") {
