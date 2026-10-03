@@ -225,6 +225,15 @@ enum AlibabaRegion: String, CaseIterable, Identifiable {
     }
 }
 
+/// The text sizes the library offers for reading transcripts and summaries, in points.
+enum ReadingSize {
+    static let steps: [Double] = [15, 17, 19.5, 22.5, 26]
+    static let standard: Double = 19.5
+
+    static func larger(than size: Double) -> Double { steps.first { $0 > size + 0.01 } ?? steps[steps.count - 1] }
+    static func smaller(than size: Double) -> Double { steps.last { $0 < size - 0.01 } ?? steps[0] }
+}
+
 /// UserDefaults keys. Views bind to these with @AppStorage.
 enum Keys {
     static let baseFolder = "baseFolder"
@@ -309,6 +318,8 @@ enum Keys {
     static let smartSearchUsed = "smartSearchUsed"
     /// Lets agents change calls through kaiku-mcp; reading is always allowed.
     static let agentsAllowEdits = KaikuAgents.allowEditsKey
+    /// Point size of the transcript and summary text in the library.
+    static let readingTextSize = "readingTextSize"
     /// Address of the Ollama or custom server.
     static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
@@ -388,6 +399,7 @@ enum AppSettings {
             Keys.baseURL(.ollama): LocalLLM.ollamaDefaultBase,
             Keys.liveAssistEnabled: false,
             Keys.agentsAllowEdits: false,
+            Keys.readingTextSize: ReadingSize.standard,
         ])
         for p in SummaryProviderKind.allCases {
             defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,
