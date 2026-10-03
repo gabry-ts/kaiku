@@ -467,6 +467,7 @@ struct AutoStopSection: View {
 struct PermissionsSettings: View {
     @ObservedObject private var permissions = Permissions.shared
     @AppStorage(Keys.systemAudioVerified) private var systemAudioVerified = false
+    @State private var reminders = RemindersService.shared.state
 
     var body: some View {
         KaikuPane(pane: .permissions, subtitle: "What Kaiku needs from macOS, and what each permission is for.") {
@@ -476,7 +477,9 @@ struct PermissionsSettings: View {
                     detail: "Records your side of the call.",
                     state: permissions.microphone,
                     action: permissions.microphone == .notAsked ? "Allow…" : "Open Settings…",
-                    perform: { permissions.requestMicrophone() })
+                    perform: { permissions.requestMicrophone() },
+                    usedBy: ("Recording › Microphone", SettingsTarget(.recording, "microphone")))
+                .settingsAnchor("microphone")
                 PermissionRow(
                     symbol: "speaker.wave.2.fill", tint: .blue, title: "System Audio Recording",
                     detail: systemAudioVerified
@@ -484,30 +487,59 @@ struct PermissionsSettings: View {
                         : "macOS asks the first time you record. It can't be checked in advance.",
                     state: systemAudioVerified ? .granted : .unknown,
                     action: "Open Settings…",
-                    perform: { Permissions.open(.systemAudio) })
+                    perform: { Permissions.open(.systemAudio) },
+                    usedBy: ("Recording › Call Audio", SettingsTarget(.recording, "callAudio")))
+                .settingsAnchor("systemAudio")
                 PermissionRow(
                     symbol: "bell.badge.fill", tint: .red, title: "Notifications",
                     detail: "Tells you when a transcript is ready or a call starts.",
                     state: permissions.notifications,
                     action: permissions.notifications == .notAsked ? "Allow…" : "Open Settings…",
-                    perform: { permissions.requestNotifications() })
+                    perform: { permissions.requestNotifications() },
+                    usedBy: ("Notifications", SettingsTarget(.notifications)))
+                .settingsAnchor("notifications")
                 PermissionRow(
                     symbol: "calendar", tint: .red, title: "Calendar",
-                    detail: "Optional. Names recordings after the event happening now.",
+                    detail: "Optional. Names calls after the event happening now.",
                     state: permissions.calendar,
                     action: permissions.calendar == .notAsked ? "Allow…" : "Open Settings…",
-                    perform: { permissions.requestCalendar() })
+                    perform: { permissions.requestCalendar() },
+                    usedBy: ("Call Detection › Calendar", SettingsTarget(.callDetection, "calendar")))
+                .settingsAnchor("calendar")
                 PermissionRow(
                     symbol: "accessibility", tint: .purple, title: "Accessibility",
                     detail: "Optional. Reads the browser window title to tell web calls apart, like WhatsApp Web and Google Meet.",
                     state: permissions.accessibility,
                     action: permissions.accessibility == .notAsked ? "Allow…" : "Open Settings…",
-                    perform: { permissions.requestAccessibility() })
+                    perform: { permissions.requestAccessibility() },
+                    usedBy: ("Call Detection › Sources", SettingsTarget(.callDetection, "sources")))
+                .settingsAnchor("accessibility")
+                PermissionRow(
+                    symbol: "checklist", tint: .orange, title: "Reminders",
+                    detail: "Optional. Adds the action items of a call to a Reminders list.",
+                    state: reminders,
+                    action: reminders == .notAsked ? "Allow…" : "Open Settings…",
+                    perform: {
+                        if reminders == .notAsked {
+                            Task {
+                                _ = await RemindersService.shared.requestAccess()
+                                reminders = RemindersService.shared.state
+                            }
+                        } else {
+                            RemindersService.openPrivacySettings()
+                        }
+                    },
+                    usedBy: ("Integrations › Action Items", SettingsTarget(.integrations, "actionItems")))
+                .settingsAnchor("reminders")
             }
         }
-        .onAppear { permissions.refresh() }
+        .onAppear {
+            permissions.refresh()
+            reminders = RemindersService.shared.state
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refresh()
+            reminders = RemindersService.shared.state
         }
     }
 }
@@ -521,6 +553,8 @@ struct PermissionRow: View {
     let state: PermissionState
     let action: String
     let perform: () -> Void
+    /// The setting that needs the permission, as a link to it.
+    var usedBy: (title: String, target: SettingsTarget)?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -534,6 +568,13 @@ struct PermissionRow: View {
                 }
                 Text(detail).font(PUI.Font.caption).foregroundStyle(ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let usedBy {
+                    Button("Used by \(usedBy.title)") {
+                        WindowManager.shared.showSettings(usedBy.target.pane, anchor: usedBy.target.anchor)
+                    }
+                    .buttonStyle(.link)
+                    .font(PUI.Font.caption)
+                }
             }
             Spacer(minLength: PUI.Space.l)
             if state != .granted {
