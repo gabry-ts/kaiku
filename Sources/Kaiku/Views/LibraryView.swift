@@ -33,9 +33,16 @@ enum PendingAction {
     case chat([RecordingFolder])
 }
 
+/// What the detail column of the library shows.
+enum LibraryDetailMode: String {
+    case call, chat
+}
+
 struct LibraryView: View {
     /// Snapshot rendering opens calls that have a summary on the Summary tab.
     static var preferSummaryTab = false
+    /// Snapshot rendering opens on the chat.
+    static var initialMode = LibraryDetailMode.call
 
     @EnvironmentObject var state: AppState
     @State private var items: [LibraryItem] = []
@@ -48,7 +55,7 @@ struct LibraryView: View {
     @State private var tagTargets: [RecordingFolder] = []
     @State private var speakersTarget: LibraryItem?
     @State private var errorMessage: String?
-    @State private var showChat = false
+    @State private var mode = LibraryView.initialMode
     /// Search by meaning instead of by the words typed.
     @State private var smartSearch = false
 
@@ -98,77 +105,89 @@ struct LibraryView: View {
         return dict.keys.sorted().map { (names[$0], dict[$0]!) }
     }
 
+    /// The call list with its filters and smart search results.
+    private var sidebar: some View {
+        List(selection: $selection) {
+            ForEach(groups, id: \.title) { group in
+                Section(group.title) {
+                    ForEach(group.items) { item in
+                        LibraryRow(item: item, busy: state.isBusy(item.folder))
+                            .tag(item.id)
+                    }
+                }
+            }
+        }
+        .contextMenu(forSelectionType: String.self) { ids in
+            contextMenu(for: items.filter { ids.contains($0.id) })
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                smartSearchBar
+                if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
+                if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
+            }
+        }
+        .searchable(text: $search, placement: .sidebar, prompt: "Search calls, tags, sources and transcripts")
+        .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 380)
+        .overlay {
+            if items.isEmpty {
+                Text("No recordings").foregroundStyle(.tertiary)
+            } else if showingPassages {
+                SmartResults(semantic: state.semantic, selected: selection) { hit in
+                    state.showInLibrary(hit.folder, at: hit.passage.start)
+                }
+            } else if filtered.isEmpty {
+                if search.isEmpty {
+                    ContentUnavailableView("No Matching Calls", systemImage: "line.3.horizontal.decrease.circle",
+                                           description: Text([tagFilter, sourceFilter].compactMap { $0 }.joined(separator: " · ")))
+                } else {
+                    ContentUnavailableView.search(text: search)
+                }
+            }
+        }
+    }
+
+    /// The chat, the selected call(s), or an empty state.
+    @ViewBuilder private var detailColumn: some View {
+        if mode == .chat {
+            ChatPanel(chat: state.chat, items: items, selected: selectedItems, tags: allTags, sources: allSources)
+        } else if selectedItems.count > 1 {
+            MultiSelectionView(items: selectedItems, request: requestAction)
+        } else if let item = selectedItems.first {
+            RecordingDetail(item: item, search: search, knownTags: allTags, request: requestAction)
+                .id(item.id)
+        } else if items.isEmpty {
+            ContentUnavailableView {
+                Label("No Recordings Yet", systemImage: "waveform.and.mic")
+            } description: {
+                Text(Shortcuts.combo(for: .record).map { "Start one from the menu bar or press \($0.display) from any app." }
+                     ?? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath).")
+            } actions: {
+                Button("Start Recording") { state.requestStart() }
+                    .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+            }
+        } else {
+            ContentUnavailableView("Select a Recording", systemImage: "text.bubble",
+                                   description: Text("Pick a call to read its transcript and listen back. Select several with ⌘ or ⇧ to act on them together."))
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                ForEach(groups, id: \.title) { group in
-                    Section(group.title) {
-                        ForEach(group.items) { item in
-                            LibraryRow(item: item, busy: state.isBusy(item.folder))
-                                .tag(item.id)
-                        }
-                    }
-                }
-            }
-            .contextMenu(forSelectionType: String.self) { ids in
-                contextMenu(for: items.filter { ids.contains($0.id) })
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    smartSearchBar
-                    if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
-                    if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
-                }
-            }
-            .searchable(text: $search, placement: .sidebar, prompt: "Search calls, tags, sources and transcripts")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 380)
-            .overlay {
-                if items.isEmpty {
-                    Text("No recordings").foregroundStyle(.tertiary)
-                } else if showingPassages {
-                    SmartResults(semantic: state.semantic, selected: selection) { hit in
-                        state.showInLibrary(hit.folder, at: hit.passage.start)
-                    }
-                } else if filtered.isEmpty {
-                    if search.isEmpty {
-                        ContentUnavailableView("No Matching Calls", systemImage: "line.3.horizontal.decrease.circle",
-                                               description: Text([tagFilter, sourceFilter].compactMap { $0 }.joined(separator: " · ")))
-                    } else {
-                        ContentUnavailableView.search(text: search)
-                    }
-                }
-            }
+            sidebar
         } detail: {
-            if selectedItems.count > 1 {
-                MultiSelectionView(items: selectedItems, request: requestAction)
-            } else if let item = selectedItems.first {
-                RecordingDetail(item: item, search: search, knownTags: allTags, request: requestAction)
-                    .id(item.id)
-            } else if items.isEmpty {
-                ContentUnavailableView {
-                    Label("No Recordings Yet", systemImage: "waveform.and.mic")
-                } description: {
-                    Text(Shortcuts.combo(for: .record).map { "Start one from the menu bar or press \($0.display) from any app." }
-                         ?? "Start one from the menu bar. Calls are saved in \(AppSettings.baseFolderDisplayPath).")
-                } actions: {
-                    Button("Start Recording") { state.requestStart() }
-                        .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
-                }
-            } else {
-                ContentUnavailableView("Select a Recording", systemImage: "text.bubble",
-                                       description: Text("Pick a call to read its transcript and listen back. Select several with ⌘ or ⇧ to act on them together."))
-            }
-        }
-        .inspector(isPresented: $showChat) {
-            ChatPanel(chat: state.chat, items: items, selected: selectedItems, tags: allTags, sources: allSources)
-                .inspectorColumnWidth(min: 300, ideal: 360, max: 560)
+            detailColumn
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showChat.toggle() } label: {
-                    Label("Chat", systemImage: "bubble.left.and.text.bubble.right")
+            ToolbarItem(placement: .navigation) {
+                Picker("Show", selection: $mode) {
+                    Text("Call").tag(LibraryDetailMode.call)
+                    Text("Chat").tag(LibraryDetailMode.chat)
                 }
-                .help(showChat ? "Hide the chat" : "Chat with your calls")
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Show the selected call or the chat with your calls")
             }
         }
         .navigationTitle("Recordings")
@@ -196,6 +215,7 @@ struct LibraryView: View {
         // A chat citation: show its call, even when the filters hide it.
         .onChange(of: state.librarySeek) { _, v in
             guard let v else { return }
+            mode = .call
             if !filtered.contains(where: { $0.id == v.key }) {
                 search = ""
                 tagFilter = nil
@@ -310,14 +330,14 @@ struct LibraryView: View {
         case .chat(let f):
             let keys = Set(f.map(\.key))
             state.chat.start(with: items.filter { keys.contains($0.id) && $0.folder.hasTranscript }.map { ChatCall($0) })
-            showChat = true
+            mode = .chat
         }
     }
 
     private func openRequestedChat() {
         guard state.chatRequested else { return }
         state.chatRequested = false
-        showChat = true
+        mode = .chat
     }
 
     private func perform(_ action: () throws -> Void) {
