@@ -18,14 +18,11 @@ struct ActionItemsSettings: View {
     var body: some View {
         SettingsGroup("Action Items", footer: "Every summary also lists the tasks of the call. Send them from the call in the library: nothing leaves your Mac until you do. Things needs no setup.") {
             remindersRows
-            SettingsRow("Linear API key") {
-                SecureField("Linear API key", text: $linearKey, prompt: Text("lin_api_…"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .frame(maxWidth: 280)
-            }
-            if !linearKey.isEmpty {
+            if linearKey.isEmpty {
+                SettingsRow(Text("Linear"), subtitle: Text("Connect Linear to send tasks to a team.")) {
+                    SetUpButton(service: .linear)
+                }
+            } else {
                 SettingsRow("Linear team") {
                     Picker("Linear team", selection: $teamID) {
                         Text("None").tag("")
@@ -49,11 +46,8 @@ struct ActionItemsSettings: View {
             }
         }
         .onAppear {
-            linearKey = Keychain.get(LinearAPI.keyAccount) ?? ""
+            linearKey = LinearAPI.key ?? ""
             loadLists()
-        }
-        .onChange(of: linearKey) { _, v in
-            Keychain.set(v.trimmingCharacters(in: .whitespacesAndNewlines), for: LinearAPI.keyAccount)
         }
         .task(id: linearKey) { await loadTeams() }
         .onChange(of: teamID) { _, _ in projectID = "" }

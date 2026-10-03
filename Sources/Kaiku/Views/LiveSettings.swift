@@ -103,7 +103,7 @@ struct LiveSettings: View {
                                subtitle: assistKind.cli == nil
                                    ? "Answers your questions; a fast one keeps them quick."
                                    : "Answers your questions; slower with a command-line tool.")
-                    ProviderAccessRows(access: access,
+                    ProviderStatusRow(access: access,
                                        modelMissing: assistKind.requiresModel && (summaryModel.isEmpty || askModel.isEmpty))
                 }
             }

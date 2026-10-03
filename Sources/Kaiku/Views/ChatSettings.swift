@@ -33,7 +33,7 @@ struct ChatSettings: View {
                 }
                 ModelField(kind: kind, text: $model,
                            subtitle: kind.cli == nil ? "Answers appear as they are written." : "Reads the calls first, so the answer takes a little longer.")
-                ProviderAccessRows(access: access, modelMissing: kind.requiresModel && model.isEmpty)
+                ProviderStatusRow(access: access, modelMissing: kind.requiresModel && model.isEmpty)
             }
             SettingsGroup("Saved Chats", footer: "Delete a chat from its list in the library, or remove its file here.") {
                 SettingsRow(Text("Saved in"), subtitle: Text(AppSettings.baseFolderDisplayPath + "/Chats")) {

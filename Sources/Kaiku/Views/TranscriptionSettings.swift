@@ -274,57 +274,11 @@ private struct AppleSettings: View {
 private struct CloudProviderSettings: View {
     let kind: ProviderKind
     let onChange: () -> Void
-    @State private var apiKey = ""
-    @State private var reveal = false
     @State private var model = ""
     @State private var customModel = false
-    @AppStorage(Keys.alibabaRegion) private var alibabaRegion = AlibabaRegion.singapore.rawValue
 
     var body: some View {
         SettingsGroup(Text(kind.displayName), footer: Text(modelHint)) {
-            if kind == .alibaba {
-                SettingsRow("Region") {
-                    Picker("Region", selection: $alibabaRegion) {
-                        ForEach(AlibabaRegion.allCases) { Text($0.displayName).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-            }
-            SettingsRow("API key") {
-                HStack(spacing: PUI.Space.s) {
-                    Group {
-                        if reveal {
-                            TextField("API key", text: $apiKey, prompt: Text("Paste your key"))
-                        } else {
-                            SecureField("API key", text: $apiKey, prompt: Text("Paste your key"))
-                        }
-                    }
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.leading)
-                    .font(.body.monospaced())
-                    .frame(maxWidth: 280)
-                    Button { reveal.toggle() } label: {
-                        Image(systemName: reveal ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help(reveal ? "Hide key" : "Show key")
-                    .accessibilityLabel(reveal ? "Hide key" : "Show key")
-                }
-            }
-            GroupRow {
-                HStack {
-                    Label("Saved in your Keychain", systemImage: "lock.fill")
-                        .font(PUI.Font.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    if let url = kind.keyURL {
-                        Link("Get an API key", destination: url).font(PUI.Font.caption)
-                    }
-                }
-            }
-
             SettingsRow("Model") {
                 Picker("Model", selection: Binding(
                     get: { customModel ? "__custom" : model },
@@ -344,15 +298,11 @@ private struct CloudProviderSettings: View {
                         .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 220)
                 }
             }
+            CloudKeyStatusRow(kind: kind)
         }
         .onAppear {
-            apiKey = Keychain.get(kind.rawValue) ?? ""
             model = AppSettings.model(for: kind)
             customModel = !kind.modelPresets.contains(model)
-        }
-        .onChange(of: apiKey) { _, v in
-            Keychain.set(v.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.rawValue)
-            onChange()
         }
         .onChange(of: model) { _, v in AppSettings.defaults.set(v, forKey: Keys.model(kind)) }
     }
@@ -373,6 +323,27 @@ private struct CloudProviderSettings: View {
             }
             return "The recording is uploaded to Alibaba's temporary storage (deleted after 48 hours) and transcribed with sentence timestamps. Fun-ASR, Paraformer and Qwen-Audio tell voices apart on the call audio. The key must belong to the chosen region."
         case .whisperCpp, .apple: return ""
+        }
+    }
+}
+
+/// Whether the cloud provider's key is saved, with Set Up… when it isn't.
+struct CloudKeyStatusRow: View {
+    let kind: ProviderKind
+
+    var body: some View {
+        GroupRow {
+            HStack(spacing: PUI.Space.m) {
+                if let error = Keychain.errors[kind.rawValue] {
+                    StatusDot(kind: .error, text: error)
+                } else if Keychain.apiKey(for: kind) == nil {
+                    StatusDot(kind: .warning, text: "No \(kind.displayName) key yet")
+                } else {
+                    StatusDot(kind: .ok, text: "Uses your \(kind.displayName) key")
+                }
+                Spacer(minLength: PUI.Space.m)
+                if Keychain.apiKey(for: kind) == nil, let service = AccountService.of(kind) { SetUpButton(service: service) }
+            }
         }
     }
 }
@@ -527,7 +498,7 @@ private struct SummarySettings: View {
                 .fixedSize()
             }
             ModelField(kind: kind, text: $model)
-            ProviderAccessRows(access: access, modelMissing: kind.requiresModel && model.isEmpty)
+            ProviderStatusRow(access: access, modelMissing: kind.requiresModel && model.isEmpty)
             GroupRow {
                 VStack(alignment: .leading, spacing: PUI.Space.s) {
                     HStack {
@@ -553,46 +524,19 @@ private struct SummarySettings: View {
     }
 }
 
-/// The API key or command-line tool of a summary provider, as edited in Settings.
+/// Whether a summary provider can be used: its command-line tool found, its server running.
+/// Keys, addresses and paths are edited in Settings > Accounts.
 @MainActor
 final class ProviderAccess: ObservableObject {
     @Published private(set) var kind: SummaryProviderKind = .openAI
-    @Published var key = "" {
-        didSet {
-            guard !loading, kind.hasOwnKey else { return }
-            Keychain.set(key.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keyAccount)
-        }
-    }
-    /// Custom CLI path; empty finds it automatically.
-    @Published var path = "" {
-        didSet {
-            guard !loading, let cli = kind.cli else { return }
-            AppSettings.defaults.set(path.trimmingCharacters(in: .whitespaces), forKey: Keys.cliPath(cli))
-            refresh()
-        }
-    }
-    /// Address of the Ollama or custom server.
-    @Published var baseURL = "" {
-        didSet {
-            guard !loading, kind.isLocal else { return }
-            AppSettings.defaults.set(baseURL.trimmingCharacters(in: .whitespaces), forKey: Keys.baseURL(kind))
-            checkServer()
-        }
-    }
     /// Where the CLI was found, nil when it wasn't.
     @Published private(set) var found: String?
     /// Whether the local server answers, nil while checking.
     @Published private(set) var serverRunning: Bool?
-    private var loading = false
     private var probe: Task<Void, Never>?
 
     func load(_ kind: SummaryProviderKind) {
-        loading = true
         self.kind = kind
-        key = kind.hasOwnKey ? (Keychain.get(kind.keyAccount) ?? "") : ""
-        path = kind.cli.map { AppSettings.defaults.string(forKey: Keys.cliPath($0)) ?? "" } ?? ""
-        baseURL = kind.isLocal ? kind.baseURL : ""
-        loading = false
         refresh()
         checkServer()
     }
@@ -604,9 +548,7 @@ final class ProviderAccess: ObservableObject {
         serverRunning = nil
         let kind = kind
         probe = Task {
-            // Lets typing settle before asking.
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled, let url = kind.probeURL else { return }
+            guard let url = kind.probeURL else { return }
             var req = URLRequest(url: url, timeoutInterval: 3)
             if let key = kind.apiKey { req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
             // Any HTTP answer, even a refusal, means something is listening.
@@ -614,13 +556,6 @@ final class ProviderAccess: ObservableObject {
             guard !Task.isCancelled, self.kind == kind else { return }
             self.serverRunning = up
         }
-    }
-
-    /// Clears the custom path and searches again, login shell included.
-    func redetect() {
-        guard let cli = kind.cli else { return }
-        CLIProviders.forget(cli)
-        path = ""
     }
 
     private func refresh() {
@@ -631,6 +566,26 @@ final class ProviderAccess: ObservableObject {
             let path = await CLIProviders.detect(cli)
             if self.kind.cli == cli { self.found = path }
         }
+    }
+
+    /// Whether it can be used, and what to show: "Ready · …", or what is missing.
+    func status(modelMissing: Bool) -> (ready: Bool, text: String, setUp: Bool) {
+        if kind.cli != nil {
+            guard let found else { return (false, "\(kind.displayName) not found", true) }
+            return modelMissing ? (false, "Model required", false) : (true, "Ready · \(kind.displayName) at \(found)", false)
+        }
+        if kind.isLocal {
+            if kind.problem != nil { return (false, "No \(kind.displayName) server address yet", true) }
+            if serverRunning == false { return (false, "\(kind == .ollama ? "Ollama" : "The server") isn't running", true) }
+            if modelMissing { return (false, "Model required", false) }
+            let base = kind == .ollama ? LocalLLM.ollamaChatBase(kind.baseURL) : kind.baseURL
+            let host = URL(string: base).flatMap { u in u.host.map { h in u.port.map { "\(h):\($0)" } ?? h } } ?? base
+            return (true, "Ready · \(kind.displayName) on \(host), nothing leaves this Mac", false)
+        }
+        if let error = Keychain.errors[kind.keyAccount] { return (false, error, true) }
+        if kind.apiKey == nil { return (false, "No \(kind.displayName) key yet", true) }
+        if modelMissing { return (false, "Model required", false) }
+        return (true, "Ready · uses your \(kind.displayName) key", false)
     }
 }
 
@@ -736,72 +691,32 @@ struct ModelField: View {
     }
 }
 
-/// API key field or CLI path for the provider, then whether it's ready.
-struct ProviderAccessRows: View {
+/// Whether the provider is ready, with Set Up… leading to its row in Accounts when it isn't.
+struct ProviderStatusRow: View {
     @ObservedObject var access: ProviderAccess
     /// True when the provider needs a model and none is set.
     var modelMissing = false
 
     var body: some View {
-        let kind = access.kind
-        if kind.isLocal {
-            SettingsRow("Server address") {
-                TextField("Server address", text: $access.baseURL, prompt: Text(kind.baseURLPlaceholder))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .frame(maxWidth: 280)
-            }
-        }
-        if kind.hasOwnKey {
-            SettingsRow("API key") {
-                SecureField("API key", text: $access.key, prompt: Text(kind.isLocal ? "Optional" : "Paste your key"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .frame(maxWidth: 280)
-            }
-        }
-        if let cli = kind.cli {
-            PathField(label: cli.binaryName, path: $access.path, placeholder: "Automatic",
-                      fallback: access.found, detect: access.redetect)
-        }
+        let status = access.status(modelMissing: modelMissing)
         GroupRow {
-            HStack {
-                status(kind)
-                Spacer()
-                if let url = kind.keyURL { Link("Get an API key", destination: url).font(PUI.Font.caption) }
+            HStack(spacing: PUI.Space.m) {
+                StatusDot(kind: status.ready ? .ok : .warning, text: status.text)
+                Spacer(minLength: PUI.Space.m)
+                if status.setUp { SetUpButton(service: AccountService.of(access.kind)) }
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func status(_ kind: SummaryProviderKind) -> some View {
-        if kind.cli != nil {
-            if let found = access.found {
-                StatusDot(kind: .ok, text: "Uses your own sign-in, no API key. Found at \(found)")
-            } else {
-                StatusDot(kind: .warning, text: "\(kind.displayName) CLI not found. Install it, or set its path.")
-            }
-        } else if kind.isLocal {
-            if kind.problem != nil {
-                StatusDot(kind: .warning, text: "Add the address of the server.")
-            } else if access.serverRunning == false {
-                StatusDot(kind: .warning, text: "Not running at this address. Start \(kind == .ollama ? "Ollama" : "the server") and check it.")
-            } else if modelMissing {
-                StatusDot(kind: .warning, text: "Model required")
-            } else {
-                StatusDot(kind: .ok, text: kind == .ollama
-                          ? "Runs on this Mac, nothing leaves it. No API key."
-                          : "Talks only to this address, so nothing leaves your Mac while it runs here.")
-            }
-        } else if kind.apiKey == nil && access.key.isEmpty {
-            StatusDot(kind: .warning, text: kind.hasOwnKey ? "API key missing" : "No \(kind.displayName) key yet. Add it under Transcription > Provider.")
-        } else if modelMissing {
-            StatusDot(kind: .warning, text: "Model required")
-        } else {
-            StatusDot(kind: .ok, text: kind.hasOwnKey ? "Key saved in your Keychain" : "Uses the \(kind.displayName) key saved for transcription")
-        }
+/// Opens the service's row in Settings > Accounts.
+struct SetUpButton: View {
+    let service: AccountService
+
+    var body: some View {
+        Button("Set Up…") { WindowManager.shared.showSettings(.accounts, anchor: service.anchor) }
+            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+            .help("Add it in Accounts")
     }
 }
 
