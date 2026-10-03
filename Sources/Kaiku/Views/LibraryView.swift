@@ -764,7 +764,7 @@ private struct RecordingDetail: View {
     @ViewBuilder private var summary: some View {
         if let text = item.folder.summary {
             VStack(alignment: .leading, spacing: 8) {
-                MarkdownText(markdown: text)
+                MarkdownText(markdown: text, size: textSize)
                 if let model = item.meta.summaryModel {
                     Text("Written by \(model). Check important details against the transcript.")
                         .font(.caption).foregroundStyle(.tertiary)
@@ -772,6 +772,11 @@ private struct RecordingDetail: View {
                 if !item.folder.loadActionItems().isEmpty { ActionItemsSection(folder: item.folder) }
             }
             .textSelection(.enabled)
+            // Same reading column as the transcript text.
+            .frame(maxWidth: TranscriptStyle.column, alignment: .leading)
+            .padding(.leading, TranscriptStyle.gutter)
+            .frame(maxWidth: TranscriptStyle.column + 2 * TranscriptStyle.gutter, alignment: .leading)
+            .frame(maxWidth: .infinity)
         } else {
             ContentUnavailableView {
                 Label("No Summary Yet", systemImage: "list.bullet.rectangle")
@@ -1524,6 +1529,8 @@ private struct BookmarkRow: View {
 /// Renders the small Markdown subset used by summaries: headings, bullets, inline styles.
 struct MarkdownText: View {
     let markdown: String
+    /// Body size in points; nil keeps the system body size.
+    var size: Double? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1533,7 +1540,7 @@ struct MarkdownText: View {
                     Spacer().frame(height: 2)
                 } else if line.hasPrefix("#") {
                     Text(inline(line.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)))
-                        .font(line.hasPrefix("# ") ? .title3.weight(.bold) : .headline)
+                        .font(heading(main: line.hasPrefix("# ")))
                         .padding(.top, 4)
                 } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -1546,8 +1553,13 @@ struct MarkdownText: View {
                 }
             }
         }
-        .font(.body)
-        .lineSpacing(2)
+        .font(size.map { .system(size: $0) } ?? .body)
+        .lineSpacing(size.map { TranscriptStyle.lineSpacing($0) } ?? 2)
+    }
+
+    private func heading(main: Bool) -> Font {
+        guard let size else { return main ? .title3.weight(.bold) : .headline }
+        return .system(size: main ? size + 3 : size, weight: .bold)
     }
 
     private func inline(_ s: String) -> AttributedString {
