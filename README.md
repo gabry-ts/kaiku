@@ -22,12 +22,15 @@
 
 ## Features
 
-- Records mic and system audio on separate tracks, no virtual driver
+- Records mic and system audio on separate tracks, no virtual driver, and can start by itself for the apps you choose
 - Transcribes locally with whisper.cpp or the macOS 26 speech recognizer, or with ElevenLabs, OpenAI, Groq, Alibaba Cloud
-- "Me" vs "Others" split, speaker diarization, rename speakers
-- Library with search, tags, inline player and bookmarks
-- Export to Markdown, TXT, SRT, VTT and DOCX
-- Optional AI summary with decisions and action items
+- "Me" vs "Others" split, speaker diarization, speaker names from the calendar invite
+- One window for calls, chat and settings, with search, tags, smart search and a player that highlights each word
+- Chat with your calls, with answers that jump to the moment they cite
+- AI summaries with action items for Reminders, Things and Linear, using a cloud provider, a CLI tool or Ollama
+- Import audio and video files, and system-wide dictation (off until you turn it on)
+- Export to Markdown, TXT, SRT, VTT and DOCX, plus a webhook
+- MCP server for Claude Code, Codex and Claude Desktop, Shortcuts, Spotlight and a Raycast extension
 
 ## Install
 
