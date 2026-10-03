@@ -622,6 +622,7 @@ private struct RecordingDetail: View {
     @State private var sendingWebhook = false
     @State private var lines: [PlaybackLine] = []
     @StateObject private var holder = PlayerHolder()
+    @AppStorage(Keys.readingTextSize) private var textSize = ReadingSize.standard
 
     private var player: AudioPlayerModel { holder.player }
 
@@ -963,7 +964,7 @@ private struct RecordingDetail: View {
                     .frame(maxWidth: .infinity)
             }
         } else {
-            TranscriptLinesView(lines: lines, player: player, search: search, canSeek: hasAudio)
+            TranscriptLinesView(lines: lines, player: player, search: search, canSeek: hasAudio, textSize: textSize)
         }
     }
 
@@ -1045,25 +1046,29 @@ private struct CompactLabelStyle: LabelStyle {
     }
 }
 
-/// The speaker turns. While the call plays, the word being said is highlighted (or the
-/// phrase, when the provider gave no word times); double-click one to play from there.
+/// The speaker turns, set as a reading column. While the call plays, the word being said is
+/// highlighted (or the phrase, when the provider gave no word times); double-click one to play from there.
 private struct TranscriptLinesView: View {
     let lines: [PlaybackLine]
     let player: AudioPlayerModel
     let search: String
     let canSeek: Bool
+    let textSize: Double
     @State private var position: PlaybackTranscript.Position?
 
     var body: some View {
         let colors = Brand.speakerColors(lines.map(\.speaker))
-        LazyVStack(alignment: .leading, spacing: 16) {
+        LazyVStack(alignment: .leading, spacing: 26) {
             ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                 let active = position?.line == index
                 TranscriptLineView(line: line, color: colors[line.speaker] ?? .secondary, search: search, canSeek: canSeek,
-                                   active: active, activeSpan: active ? position?.span : nil, seek: seek)
+                                   textSize: textSize, active: active, activeSpan: active ? position?.span : nil, seek: seek)
                     .equatable()
             }
         }
+        // Timestamps sit in a gutter left of the column; with room to spare, the column is centered.
+        .frame(maxWidth: TranscriptStyle.column + 2 * TranscriptStyle.gutter, alignment: .leading)
+        .frame(maxWidth: .infinity)
         // Only the position is kept here, so a time update redraws the turns whose highlight changed.
         .onReceive(player.$time) { follow($0) }
         .onChange(of: lines) { _, _ in follow(player.time) }
@@ -1079,12 +1084,34 @@ private struct TranscriptLinesView: View {
     }
 }
 
+/// Type and measures of the transcript reading column.
+enum TranscriptStyle {
+    static let column: CGFloat = 680
+    static let gutter: CGFloat = 84
+
+    static func font(_ size: Double) -> NSFont { NSFont.systemFont(ofSize: size) }
+
+    /// Extra space between lines for a line height of about 1.55 times the size.
+    static func lineSpacing(_ size: Double) -> CGFloat {
+        max(0, size * 1.55 - NSLayoutManager().defaultLineHeight(for: font(size)))
+    }
+}
+
+private extension VerticalAlignment {
+    /// The first line of a turn's text, so its timestamp lines up with it rather than with the speaker.
+    enum TurnText: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat { d[.firstTextBaseline] }
+    }
+    static let turnText = VerticalAlignment(TurnText.self)
+}
+
 /// One speaker turn. Equatable so that it is redrawn only when its own highlight changes.
 private struct TranscriptLineView: View, Equatable {
     let line: PlaybackLine
     let color: Color
     let search: String
     let canSeek: Bool
+    let textSize: Double
     let active: Bool
     let activeSpan: Int?
     let seek: (Double) -> Void
@@ -1093,46 +1120,59 @@ private struct TranscriptLineView: View, Equatable {
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.line == b.line && a.color == b.color && a.search == b.search && a.canSeek == b.canSeek
-            && a.active == b.active && a.activeSpan == b.activeSpan
+            && a.textSize == b.textSize && a.active == b.active && a.activeSpan == b.activeSpan
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
+        HStack(alignment: .turnText, spacing: 0) {
             Button { seek(line.start) } label: {
-                HStack(spacing: 3) {
-                    Text(TranscriptFormatter.timestamp(line.start))
+                HStack(spacing: 4) {
                     Image(systemName: "play.fill").font(.system(size: 7)).opacity(hover && canSeek ? 1 : 0)
+                    Text(TranscriptFormatter.timestamp(line.start))
                 }
-                .font(.caption.monospacedDigit())
+                .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle((hover && canSeek) || active ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
-            .onHover { hover = $0 }
             .disabled(!canSeek)
             .help(canSeek ? "Play from here" : "")
             .accessibilityLabel("Play from \(TranscriptFormatter.timestamp(line.start))")
-            .frame(width: 58, alignment: .leading)
+            // Shown only on the turn under the pointer and the one playing.
+            .opacity(hover || active ? 1 : 0)
+            .frame(width: TranscriptStyle.gutter, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(line.speaker)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Circle().fill(color).frame(width: 7, height: 7)
+                    Text(line.speaker)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(color)
+                }
                 let shown = displayed
                 Text(highlighted(shown))
-                    .font(.body)
-                    .lineSpacing(3)
+                    .font(.system(size: textSize))
+                    .lineSpacing(TranscriptStyle.lineSpacing(textSize))
                     .fixedSize(horizontal: false, vertical: true)
+                    .alignmentGuide(.turnText) { $0[.firstTextBaseline] }
                     .background(GeometryReader { geo in
                         Color.clear
                             .onAppear { width = geo.size.width }
                             .onChange(of: geo.size.width) { _, w in width = w }
                     })
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.primary.opacity(hover && canSeek ? 0.045 : 0))
+                            .padding(.horizontal, -12)
+                            .padding(.vertical, -6)
+                    )
                     .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { value in
                         guard canSeek else { return }
                         seek(time(at: value.location, aligned: String(shown.characters) == line.text))
                     })
             }
+            .frame(maxWidth: TranscriptStyle.column, alignment: .leading)
         }
+        .onHover { hover = $0 }
         .contextMenu {
             Button("Copy") {
                 NSPasteboard.general.clearContents()
@@ -1176,7 +1216,7 @@ private struct TranscriptLineView: View, Equatable {
 
     /// Where to play from for a double-click at `point` in the text.
     private func time(at point: CGPoint, aligned: Bool) -> Double {
-        guard aligned, let offset = TranscriptHitTest.characterOffset(at: point, in: line.text, width: width) else {
+        guard aligned, let offset = TranscriptHitTest.characterOffset(at: point, in: line.text, width: width, size: textSize) else {
             return line.start
         }
         return line.seekTime(atCharacter: offset)
@@ -1187,11 +1227,11 @@ private struct TranscriptLineView: View, Equatable {
 /// the text out, so it is laid out again with TextKit in the same font, spacing and width.
 @MainActor
 enum TranscriptHitTest {
-    static func characterOffset(at point: CGPoint, in text: String, width: CGFloat) -> Int? {
+    static func characterOffset(at point: CGPoint, in text: String, width: CGFloat, size: Double) -> Int? {
         guard width > 0, !text.isEmpty else { return nil }
         let style = NSMutableParagraphStyle()
-        style.lineSpacing = 3
-        let storage = NSTextStorage(string: text, attributes: [.font: NSFont.preferredFont(forTextStyle: .body), .paragraphStyle: style])
+        style.lineSpacing = TranscriptStyle.lineSpacing(size)
+        let storage = NSTextStorage(string: text, attributes: [.font: TranscriptStyle.font(size), .paragraphStyle: style])
         let layout = NSLayoutManager()
         let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
