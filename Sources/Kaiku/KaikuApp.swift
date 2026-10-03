@@ -73,6 +73,10 @@ struct KaikuApp: App {
                     Button("Settings…") { WindowManager.shared.showSettings() }
                         .keyboardShortcut(",", modifiers: .command)
                 }
+                CommandGroup(after: .newItem) {
+                    Button("Import…") { CallImporter.shared.chooseFiles() }
+                        .keyboardShortcut("o", modifiers: .command)
+                }
                 // Cmd+Q closes the key window instead of quitting, so the app stays in the menu
                 // bar. Quit stays in the panel footer; the system, Sparkle and Apple Events
                 // still terminate through NSApp.terminate.
