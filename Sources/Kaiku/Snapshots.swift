@@ -69,8 +69,8 @@ enum Snapshots {
 
         // Settings panes, in the main window like the real one, grown to the pane's height so
         // long panes aren't cropped.
-        func settings(_ name: String, _ pane: SettingsPane, dark: Bool) {
-            AppNavigation.shared.open(pane)
+        func settings(_ name: String, _ pane: SettingsPane, dark: Bool, anchor: String? = nil) {
+            AppNavigation.shared.open(pane, anchor: anchor)
             AppNavigation.shared.showingSettings = true
             snap(AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)), name: name,
                  size: CGSize(width: 1100, height: 720), dark: dark, chrome: true, dir: dir, growToContent: true)
@@ -79,6 +79,13 @@ enum Snapshots {
         for pane in SettingsPane.allCases {
             for dark in [false, true] { settings("settings-\(pane.rawValue)-\(dark ? "dark" : "light")", pane, dark: dark) }
         }
+        // A link into Accounts: the OpenAI row open and highlighted.
+        settings("settings-accounts-openai-light", .accounts, dark: false, anchor: AccountService.openAI.anchor)
+        // Call Detection recording chosen sources, with sources seen and one still new.
+        defaults.register(defaults: [Keys.autoRecordMode: AutoRecordMode.selected.rawValue,
+                                     Keys.detectSeenSources: ["Zoom", "WhatsApp", "Slack"]])
+        settings("settings-callDetection-chosen-light", .callDetection, dark: false)
+        defaults.register(defaults: [Keys.autoRecordMode: AutoRecordMode.off.rawValue, Keys.detectSeenSources: [String]()])
         if LiveTranscription.isSupported {
             defaults.register(defaults: [Keys.liveEnabled: true])
             for dark in [false, true] { settings("settings-transcription-live-on-\(dark ? "dark" : "light")", .transcription, dark: dark) }
