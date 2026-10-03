@@ -168,6 +168,7 @@ struct LibraryView: View {
                 }
             }
         }
+        .importDropTarget()
     }
 
     /// The chat, the selected call(s), or an empty state.
