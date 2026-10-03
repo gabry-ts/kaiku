@@ -94,6 +94,7 @@ struct SettingsSidebarView: View {
                     return .handled
                 }
                 .onExitCommand { if query.isEmpty { nav.closeSettings() } else { query = "" } }
+            if !searching { NeedsAttention() }
         }
         .padding(.horizontal, PUI.Space.l)
         .padding(.top, PUI.Space.xs)
@@ -226,17 +227,83 @@ struct SettingsSearchField: View {
     }
 }
 
-/// A pane in the settings sidebar: its tile and name.
+/// A pane in the settings sidebar: its tile, name and the number of its problems.
 struct SettingsPaneRow: View {
     let pane: SettingsPane
+    @ObservedObject private var health = SettingsHealth.shared
 
     var body: some View {
+        let count = health.badge(for: pane)
         HStack(spacing: PUI.Space.m) {
             IconTile(pane.symbol, color: pane.tint)
             Text(pane.title).lineLimit(1)
             Spacer(minLength: 0)
+            if count > 0 {
+                Text("\(count)")
+                    .font(PUI.Font.badge)
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(Circle().fill(Color.orange))
+                    .accessibilityLabel("\(count) to fix")
+            }
         }
         .padding(.vertical, 1)
+    }
+}
+
+/// The problems in the settings, each leading to where it is fixed. Hidden when there are none.
+private struct NeedsAttention: View {
+    @ObservedObject private var health = SettingsHealth.shared
+    @ObservedObject private var nav = AppNavigation.shared
+    @State private var showAll = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let ink = Ink(scheme)
+        let issues = health.issues
+        if !issues.isEmpty {
+            VStack(alignment: .leading, spacing: PUI.Space.s) {
+                HStack {
+                    Text("Needs Attention").font(PUI.Font.label).foregroundStyle(ink.secondary)
+                    Spacer()
+                    Text("\(issues.count)").font(PUI.Font.label)
+                        .foregroundStyle(health.dotColor == .red ? ink.red : ink.secondary)
+                }
+                ForEach(showAll ? issues : Array(issues.prefix(3))) { issue in
+                    Button { nav.open(issue.target.pane, anchor: issue.target.anchor) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: PUI.Space.s) {
+                            Circle().fill(color(issue.level, ink)).frame(width: 7, height: 7)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(issue.text).font(PUI.Font.callout).foregroundStyle(ink.primary)
+                                Text(issue.detail).font(PUI.Font.caption).foregroundStyle(ink.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the setting")
+                }
+                if issues.count > 3 {
+                    Button(showAll ? "Show fewer" : "Show all (\(issues.count))") { showAll.toggle() }
+                        .buttonStyle(.link)
+                        .font(PUI.Font.caption)
+                }
+            }
+            .padding(PUI.Space.m + 2)
+            .background(RoundedRectangle(cornerRadius: PUI.Radius.group, style: .continuous)
+                .fill(scheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.9)))
+            .overlay(RoundedRectangle(cornerRadius: PUI.Radius.group, style: .continuous)
+                .strokeBorder(Color.black.opacity(scheme == .dark ? 0.3 : 0.07), lineWidth: 0.5))
+        }
+    }
+
+    private func color(_ level: SettingsHealth.Issue.Level, _ ink: Ink) -> Color {
+        switch level {
+        case .blocking: return ink.red
+        case .warning: return ink.orange
+        case .info: return ink.tertiary
+        }
     }
 }
 

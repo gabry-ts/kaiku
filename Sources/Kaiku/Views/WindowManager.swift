@@ -36,7 +36,12 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     /// Opens the main window on Settings, on `pane` (the last one shown when nil), scrolled to
     /// the row `anchor`. An open window switches to it.
+    /// Opening a closed window with no pane asked for goes to the first problem, if any.
     func showSettings(_ pane: SettingsPane? = nil, anchor: String? = nil) {
+        var pane = pane
+        if pane == nil, windows[Self.mainID] == nil, let first = SettingsHealth.shared.first {
+            pane = first.target.pane
+        }
         AppNavigation.shared.open(pane, anchor: anchor)
         AppNavigation.shared.showingSettings = true
         showMain()

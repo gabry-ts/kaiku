@@ -230,6 +230,7 @@ private struct AccountFields: View {
                                 let r = await KeyTester.test(service)
                                 result = r
                                 testing = false
+                                if service == .linear { SettingsHealth.shared.linearRefused = !r.ok && service.key != nil }
                             }
                         }
                         .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))

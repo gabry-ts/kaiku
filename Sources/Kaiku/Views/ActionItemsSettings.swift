@@ -98,7 +98,13 @@ struct ActionItemsSettings: View {
         // Let typing finish before asking Linear.
         try? await Task.sleep(nanoseconds: 600_000_000)
         guard !Task.isCancelled else { return }
-        do { teams = try await LinearAPI.teams() } catch { linearError = error.localizedDescription }
+        do {
+            teams = try await LinearAPI.teams()
+            SettingsHealth.shared.linearRefused = false
+        } catch {
+            linearError = error.localizedDescription
+            if (error as? URLError) == nil { SettingsHealth.shared.linearRefused = true }
+        }
     }
 
     private func loadProjects() async {

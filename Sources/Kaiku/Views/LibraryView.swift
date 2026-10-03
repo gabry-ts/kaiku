@@ -54,6 +54,7 @@ struct LibraryView: View {
     @State private var speakersTarget: LibraryItem?
     @State private var errorMessage: String?
     @ObservedObject private var nav = AppNavigation.shared
+    @ObservedObject private var health = SettingsHealth.shared
     private var mode: LibraryDetailMode {
         get { nav.mode }
         nonmutating set { nav.mode = newValue }
@@ -140,7 +141,7 @@ struct LibraryView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()
-                MainSidebarButton(title: "Settings", symbol: "gearshape") {
+                MainSidebarButton(title: "Settings", symbol: "gearshape", dot: health.dotColor) {
                     WindowManager.shared.showSettings()
                 }
                 .help("Settings (⌘,)")
