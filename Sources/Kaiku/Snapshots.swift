@@ -191,6 +191,44 @@ enum Snapshots {
         state.librarySelection = folders[1].key
         snap(AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)), name: "library-transcribing-dark",
              size: CGSize(width: 1100, height: 720), dark: true, chrome: true, dir: dir)
+        // Chat, in place of the call detail.
+        let chatCalls = [folders[0], folders[2], folders[4], folders[5]].compactMap { f -> ChatCall? in
+            guard let meta = f.loadMeta() else { return nil }
+            return ChatCall(ref: ChatPrompt.ref(forFolderName: f.url.lastPathComponent), path: f.key, title: meta.title,
+                            date: meta.date, duration: meta.durationSeconds)
+        }
+        let design = chatCalls[0].ref
+        let question = ChatMessage(role: .user, text: "What did we decide about billing and the roadmap?")
+        let answer = ChatMessage(role: .assistant, text: Fixtures.chatAnswer(design))
+        state.librarySelection = folders[0].key
+        LibraryView.initialMode = .chat
+        let chatView = { AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)) }
+        state.chat.setPreview(ChatConversation(calls: chatCalls))
+        both("chat-empty", size: CGSize(width: 1100, height: 720), chatView)
+        state.chat.setPreview(ChatConversation(title: "Billing and roadmap decisions", calls: chatCalls,
+                                               messages: [question, answer]))
+        both("chat-answer", size: CGSize(width: 1100, height: 720), chatView)
+        state.chat.setPreview(ChatConversation(title: "Billing and roadmap decisions", calls: chatCalls,
+                                               messages: [question, answer,
+                                                          ChatMessage(role: .user, text: "Who owns the Stripe migration plan?")]),
+                              answering: true, status: "Reading 4 calls…", started: Date().addingTimeInterval(-12))
+        both("chat-answering", size: CGSize(width: 1100, height: 720), chatView)
+        state.chat.setPreview(ChatConversation())
+        snap(chatView(), name: "chat-nocalls-light", size: CGSize(width: 1100, height: 720), dark: false, chrome: true, dir: dir)
+        LibraryView.initialMode = .call
+        // The calls picker, as shown in its popover.
+        state.chat.setPreview(ChatConversation(calls: chatCalls))
+        let items = LibraryItem.loadAll(base: library)
+        let byRef = Dictionary(items.map { ($0.chatRef, $0) }, uniquingKeysWith: { a, _ in a })
+        both("chat-calls", size: nil, chrome: false) {
+            AnyView(ChatCallsPicker(chat: state.chat, items: items, selected: [items[0]], tags: ["Roadmap", "Design", "Hiring"],
+                                    sources: ["Google Meet", "Zoom"], byRef: byRef)
+                .environmentObject(state)
+                .puiGlass(popover)
+                .background(Color(nsColor: .windowBackgroundColor), in: popover))
+        }
+        state.chat.setPreview(ChatConversation())
+
         defaults.register(defaults: [Keys.baseFolder: empty.path])
         state.librarySelection = nil
         both("library-empty", size: CGSize(width: 1000, height: 620)) {
@@ -489,6 +527,23 @@ private enum Fixtures {
     - Tom: write the Stripe migration plan by Friday.
     - Giulia: share the updated roadmap after the call.
     """
+
+    /// An answer about the design sync, citing it as `ref`.
+    static func chatAnswer(_ ref: String) -> String {
+        """
+        ## Billing
+        Billing moves to **November**: the Stripe migration needs at least two sprints, so it can't ship with the library [\(ref) 00:01:36; \(ref) 00:03:42].
+
+        ## Roadmap
+        1. Ship the **new library** first.
+        2. Onboarding is basically ready: four of five test users finished without help [\(ref) 00:00:41].
+        3. Billing follows in November.
+
+        ## Action items
+        - Tom writes the migration plan by Friday [\(ref) 00:03:50].
+        - Giulia adds a short explainer before the `permissions` prompt and shares the updated roadmap [\(ref) 00:01:03].
+        """
+    }
 
     static func event(title: String, start: Date) -> CalendarEventInfo {
         CalendarEventInfo(title: title, calendar: "Work", start: start, end: start.addingTimeInterval(3600), attendees: [
