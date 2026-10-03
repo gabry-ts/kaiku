@@ -80,7 +80,7 @@ struct KaikuPane<Content: View>: View {
     @ViewBuilder let content: Content
     @ObservedObject private var nav = AppNavigation.shared
 
-    /// Widest the form grows, and its margin from the sidebar.
+    /// Widest the form grows, and its minimum side margin.
     static var maxWidth: CGFloat { 720 }
     static var margin: CGFloat { 40 }
 
@@ -96,7 +96,8 @@ struct KaikuPane<Content: View>: View {
                 .padding(.horizontal, Self.margin)
                 .padding(.top, PUI.Space.xxl + PUI.Space.xs)
                 .padding(.bottom, PUI.Space.xxl)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // Centered in the window, like the transcript's reading column.
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .scrollBounceBehavior(.basedOnSize)
             .onAppear { jump(proxy) }
