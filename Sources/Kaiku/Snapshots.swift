@@ -107,7 +107,7 @@ enum Snapshots {
         defaults.register(defaults: quiet.mapValues { _ in true })
         // Ask every time, with the notification it needs switched off.
         defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.ask.rawValue, NotificationKind.callEnded.showKey: false])
-        settings("settings-recording-ask-fallback-light", .recording, dark: false)
+        settings("settings-callDetection-ask-fallback-light", .callDetection, dark: false)
         settings("settings-notifications-ask-fallback-light", .notifications, dark: false)
         defaults.register(defaults: [Keys.detectCallEndMode: CallEndMode.standard.rawValue, NotificationKind.callEnded.showKey: true])
         defaults.register(defaults: [Keys.provider: ProviderKind.openAI.rawValue])

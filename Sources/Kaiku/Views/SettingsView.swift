@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, ai, accounts, agents, webhook, notifications, permissions, about
+    case general, popover, shortcuts, recording, callDetection, transcription, ai, accounts, agents, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -12,7 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .popover: return "Popover"
         case .shortcuts: return "Shortcuts"
         case .recording: return "Recording"
-        case .sources: return "Sources"
+        case .callDetection: return "Call Detection"
         case .transcription: return "Transcription"
         case .ai: return "AI"
         case .accounts: return "Accounts"
@@ -30,7 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .popover: return "menubar.rectangle"
         case .shortcuts: return "keyboard.fill"
         case .recording: return "mic.fill"
-        case .sources: return "dot.radiowaves.left.and.right"
+        case .callDetection: return "phone.and.waveform.fill"
         case .transcription: return "text.quote"
         case .ai: return "sparkles"
         case .accounts: return "key.fill"
@@ -48,7 +48,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .popover: return .orange
         case .shortcuts: return .indigo
         case .recording: return AppAccent.kaiku.color
-        case .sources: return .teal
+        case .callDetection: return .teal
         case .transcription: return .blue
         case .ai: return .indigo
         case .accounts: return .yellow
@@ -80,7 +80,7 @@ struct SettingsView: View {
             case .popover: PopoverSettings()
             case .shortcuts: ShortcutSettings()
             case .recording: RecordingSettings()
-            case .sources: SourcesSettings()
+            case .callDetection: CallDetectionSettings()
             case .transcription: TranscriptionSettings()
             case .ai: AISettings()
             case .accounts: AccountsSettings()
@@ -378,9 +378,7 @@ struct RecordingSettings: View {
             }
 
             MuteSection()
-            CallDetectionSection()
             AutoStopSection()
-            CalendarSection()
         }
         .onAppear { devices = AudioDevices.inputs() }
         .onDisappear { monitor.stop() }
@@ -428,84 +426,6 @@ extension MuteStyle {
     }
 }
 
-// MARK: - Call detection
-
-struct CallDetectionSection: View {
-    @AppStorage(Keys.detectCalls) private var detect = true
-    @AppStorage(Keys.autoRecordMode) private var autoRecord = AutoRecordMode.off.rawValue
-    @AppStorage(Keys.detectAutoStopSeconds) private var autoStop = 120
-    @AppStorage(Keys.detectCallEndMode) private var callEnd = CallEndMode.standard.rawValue
-    @AppStorage(NotificationKind.callEnded.showKey) private var callEndedShown = true
-    @ObservedObject private var permissions = Permissions.shared
-
-    private var mode: CallEndMode { CallEndMode(saved: callEnd) }
-    private var behavior: CallEndBehavior {
-        mode.behavior(notificationsAllowed: permissions.notificationsAllowed, callEndedNotificationEnabled: callEndedShown)
-    }
-    /// Ask every time was chosen, but the question can't be shown.
-    private var fallsBack: Bool { mode == .ask && behavior != .ask }
-
-    private var fallbackNote: String {
-        let why = permissions.notificationsAllowed
-            ? "The Call ended notification is switched off in Notifications"
-            : "macOS doesn't allow notifications from Kaiku"
-        let then = autoStop > 0
-            ? "the recording stops after the delay below instead."
-            : "the recording goes on until you stop it. Choose a delay below to have it stop by itself."
-        return "\(why), so Kaiku can't ask: \(then)"
-    }
-
-    private var modeDetail: String {
-        switch mode {
-        case .stopAfterDelay: return "A notification lets you stop right away; otherwise the recording stops after the delay."
-        case .ask: return "A notification asks whether to stop. The recording goes on until you answer."
-        case .nothing: return "No notification. The recording goes on until you stop it."
-        }
-    }
-
-    var body: some View {
-        SettingsGroup("Call Detection", footer: "Kaiku watches which apps use a microphone, without opening any microphone itself. When Zoom, Teams, Meet and others start a call, you get a notification to record it. Choose which apps and websites can start a recording in Sources, and which notifications you get in Notifications.") {
-            SwitchRow("Notice when a call starts", isOn: $detect)
-            if detect {
-                SettingsRow(Text("Record automatically"), subtitle: Text("Chosen sources are set in Sources. Calls that aren't recorded by themselves are offered in a notification.")) {
-                    Picker("Record automatically", selection: $autoRecord) {
-                        Text("Off").tag(AutoRecordMode.off.rawValue)
-                        Text("All calls").tag(AutoRecordMode.all.rawValue)
-                        Text("Chosen sources").tag(AutoRecordMode.selected.rawValue)
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                SettingsRow(Text("When a call ends"), subtitle: Text(modeDetail)) {
-                    Picker("When a call ends", selection: $callEnd) {
-                        ForEach(CallEndMode.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                if fallsBack {
-                    GroupRow { StatusDot(kind: .warning, text: fallbackNote) }
-                }
-                if behavior == .stopAfterDelay {
-                    SettingsRow("Stop automatically after the call ends") {
-                        Picker("Stop automatically after the call ends", selection: $autoStop) {
-                            Text("Never").tag(0)
-                            Text("After 30 seconds").tag(30)
-                            Text("After 1 minute").tag(60)
-                            Text("After 2 minutes").tag(120)
-                            Text("After 5 minutes").tag(300)
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                    }
-                }
-            }
-        }
-        .onChange(of: detect) { _, _ in MeetingMonitor.shared.apply() }
-        .onAppear { permissions.refreshNotifications() }
-    }
-}
-
 // MARK: - Automatic stop
 
 /// Stops recordings left running by mistake, whether started by hand or by call detection.
@@ -540,65 +460,6 @@ struct AutoStopSection: View {
                 .fixedSize()
             }
         }
-    }
-}
-
-// MARK: - Calendar
-
-struct CalendarSection: View {
-    @AppStorage(Keys.calendarEnabled) private var enabled = true
-    @ObservedObject private var permissions = Permissions.shared
-    @State private var chosen: Set<String> = []
-    @State private var calendars: [(id: String, title: String, account: String)] = []
-    @State private var expanded = false
-
-    var body: some View {
-        SettingsGroup("Calendar", footer: "When a recording starts during an event (or up to 10 minutes before or after), its title is used and the attendees are suggested in Rename Speakers. Google and Outlook calendars must be added in System Settings > Internet Accounts.") {
-            SwitchRow("Name recordings after calendar events", isOn: $enabled)
-            if enabled {
-                if permissions.calendar == .granted {
-                    GroupRow {
-                        DisclosureGroup("Calendars (\(chosen.isEmpty ? "all" : "\(chosen.count)"))", isExpanded: $expanded) {
-                            VStack(alignment: .leading, spacing: PUI.Space.s) {
-                                ForEach(calendars, id: \.id) { cal in
-                                    Toggle(isOn: Binding(
-                                        get: { chosen.isEmpty || chosen.contains(cal.id) },
-                                        set: { on in
-                                            var set = chosen.isEmpty ? Set(calendars.map(\.id)) : chosen
-                                            if on { set.insert(cal.id) } else { set.remove(cal.id) }
-                                            // Empty means "all": the last calendar can't be unchecked.
-                                            guard !set.isEmpty else { return }
-                                            chosen = set.count == calendars.count ? [] : set
-                                            AppSettings.defaults.set(Array(chosen).sorted(), forKey: Keys.calendarIDs)
-                                        })) {
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(cal.title).font(PUI.Font.body)
-                                            Text(cal.account).font(PUI.Font.caption).foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .toggleStyle(.checkbox)
-                                }
-                            }
-                            .padding(.top, PUI.Space.s)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .font(PUI.Font.body)
-                    }
-                } else {
-                    SettingsRow(Text(permissions.calendar == .denied ? "Calendar access denied" : "Needs calendar access")) {
-                        Button(permissions.calendar == .notAsked ? "Allow…" : "Open Settings…") { permissions.requestCalendar() }
-                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                    }
-                }
-            }
-        }
-        .onAppear(perform: load)
-        .onChange(of: permissions.calendar) { _, _ in load() }
-    }
-
-    private func load() {
-        chosen = Set(AppSettings.calendarIDs)
-        calendars = CalendarService.shared.calendars().map { ($0.calendarIdentifier, $0.title, $0.source.title) }
     }
 }
 
