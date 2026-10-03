@@ -84,9 +84,9 @@ enum Snapshots {
             settings("settings-live-download-light", .live, dark: false)
             LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveAssistEnabled: true])
-            settings("settings-live-assist-light", .live, dark: false)
+            settings("settings-ai-live-assist-light", .ai, dark: false)
             defaults.register(defaults: [Keys.liveProvider: SummaryProviderKind.claudeCode.rawValue])
-            settings("settings-live-assist-claudecode-light", .live, dark: false)
+            settings("settings-ai-live-assist-claudecode-light", .ai, dark: false)
             defaults.register(defaults: [Keys.liveProvider: ""])
             defaults.register(defaults: [Keys.liveAssistEnabled: false])
             // Every other engine, and a cloud one without its API key.
@@ -115,7 +115,7 @@ enum Snapshots {
         // The summary with each provider that needs more than a shared transcription key.
         for kind in [SummaryProviderKind.openRouter, .claudeCode, .codex, .opencode] {
             defaults.register(defaults: [Keys.summaryProvider: kind.rawValue])
-            settings("settings-transcription-summary-\(kind.rawValue)-light", .transcription, dark: false)
+            settings("settings-ai-summary-\(kind.rawValue)-light", .ai, dark: false)
         }
         defaults.register(defaults: [Keys.summaryProvider: SummaryProviderKind.openAI.rawValue])
         if ProviderKind.apple.isAvailable {

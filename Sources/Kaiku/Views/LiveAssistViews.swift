@@ -162,7 +162,7 @@ private struct MissingKeyNote: View {
 
     var body: some View {
         LiveEmptyState(symbol: "key", text: "Summary and Ask use \(provider.displayName). \(provider.problem ?? "")") {
-            Button("Open Settings") { WindowManager.shared.showSettings(.live) }
+            Button("Open Settings") { WindowManager.shared.showSettings(.ai, anchor: "liveAssist") }
                 .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
         }
     }

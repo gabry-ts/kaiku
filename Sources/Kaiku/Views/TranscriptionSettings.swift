@@ -37,7 +37,6 @@ struct TranscriptionSettings: View {
 
             SilenceTrimSection()
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
-            SummarySettings()
             ActionItemsSettings()
         }
         .task(id: language) { await refreshSpeechModel() }
@@ -473,54 +472,6 @@ private struct PriceSection: View {
             }
             .onAppear { prices = AppSettings.priceOverrides }
         }
-    }
-}
-
-// MARK: - Summary
-
-private struct SummarySettings: View {
-    @AppStorage(Keys.summaryEnabled) private var enabled = false
-    @AppStorage(Keys.summaryProvider) private var provider = SummaryProviderKind.openAI.rawValue
-    @AppStorage(Keys.summaryPrompt) private var prompt = SummaryAPI.defaultPrompt
-    @State private var model = ""
-    @StateObject private var access = ProviderAccess()
-
-    private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: provider) ?? .openAI }
-
-    var body: some View {
-        SettingsGroup("Summary", footer: "Off by default. Sends the transcript to the provider you pick, with your own key or command-line tool, and saves summary.md in the call folder. You can also summarize any past call from the library.") {
-            SwitchRow("Summarize every call after transcription", isOn: $enabled)
-            SettingsRow("Provider") {
-                Picker("Provider", selection: $provider) {
-                    ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
-                }
-                .labelsHidden()
-                .fixedSize()
-            }
-            ModelField(kind: kind, text: $model)
-            ProviderStatusRow(access: access, modelMissing: kind.requiresModel && model.isEmpty)
-            GroupRow {
-                VStack(alignment: .leading, spacing: PUI.Space.s) {
-                    HStack {
-                        Text("Prompt").font(PUI.Font.body)
-                        Spacer()
-                        Button("Reset") { prompt = SummaryAPI.defaultPrompt }
-                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                            .disabled(prompt == SummaryAPI.defaultPrompt)
-                    }
-                    EditorField(text: $prompt, minHeight: 140)
-                    Text("{{title}} and {{transcript}} are filled in for you.").font(PUI.Font.caption).foregroundStyle(.secondary)
-                }
-            }
-        }
-        .onAppear(perform: load)
-        .onChange(of: provider) { _, _ in load() }
-        .onChange(of: model) { _, v in AppSettings.defaults.set(v.trimmingCharacters(in: .whitespaces), forKey: Keys.summaryModel(kind)) }
-    }
-
-    private func load() {
-        model = AppSettings.summaryModel(for: kind)
-        access.load(kind)
     }
 }
 

@@ -500,7 +500,7 @@ private struct ChatProviderMenu: View {
             .pickerStyle(.inline)
             models(kind: kind, model: model)
             Divider()
-            Button("Chat Settings…") { WindowManager.shared.showSettings(.chat) }
+            Button("Chat Settings…") { WindowManager.shared.showSettings(.ai, anchor: "chat") }
         } label: {
             HStack(spacing: PUI.Space.xs) {
                 Text(kind.displayName + (model.isEmpty ? "" : " · \(model)"))

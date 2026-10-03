@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, live, chat, accounts, agents, webhook, notifications, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, live, ai, accounts, agents, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -15,7 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return "Sources"
         case .transcription: return "Transcription"
         case .live: return "Live"
-        case .chat: return "Chat"
+        case .ai: return "AI"
         case .accounts: return "Accounts"
         case .agents: return "Agents (MCP)"
         case .webhook: return "Webhook"
@@ -34,7 +34,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return "dot.radiowaves.left.and.right"
         case .transcription: return "text.quote"
         case .live: return "captions.bubble.fill"
-        case .chat: return "bubble.left.and.text.bubble.right.fill"
+        case .ai: return "sparkles"
         case .accounts: return "key.fill"
         case .agents: return "terminal.fill"
         case .webhook: return "paperplane.fill"
@@ -53,7 +53,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sources: return .teal
         case .transcription: return .blue
         case .live: return .pink
-        case .chat: return .cyan
+        case .ai: return .indigo
         case .accounts: return .yellow
         case .agents: return .mint
         case .webhook: return .purple
@@ -87,7 +87,7 @@ struct SettingsView: View {
             case .sources: SourcesSettings()
             case .transcription: TranscriptionSettings()
             case .live: LiveSettings()
-            case .chat: ChatSettings()
+            case .ai: AISettings()
             case .accounts: AccountsSettings()
             case .agents: AgentSettings()
             case .webhook: WebhookSettings()
