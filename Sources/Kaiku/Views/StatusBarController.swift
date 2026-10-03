@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import KaikuCore
 import SwiftUI
 
 /// The menu bar item. Click opens the panel (the same SwiftUI MenuPanel, in a transient
@@ -29,6 +30,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         item.button?.toolTip = "Kaiku. Option-click to mute all microphones."
         self.item = item
         updateImage()
+        enableFileDrop()
         // objectWillChange fires before the change: read the new values on the next turn.
         AppState.shared.objectWillChange
             .merge(with: AppState.shared.tick.objectWillChange, MicMuter.shared.objectWillChange)
@@ -38,6 +40,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     private func updateImage() {
         guard let button = item?.button else { return }
+        enableFileDrop()
         let state = AppState.shared
         let muted = MicMuter.shared.isMuted
         // Rebuild the image only when what it shows changes.
@@ -120,5 +123,39 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         popover.animates = false
         popover.delegate = self
         return popover
+    }
+}
+
+// MARK: File drop
+
+/// Audio and video files dropped on the menu bar icon are imported. The status item's
+/// window takes the drop and hands it to its delegate.
+extension StatusBarController: NSWindowDelegate, NSDraggingDestination {
+    private func enableFileDrop() {
+        guard let window = item?.button?.window, window.delegate !== self else { return }
+        window.registerForDraggedTypes([.fileURL])
+        window.delegate = self
+    }
+
+    private func droppedFiles(_ info: NSDraggingInfo) -> [URL] {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
+    func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !AudioImport.split(droppedFiles(sender)).supported.isEmpty else { return [] }
+        item?.button?.highlight(true)
+        return .copy
+    }
+
+    func draggingExited(_ sender: NSDraggingInfo?) {
+        if popover?.isShown != true { item?.button?.highlight(false) }
+    }
+
+    func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if popover?.isShown != true { item?.button?.highlight(false) }
+        let files = droppedFiles(sender)
+        guard !files.isEmpty else { return false }
+        CallImporter.shared.importFiles(files)
+        return true
     }
 }
