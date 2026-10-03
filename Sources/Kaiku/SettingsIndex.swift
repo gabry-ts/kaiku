@@ -27,6 +27,7 @@ enum SettingsIndex {
         e(.general, "startup", "Startup", "Open at login", ["dock", "login", "startup", "launch", "boot"]),
         e(.general, "callsFolder", "Calls Folder", "Save calls in", folderWords + ["recordings", "finder"]),
         e(.general, "smartSearch", "Library", "Smart search", ["semantic", "meaning", "smart", "index", "search"]),
+        e(.general, "readingWidth", "Library", "Calls and chat width", ["full width", "centered", "column", "layout", "wide", "margins"]),
         e(.general, "storage", "Storage", "Space used", ["disk", "space", "size", "storage"]),
         e(.general, "storage", "Storage", "Delete old audio automatically", cleanupWords + ["audio"]),
         e(.general, "storage", "Storage", "Audio older than", cleanupWords + ["days", "keep"]),

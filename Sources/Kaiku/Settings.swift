@@ -321,6 +321,8 @@ enum Keys {
     static let agentsAllowEdits = KaikuAgents.allowEditsKey
     /// Point size of the transcript and summary text in the library.
     static let readingTextSize = "readingTextSize"
+    /// Calls and chat use the whole window width instead of a centered column.
+    static let readingFullWidth = "readingFullWidth"
     /// Address of the Ollama or custom server.
     static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
@@ -400,6 +402,7 @@ enum AppSettings {
             Keys.liveAssistEnabled: false,
             Keys.agentsAllowEdits: false,
             Keys.readingTextSize: ReadingSize.standard,
+            Keys.readingFullWidth: false,
         ])
         for p in SummaryProviderKind.allCases {
             defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,

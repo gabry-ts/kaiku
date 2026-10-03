@@ -225,6 +225,7 @@ struct PanelSettings: View {
 
 /// How the library window searches the calls.
 struct LibrarySection: View {
+    @AppStorage(Keys.readingFullWidth) private var fullWidth = false
     @AppStorage(Keys.smartSearchUsed) private var smartSearch = false
     @ObservedObject private var semantic = AppState.shared.semantic
 
@@ -241,6 +242,16 @@ struct LibrarySection: View {
                 if on { semantic.activate() } else { semantic.deactivate() }
             }))
             .settingsAnchor("smartSearch")
+            SettingsRow(Text("Calls and chat"), subtitle: Text("A centered reading column, or the whole window width.")) {
+                Picker("Calls and chat", selection: $fullWidth) {
+                    Text("Centered").tag(false)
+                    Text("Full width").tag(true)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            .settingsAnchor("readingWidth")
         }
         .settingsAnchor("library")
     }

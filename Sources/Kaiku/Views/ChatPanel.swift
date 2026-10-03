@@ -18,6 +18,8 @@ extension ChatCall {
 /// The library's chat, in place of the call detail: the calls it is about, the conversation
 /// with citations that open the call at that moment, and the saved chats.
 struct ChatPanel: View {
+    /// Redraws when the column width setting changes.
+    @AppStorage(Keys.readingFullWidth) private var fullWidth = false
     @EnvironmentObject var state: AppState
     @ObservedObject var chat: ChatModel
     /// Every call in the library.
@@ -39,8 +41,8 @@ struct ChatPanel: View {
     @Environment(\.colorScheme) private var scheme
 
     private static let end = "end"
-    /// Widest the conversation reads at.
-    static let readingWidth: CGFloat = 880
+    /// Widest the conversation reads at; unlimited with Full width.
+    static var readingWidth: CGFloat { AppSettings.defaults.bool(forKey: Keys.readingFullWidth) ? .infinity : 880 }
 
     static let suggestions: [(symbol: String, text: String)] = [
         ("checkmark.seal", "What was decided?"),

@@ -619,6 +619,7 @@ private struct LibraryRow: View {
 // MARK: - Detail
 
 private struct RecordingDetail: View {
+    @AppStorage(Keys.readingFullWidth) private var fullWidth = false
     @EnvironmentObject var state: AppState
     let item: LibraryItem
     let search: String
@@ -686,7 +687,7 @@ private struct RecordingDetail: View {
             }
             .padding(.horizontal, 28)
             .padding(.vertical, 22)
-            .frame(maxWidth: 1040, alignment: .leading)
+            .frame(maxWidth: fullWidth ? .infinity : 1040, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .toolbar { toolbar }
@@ -1165,7 +1166,8 @@ private struct TranscriptLinesView: View {
 
 /// Type and measures of the transcript reading column.
 enum TranscriptStyle {
-    static let column: CGFloat = 860
+    /// Widest the text reads at; unlimited with Full width.
+    static var column: CGFloat { AppSettings.defaults.bool(forKey: Keys.readingFullWidth) ? .infinity : 860 }
     static let gutter: CGFloat = 84
 
     static func font(_ size: Double) -> NSFont { NSFont.systemFont(ofSize: size) }
