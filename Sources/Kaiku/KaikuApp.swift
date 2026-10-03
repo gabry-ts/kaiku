@@ -73,6 +73,13 @@ struct KaikuApp: App {
                     Button("Settings…") { WindowManager.shared.showSettings() }
                         .keyboardShortcut(",", modifiers: .command)
                 }
+                // Cmd+Q closes the key window instead of quitting, so the app stays in the menu
+                // bar. Quit stays in the panel footer; the system, Sparkle and Apple Events
+                // still terminate through NSApp.terminate.
+                CommandGroup(replacing: .appTermination) {
+                    Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
+                        .keyboardShortcut("q", modifiers: .command)
+                }
             }
     }
 }
