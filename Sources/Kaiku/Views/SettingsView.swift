@@ -101,21 +101,11 @@ struct GeneralSettings: View {
     @AppStorage(Keys.showInDock) private var showInDock = true
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
+    /// What was found in the folder just chosen, shown for a few seconds.
+    @State private var folderResult: String?
 
     var body: some View {
-        KaikuPane(pane: .general, subtitle: "Where calls are saved, their language, startup and storage.") {
-            SettingsGroup("Recordings", footer: "Every call gets its own folder with the audio, transcript.md and meta.json.") {
-                SettingsRow(Text("Save recordings in"),
-                            subtitle: Text(AppSettings.displayBaseFolderOverride ?? (baseFolder as NSString).abbreviatingWithTildeInPath)) {
-                    HStack(spacing: PUI.Space.s) {
-                        Button("Show in Finder") { AppState.shared.openBaseFolder() }
-                        Button("Choose…", action: chooseFolder)
-                    }
-                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                }
-                .help(baseFolder)
-            }
-
+        KaikuPane(pane: .general, subtitle: "Startup, where your calls are saved, and how the library reads.") {
             SettingsGroup("Startup") {
                 SwitchRow("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLogin))
                 if LoginItem.needsApproval {
@@ -130,6 +120,23 @@ struct GeneralSettings: View {
                 SwitchRow("Show in the Dock while Settings or the library is open", isOn: $showInDock)
                     .onChange(of: showInDock) { _, _ in WindowManager.shared.updateDockPresence() }
             }
+            .settingsAnchor("startup")
+
+            SettingsGroup("Calls Folder", footer: "Each call gets its own folder with the audio, transcript and summary. Chats are saved in Chats inside it.") {
+                SettingsRow(Text("Save calls in"),
+                            subtitle: Text(AppSettings.displayBaseFolderOverride ?? (baseFolder as NSString).abbreviatingWithTildeInPath)) {
+                    HStack(spacing: PUI.Space.s) {
+                        Button("Show in Finder") { AppState.shared.openBaseFolder() }
+                        Button("Choose…", action: chooseFolder)
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                }
+                .help(baseFolder)
+                if let folderResult {
+                    GroupRow { StatusDot(kind: .ok, text: folderResult) }
+                }
+            }
+            .settingsAnchor("callsFolder")
 
             LibrarySection()
             StorageSection()
@@ -157,6 +164,12 @@ struct GeneralSettings: View {
             baseFolder = url.path
             // Show the calls of the new folder, and recover any left unfinished there.
             AppState.shared.baseFolderChanged()
+            let count = RecordingFolder.scan(base: url).count
+            folderResult = count == 0 ? "No calls in this folder yet" : "Found \(count) call\(count == 1 ? "" : "s") in this folder"
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                folderResult = nil
+            }
         }
     }
 }
@@ -263,7 +276,7 @@ struct StorageSection: View {
     @State private var result: String?
 
     var body: some View {
-        SettingsGroup(Text("Storage"), footer: Text("Audio of calls older than \(days) days goes to the Trash; transcripts, summaries and bookmarks stay. Calls that aren't transcribed yet keep their audio. Automatic cleanup runs at launch and once a day.")) {
+        SettingsGroup(Text("Storage"), footer: Text("Moves the audio of transcribed calls to the Trash. Transcripts, summaries and bookmarks stay.")) {
             SettingsRow("Space used") {
                 if let usage {
                     ValueText("\(Storage.format(usage.total)) · \(usage.calls) calls · audio \(Storage.format(usage.audio))")
@@ -272,10 +285,10 @@ struct StorageSection: View {
                 }
             }
             SwitchRow("Delete old audio automatically", isOn: $autoCleanup)
-            SettingsRow("Keep audio for") {
+            SettingsRow("Audio older than") {
                 HStack(spacing: PUI.Space.s) {
                     ValueText("\(days) day\(days == 1 ? "" : "s")")
-                    Stepper("Keep audio for", value: $days, in: 1...365, step: days < 14 ? 1 : 7)
+                    Stepper("Audio older than", value: $days, in: 1...365, step: days < 14 ? 1 : 7)
                         .labelsHidden()
                 }
             }
@@ -292,6 +305,7 @@ struct StorageSection: View {
                 }
             }
         }
+        .settingsAnchor("storage")
         .task { await refresh() }
         .confirmationDialog(preview.isEmpty ? "Nothing to clean up" : "Move the audio of \(preview.count) call\(preview.count == 1 ? "" : "s") to the Trash?",
                             isPresented: $confirming) {
@@ -336,13 +350,14 @@ struct RecordingSettings: View {
 
     private var microphoneFooter: String {
         microphone == AudioDevices.none
-            ? "Only the call audio is recorded, so your own voice won't be in the transcript."
-            : microphone == AudioDevices.automatic && followCall ? "Automatic records from the microphone your call uses, and switches when the call does. Without a call, it uses \(resolved?.name ?? "the built-in microphone"). Picking a microphone in the panel stops following for that recording."
-            : "Automatic uses \(resolved?.name ?? "the built-in microphone"). It picks a Bluetooth headset only when your call already uses its microphone, since otherwise that lowers call quality."
+            ? "Only the call audio is recorded, so your voice won't be in the transcript."
+            : microphone == AudioDevices.automatic && followCall ? "Follows the microphone your call uses. Without a call: \(resolved?.name ?? "the built-in microphone")."
+            : microphone == AudioDevices.automatic ? "Uses \(resolved?.name ?? "the built-in microphone"), and a Bluetooth headset only when your call already does."
+            : "Records from the microphone chosen above."
     }
 
     var body: some View {
-        KaikuPane(pane: .recording, subtitle: "Your microphone, the call audio, muting and call detection.") {
+        KaikuPane(pane: .recording, subtitle: "Your microphone, the call audio and muting.") {
             SettingsGroup(Text("Microphone"), footer: Text(microphoneFooter)) {
                 SwitchRow("Record my microphone", isOn: recordMic)
                 if microphone != AudioDevices.none {
@@ -364,7 +379,7 @@ struct RecordingSettings: View {
 
                     if selectedIsBluetooth {
                         GroupRow {
-                            StatusDot(kind: .warning, text: "Recording from a Bluetooth headset switches it to call mode. You and the other people will sound worse for the whole call.")
+                            StatusDot(kind: .warning, text: "A Bluetooth headset switches to call quality while recording.")
                         }
                     }
 
@@ -385,25 +400,29 @@ struct RecordingSettings: View {
                     }
                 }
             }
+            .settingsAnchor("microphone")
 
-            SettingsGroup("Call Audio", footer: "Everything your Mac plays is captured, without a bot joining the call, and recording continues if you switch between headphones and speakers. On speakers your mic also hears the other people: with echo removal, those repeated lines are hidden from your side of the transcript (they stay in segments.json).") {
-                SettingsRow("Status") {
-                    if systemAudioVerified {
-                        StatusDot(kind: .ok, text: "Working")
-                    } else {
-                        StatusDot(kind: .neutral, text: "Checked on your first recording")
+            SettingsGroup("Call Audio", footer: "Captures what your Mac plays, without a bot in the call.") {
+                SettingsRow("Call audio") {
+                    HStack(spacing: PUI.Space.m) {
+                        if systemAudioVerified {
+                            StatusDot(kind: .ok, text: "Working")
+                        } else {
+                            StatusDot(kind: .neutral, text: "Checked on your first recording")
+                            Button("Open Settings…") { Permissions.open(.systemAudio) }
+                                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                                .help("If the other side is missing from transcripts, allow Kaiku under System Audio Recording.")
+                        }
                     }
                 }
-                SettingsRow(Text("System Audio Recording"),
-                            subtitle: Text("macOS asks for permission the first time you record. If the other side is missing from transcripts, allow Kaiku under System Audio Recording.")) {
-                    Button("Open Settings…") { Permissions.open(.systemAudio) }
-                        .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                }
-                SwitchRow("Remove echo when using speakers", isOn: $removeEcho)
+                SwitchRow("Remove echo when using speakers", subtitle: "Hides your mic picking up the other people.", isOn: $removeEcho)
             }
+            .settingsAnchor("callAudio")
 
             MuteSection()
+                .settingsAnchor("mute")
             AutoStopSection()
+                .settingsAnchor("forgotten")
         }
         .onAppear { devices = AudioDevices.inputs() }
         .onDisappear { monitor.stop() }
@@ -416,19 +435,31 @@ struct MuteSection: View {
     @ObservedObject private var muter = MicMuter.shared
     @AppStorage(Keys.muteStyle) private var style = MuteStyle.volume.rawValue
     @AppStorage(Keys.muteVolumePercent) private var percent = 1
+    @State private var showTip = false
 
     var body: some View {
-        SettingsGroup("Mute", footer: "Silences every microphone on this Mac, including the one your call app uses, while the app still shows you as unmuted. Option-click the menu bar icon to toggle it. Your previous settings come back when you unmute or quit. Teams can drop a microphone that is hardware-muted or fully silent: turning the volume down to 1% keeps it working. Changes apply the next time you mute. Tip: turn off \"Automatically adjust microphone volume\" in Zoom, so it doesn't fight the mute.") {
-            SwitchRow("Mute all microphones", isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
+        SettingsGroup("Mute", footer: "Silences every microphone, including your call app's. Your settings come back when you unmute or quit.") {
+            SwitchRow(Text("Mute all microphones"), subtitle: Text("Option-click the menu bar icon, or use your shortcut."),
+                      isOn: Binding(get: { muter.isMuted }, set: { $0 ? muter.mute() : muter.unmute() }))
             SettingsRow("Mute by") {
-                Picker("Mute by", selection: $style) {
-                    ForEach(MuteStyle.allCases) { Text($0.displayName).tag($0.rawValue) }
+                HStack(spacing: PUI.Space.s) {
+                    SegmentedPill(MuteStyle.allCases.map { (value: $0.rawValue, title: $0.displayName) }, selection: $style)
+                        .fixedSize()
+                    Button { showTip.toggle() } label: { Image(systemName: "questionmark.circle") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("About muting")
+                        .popover(isPresented: $showTip, arrowEdge: .bottom) {
+                            Text("Changes apply the next time you mute. In Zoom, turn off \"Automatically adjust microphone volume\" so it doesn't fight the mute.")
+                                .font(PUI.Font.callout)
+                                .frame(width: 260)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(PUI.Space.l)
+                        }
                 }
-                .labelsHidden()
-                .fixedSize()
             }
             if style == MuteStyle.volume.rawValue {
-                SettingsRow("Volume while muted") {
+                SettingsRow(Text("Volume while muted"), subtitle: Text("Teams drops a microphone that is fully silent; 1% keeps it.")) {
                     HStack(spacing: PUI.Space.s) {
                         ValueText("\(percent)%")
                         Stepper("Volume while muted", value: $percent, in: 0...10).labelsHidden()
@@ -446,7 +477,7 @@ extension MuteStyle {
     var displayName: String {
         switch self {
         case .hardware: return "Mute switch"
-        case .volume: return "Turning the volume down"
+        case .volume: return "Volume down"
         }
     }
 }
@@ -459,7 +490,7 @@ struct AutoStopSection: View {
     @AppStorage(Keys.maxRecordingSeconds) private var maxLength = 14400
 
     var body: some View {
-        SettingsGroup("Forgotten Recordings", footer: "Stops a recording that was left running, even when the call app keeps the microphone open after the call. Silence means no sound from your microphone or from the call. Pauses don't count.") {
+        SettingsGroup("Forgotten Recordings", footer: "Stops a recording left running. Pauses don't count as silence.") {
             SettingsRow("Stop after a silence of") {
                 Picker("Stop after a silence of", selection: $silence) {
                     Text("Never").tag(0)
@@ -651,17 +682,14 @@ struct AboutSettings: View {
                     onCheckForUpdates: { UpdaterManager.shared.checkForUpdates() },
                     onBuyMeACoffee: { BuyMeACoffee.open() })
 
-                SettingsGroup("Recordings") {
-                    SettingsRow(Text("Recordings folder"), subtitle: Text(AppSettings.baseFolderDisplayPath)) {
-                        Button("Open Recordings Folder") { AppState.shared.openBaseFolder() }
-                            .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                    }
+                SettingsGroup("Help") {
                     SettingsRow("Welcome guide") {
                         Button("Show Welcome Guide") { WindowManager.shared.showOnboarding() }
                             .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                     }
                 }
                 .frame(maxWidth: 420)
+                .settingsAnchor("help")
             }
             .padding(.top, 44)
             .padding(.horizontal, PUI.Space.xxl)

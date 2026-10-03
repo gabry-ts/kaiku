@@ -16,7 +16,7 @@ struct NotificationSettings: View {
 
     var body: some View {
         KaikuPane(pane: .notifications, subtitle: "Which notifications Kaiku shows, and which play a sound.") {
-            SettingsGroup(footer: "The switches below only apply while macOS allows notifications from Kaiku.") {
+            SettingsGroup {
                 SettingsRow(Text("Notifications from Kaiku"), subtitle: Text(systemDetail)) {
                     HStack(spacing: PUI.Space.m) {
                         systemStatus
@@ -27,21 +27,35 @@ struct NotificationSettings: View {
                     }
                 }
             }
+            .settingsAnchor("system")
 
-            SettingsGroup("Calls", footer: "With Call detected off, a call that needs your answer isn't recorded, as if you had dismissed the notification. With New source off, the recording goes on and the source is asked about again next time.") {
-                ForEach(Self.calls) { NotificationRow(kind: $0) }
-                if CallEndMode(saved: callEnd) == .ask, !callEndedShown {
-                    GroupRow { StatusDot(kind: .warning, text: askNote) }
+            Group {
+                SettingsGroup("Calls", footer: "With New source off, the recording goes on and the source is asked about again next time.") {
+                    ForEach(Self.calls) { NotificationRow(kind: $0) }
+                    if CallEndMode(saved: callEnd) == .ask, !callEndedShown {
+                        GroupRow {
+                            HStack(spacing: PUI.Space.m) {
+                                StatusDot(kind: .warning, text: askNote)
+                                Spacer(minLength: PUI.Space.m)
+                                Button("Open Call Detection") { WindowManager.shared.showSettings(.callDetection, anchor: "detection") }
+                                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                            }
+                        }
+                    }
                 }
-            }
+                .settingsAnchor("calls")
 
-            SettingsGroup("Transcripts and Recordings", footer: "With Recovered recording off, saved recordings still show in the popover, where you can transcribe them.") {
-                ForEach(Self.transcripts) { NotificationRow(kind: $0) }
-            }
+                SettingsGroup("Calls and Transcripts", footer: "With Recovered recording off, saved calls still show in the panel.") {
+                    ForEach(Self.transcripts) { NotificationRow(kind: $0) }
+                }
+                .settingsAnchor("transcripts")
 
-            SettingsGroup("Problems", footer: "Failures are also shown in the popover.") {
-                ForEach(Self.problems) { NotificationRow(kind: $0) }
+                SettingsGroup("Problems", footer: "Failures also show in the panel.") {
+                    ForEach(Self.problems) { NotificationRow(kind: $0) }
+                }
+                .settingsAnchor("problems")
             }
+            .disabled(permissions.notifications == .denied)
         }
         .onAppear { permissions.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -52,7 +66,7 @@ struct NotificationSettings: View {
     /// "Ask every time" needs the Call ended notification, which is off.
     private var askNote: String {
         let then = autoStop > 0 ? "the recording stops after the delay instead" : "the recording goes on until you stop it"
-        return "When a call ends is set to Ask every time in Recording, which needs Call ended. While it is off, \(then)."
+        return "Ask every time needs Call ended. While it is off, \(then)."
     }
 
     private var systemDetail: String {
