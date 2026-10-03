@@ -519,7 +519,7 @@ private struct ChatProviderMenu: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Who answers, also in Settings > Chat")
+        .help("Who answers, also in Settings > AI > Chat")
         .task(id: kind) { await catalog.load(kind) }
     }
 

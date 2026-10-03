@@ -96,7 +96,7 @@ enum Snapshots {
                 defaults.register(defaults: [Keys.liveEngine: kind.rawValue])
                 settings("settings-transcription-live-\(kind.rawValue)-light", .transcription, dark: false)
             }
-            LiveSettings.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Transcription.")
+            LiveSettings.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Accounts.")
             settings("settings-transcription-live-elevenlabs-nokey-light", .transcription, dark: false)
             LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveEngine: LiveEngineKind.apple.rawValue, Keys.liveEnabled: false])

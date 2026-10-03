@@ -11,7 +11,7 @@ struct WhisperCppProvider: TranscriptionProvider {
 
     func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
         guard FileManager.default.fileExists(atPath: model) else {
-            throw ProviderError(message: "whisper.cpp model not found at \(model). Download one (see README) and set its path in Settings.")
+            throw ProviderError(message: "whisper.cpp model not found at \(model). Download one in Settings > Transcription > Model.")
         }
         let dir = try AudioTools.makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

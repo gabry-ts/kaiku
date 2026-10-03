@@ -67,8 +67,8 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .apple: return "Apple (on device)"
-        case .whisper: return "whisper.cpp (on device)"
+        case .apple: return "Apple (on this Mac)"
+        case .whisper: return "whisper.cpp (on this Mac)"
         case .openAI: return "OpenAI Realtime"
         case .elevenLabs: return "ElevenLabs Scribe Realtime"
         }
@@ -117,7 +117,7 @@ enum LiveEngineKind: String, CaseIterable, Identifiable {
 
     /// What to do when the key of a cloud engine is missing.
     private var keyHint: String {
-        "Add an \(self == .openAI ? "OpenAI" : "ElevenLabs") API key in Settings > Transcription."
+        "Add an \(self == .openAI ? "OpenAI" : "ElevenLabs") API key in Settings > Accounts."
     }
 
     /// The engines that can run on this version of macOS.

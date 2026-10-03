@@ -43,7 +43,7 @@ enum ChatJob {
     private static func text(kind: SummaryProviderKind, model: String, calls: [ChatCall], history: [ChatMessage], question: String,
                              asksTitle: Bool, update: @escaping @MainActor (Progress) -> Void) async throws -> Answer {
         if kind.requiresModel, model.trimmingCharacters(in: .whitespaces).isEmpty {
-            throw ProviderError(message: "\(kind.displayName) needs a model. Check Settings > Chat.")
+            throw ProviderError(message: "\(kind.displayName) needs a model. Check Settings > AI > Chat.")
         }
         let past = ChatPrompt.recent(history)
         let folders = calls.map { (call: $0, folder: RecordingFolder(url: URL(fileURLWithPath: $0.path, isDirectory: true))) }

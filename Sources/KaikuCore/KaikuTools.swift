@@ -39,7 +39,7 @@ public struct KaikuToolSet: MCPToolSet {
         let args = MCPArguments(arguments)
         if Self.editToolNames.contains(name) {
             guard allowEdits() else {
-                return .error("Changing calls is turned off. The user can allow it in Kaiku > Settings > Agents (MCP) > Allow agents to edit calls.")
+                return .error("Changing calls is turned off. The user can allow it in Kaiku > Settings > Integrations > Agents (MCP) > Allow agents to edit calls.")
             }
         }
         switch name {

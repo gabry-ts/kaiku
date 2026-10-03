@@ -9,7 +9,7 @@ enum SummaryJob {
             throw ProviderError(message: "This call has no transcript yet.")
         }
         if let problem = kind.problem {
-            throw ProviderError(message: "\(problem) Check Settings > Transcription > Summary.")
+            throw ProviderError(message: "\(problem) Check Settings > AI > Summaries.")
         }
         let meta = folder.loadMeta()
         let model = AppSettings.summaryModel(for: kind)

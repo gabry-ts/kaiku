@@ -56,7 +56,7 @@ enum CLIProviders {
     static func complete(_ tool: CLITool, name: String, model: String, prompt: String,
                          timeout: TimeInterval) async throws -> String {
         guard let binary = await detect(tool) else {
-            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings.")
+            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings > Accounts.")
         }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kaiku-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -84,7 +84,7 @@ enum CLIProviders {
     @discardableResult
     static func run(_ tool: CLITool, name: String, _ args: [String], timeout: TimeInterval = 30) async throws -> String {
         guard let binary = await detect(tool) else {
-            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings.")
+            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings > Accounts.")
         }
         var env = ProcessInfo.processInfo.environment
         let dirs = [(binary as NSString).deletingLastPathComponent]
@@ -108,7 +108,7 @@ enum CLIProviders {
     static func chat(_ tool: CLITool, name: String, model: String, prompt: String, workDir: URL?, readableDirs: [String],
                      timeout: TimeInterval, update: @escaping @MainActor (ChatStreamEvent) -> Void) async throws -> String {
         guard let binary = await detect(tool) else {
-            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings.")
+            throw ProviderError(message: "\(name) CLI not found. Install it or set its path in Settings > Accounts.")
         }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kaiku-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

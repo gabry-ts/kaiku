@@ -9,7 +9,7 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
 
     var displayName: String {
         switch self {
-        case .whisperCpp: return "whisper.cpp (local)"
+        case .whisperCpp: return "whisper.cpp (on this Mac)"
         case .apple: return "Apple (on this Mac)"
         case .elevenLabs: return "ElevenLabs Scribe"
         case .openAI: return "OpenAI"
@@ -449,7 +449,7 @@ enum AppSettings {
         return WhisperModels.detectWhisperCLI() ?? custom
     }
     static var whisperModel: String { expand(defaults.string(forKey: Keys.whisperModel)) }
-    /// The model for live whisper: the one chosen in Settings > Live, else Small or Base
+    /// The model for live whisper: the one chosen in Settings > Transcription > Live Transcription, else Small or Base
     /// when downloaded (light enough to run all call long), else the transcription model.
     static var liveWhisperModel: String {
         let chosen = expand(defaults.string(forKey: Keys.liveWhisperModel))
@@ -600,7 +600,7 @@ enum AppSettings {
         }
     }
 
-    /// Apps added by hand in Settings > Sources.
+    /// Apps added by hand in Settings > Call Detection > Sources.
     static var customApps: [CustomApp] {
         get {
             defaults.data(forKey: Keys.detectCustomApps)
@@ -609,7 +609,7 @@ enum AppSettings {
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.detectCustomApps) }
     }
 
-    /// Websites added by hand in Settings > Sources.
+    /// Websites added by hand in Settings > Call Detection > Sources.
     static var customWebsites: [CustomWebsite] {
         get {
             defaults.data(forKey: Keys.detectCustomWebsites)

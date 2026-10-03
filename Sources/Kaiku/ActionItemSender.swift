@@ -56,7 +56,7 @@ enum ActionItemSender {
         switch destination {
         case .reminders:
             guard let listID = AppSettings.defaults.string(forKey: Keys.remindersListID), !listID.isEmpty else {
-                throw ProviderError(message: "Choose a Reminders list in Settings > Transcription > Action Items.")
+                throw ProviderError(message: "Choose a Reminders list in Settings > Integrations > Action Items.")
             }
             if RemindersService.shared.state == .notAsked { _ = await RemindersService.shared.requestAccess() }
             guard RemindersService.shared.state == .granted else {
@@ -69,7 +69,7 @@ enum ActionItemSender {
             }
         case .linear:
             guard LinearAPI.key != nil, let team = AppSettings.defaults.string(forKey: Keys.linearTeamID), !team.isEmpty else {
-                throw ProviderError(message: "Add your Linear key and choose a team in Settings > Transcription > Action Items.")
+                throw ProviderError(message: "Add your Linear key in Settings > Accounts and choose a team in Settings > Integrations > Action Items.")
             }
         }
         for item in items {

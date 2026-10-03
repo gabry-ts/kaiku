@@ -179,7 +179,7 @@ private struct AccessibilityStep: View {
                 AccessibilityRow(permissions: permissions)
             }
             .frame(maxWidth: 480)
-            Text("You can decide which sources to record in Settings > Sources.")
+            Text("You can decide which sources to record in Settings > Call Detection.")
                 .font(.callout).foregroundStyle(.secondary)
         }
         .padding(28)
@@ -235,7 +235,7 @@ private struct ProviderStep: View {
                         }
                     }
                     if !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) {
-                        StatusDot(kind: .warning, text: "whisper-cli not found. Set its path in Settings.")
+                        StatusDot(kind: .warning, text: "whisper-cli not found. Set its path in Settings > Transcription > Advanced.")
                     }
                 } else if kind == .apple {
                     Text("Private and free").font(.body.weight(.semibold))

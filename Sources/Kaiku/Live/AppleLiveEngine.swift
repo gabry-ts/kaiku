@@ -54,7 +54,7 @@ final class AppleLiveEngine: LiveEngine, @unchecked Sendable {
         }
         // Never download during a call: that is done from Settings.
         guard await AppleSpeech.isInstalled(locale) else {
-            throw LiveEngineError("The speech model for \(AppleSpeech.name(locale)) isn't downloaded. Get it in Settings > Live.")
+            throw LiveEngineError("The speech model for \(AppleSpeech.name(locale)) isn't downloaded. Get it in Settings > Transcription > Live Transcription.")
         }
         Log.transcription.info("Live transcription in \(locale.identifier, privacy: .public)")
         state.withLock { s in

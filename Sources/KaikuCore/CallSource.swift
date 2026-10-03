@@ -16,7 +16,7 @@ public enum AutoRecordMode: String, CaseIterable, Identifiable, Sendable {
     case off
     /// Every source that isn't ignored; a source never seen before is recorded, then asked about.
     case all
-    /// Only the sources chosen in Settings > Sources; the others are offered.
+    /// Only the sources chosen in Settings > Call Detection > Sources; the others are offered.
     case selected
     public var id: String { rawValue }
 
@@ -150,7 +150,7 @@ public struct CallSource: Equatable, Sendable {
     }
 }
 
-/// An app added by hand in Settings > Sources, detected by its bundle id.
+/// An app added by hand in Settings > Call Detection > Sources, detected by its bundle id.
 public struct CustomApp: Codable, Equatable, Sendable {
     public let name: String
     public let bundleID: String
@@ -181,7 +181,7 @@ public struct CustomApp: Codable, Equatable, Sendable {
     }
 }
 
-/// A website added by hand in Settings > Sources, recognized by words in the browser
+/// A website added by hand in Settings > Call Detection > Sources, recognized by words in the browser
 /// window title.
 public struct CustomWebsite: Codable, Equatable, Sendable {
     public let name: String

@@ -71,7 +71,7 @@ final class ChatModel: ObservableObject {
         setCalls(chat.calls.filter { $0.ref != call.ref })
     }
 
-    /// Asks the draft with the provider chosen in Settings > Chat.
+    /// Asks the draft with the provider chosen in Settings > AI > Chat.
     func send() {
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isAnswering else { return }
@@ -81,7 +81,7 @@ final class ChatModel: ObservableObject {
         }
         let kind = AppSettings.chatProvider
         if let problem = kind.problem {
-            error = "\(problem) Check Settings > Chat."
+            error = "\(problem) Check Settings > AI > Chat."
             return
         }
         let model = AppSettings.chatModel(for: kind)
@@ -166,7 +166,7 @@ final class ChatModel: ObservableObject {
         loadSaved()
     }
 
-    /// Answers the next questions with `kind`, as chosen in Settings > Chat.
+    /// Answers the next questions with `kind`, as chosen in Settings > AI > Chat.
     func setProvider(_ kind: SummaryProviderKind) {
         AppSettings.defaults.set(kind.rawValue, forKey: Keys.chatProvider)
         objectWillChange.send()

@@ -773,7 +773,7 @@ private struct RecordingDetail: View {
             }
             .buttonStyle(.bordered)
             .disabled(!item.folder.hasTranscript || busy || summarizing)
-            .help(AppSettings.summaryProvider.problem.map { "\($0) Check Settings > Transcription > Summary" }
+            .help(AppSettings.summaryProvider.problem.map { "\($0) Check Settings > AI > Summaries" }
                   ?? "Summarize with \(AppSettings.summaryProvider.displayName) (\(AppSettings.summaryModel(for: AppSettings.summaryProvider)))")
             if summarizing { ProgressView().controlSize(.small) }
             Spacer()
@@ -908,7 +908,7 @@ private struct RecordingDetail: View {
         let minutes = (item.meta.transcribedSeconds ?? item.meta.durationSeconds) / 60
         return String(format: "Estimate: %.1f minutes sent to the provider", minutes)
             + (item.meta.modelID.map { " (\($0))" } ?? "")
-            + ". Based on list prices you can edit in Settings > Transcription."
+            + ". Based on list prices you can edit in Settings > Transcription > Advanced."
     }
 
     private var languageText: String {
