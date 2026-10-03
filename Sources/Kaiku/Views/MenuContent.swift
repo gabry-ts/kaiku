@@ -6,6 +6,7 @@ import KaikuCore
 struct MenuPanel: View {
     @EnvironmentObject var state: AppState
     @ObservedObject private var muter = MicMuter.shared
+    @ObservedObject private var importer = CallImporter.shared
     @State private var recent: [(folder: RecordingFolder, meta: RecordingMeta)] = []
     @State private var totalCalls = 0
     @AppStorage(Keys.popoverSections) private var layout = Data()
@@ -159,6 +160,14 @@ struct MenuPanel: View {
                             .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                             .help("Stop transcribing. No summary or webhook is sent.")
                     }
+                }
+            }
+        } else if let status = importer.status {
+            Card {
+                HStack(spacing: PUI.Space.m) {
+                    ProgressView().controlSize(.small)
+                    StatusText("Importing", detail: status)
+                    Spacer(minLength: 0)
                 }
             }
         } else if case .error = state.phase {
