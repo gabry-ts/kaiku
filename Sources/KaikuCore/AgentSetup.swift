@@ -71,6 +71,20 @@ public enum ControlRequest: Equatable, Sendable {
     /// Selects a call, by its folder, in the Library.
     case openCall(folder: String)
     case chat(question: String, tag: String?, source: String?, days: Int?)
+    /// Opens Settings on a pane (the last one when nil), at a row: `kaiku://settings/ai#chat`
+    /// or `kaiku://settings/ai/chat`. Pane names of earlier versions lead to their new place.
+    case openSettings(pane: String?, anchor: String?)
+
+    /// Panes that were merged into others, by their old name.
+    static let legacyPanes: [String: (pane: String, anchor: String?)] = [
+        "popover": ("menuBar", "panel"),
+        "shortcuts": ("menuBar", "shortcuts"),
+        "sources": ("callDetection", "sources"),
+        "live": ("transcription", "live"),
+        "chat": ("ai", "chat"),
+        "agents": ("integrations", "agents"),
+        "webhook": ("integrations", "webhook"),
+    ]
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == AgentRequest.scheme,
@@ -79,7 +93,19 @@ public enum ControlRequest: Equatable, Sendable {
             let v = parts.queryItems?.first(where: { $0.name == name })?.value?.trimmingCharacters(in: .whitespacesAndNewlines)
             return (v ?? "").isEmpty ? nil : v
         }
-        let path = parts.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        let rawPath = parts.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if parts.host?.lowercased() == "settings" {
+            let segments = rawPath.split(separator: "/").map(String.init)
+            var pane = segments.first
+            var anchor = parts.fragment.flatMap { $0.isEmpty ? nil : $0 } ?? (segments.count > 1 ? segments[1] : nil)
+            if let old = pane, let moved = Self.legacyPanes[old.lowercased()] {
+                pane = moved.pane
+                anchor = anchor ?? moved.anchor
+            }
+            self = .openSettings(pane: pane, anchor: anchor)
+            return
+        }
+        let path = rawPath.lowercased()
         switch (parts.host?.lowercased(), path) {
         case ("record", "start"): self = .startRecording(title: value("title"))
         case ("record", "stop"): self = .stopRecording

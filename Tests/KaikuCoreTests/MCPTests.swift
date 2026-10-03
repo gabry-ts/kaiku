@@ -237,6 +237,12 @@ final class MCPTests: XCTestCase {
         XCTAssertEqual(parse("kaiku://open?folder=%2Ftmp%2Fa"), .openCall(folder: "/tmp/a"))
         XCTAssertEqual(parse("kaiku://chat?q=what%20was%20decided&tag=work&days=7"),
                        .chat(question: "what was decided", tag: "work", source: nil, days: 7))
+        XCTAssertEqual(parse("kaiku://settings"), .openSettings(pane: nil, anchor: nil))
+        XCTAssertEqual(parse("kaiku://settings/accounts#openAI"), .openSettings(pane: "accounts", anchor: "openAI"))
+        XCTAssertEqual(parse("kaiku://settings/ai/chat"), .openSettings(pane: "ai", anchor: "chat"))
+        XCTAssertEqual(parse("kaiku://settings/live"), .openSettings(pane: "transcription", anchor: "live"))
+        XCTAssertEqual(parse("kaiku://settings/shortcuts"), .openSettings(pane: "menuBar", anchor: "shortcuts"))
+        XCTAssertEqual(parse("kaiku://settings/chat#savedChats"), .openSettings(pane: "ai", anchor: "savedChats"))
         XCTAssertNil(parse("kaiku://chat"))
         XCTAssertNil(parse("kaiku://record/erase"))
         XCTAssertNil(parse("kaiku://transcribe?folder=%2Ftmp%2Fa"))

@@ -880,6 +880,9 @@ final class AppState: ObservableObject {
             chat.send()
             chatRequested = true
             openInLibrary(nil)
+        case .openSettings(let name, let anchor):
+            let pane = name.flatMap { n in SettingsPane.allCases.first { $0.rawValue.caseInsensitiveCompare(n) == .orderedSame } }
+            WindowManager.shared.showSettings(pane, anchor: pane == nil ? nil : anchor)
         }
     }
 
