@@ -56,9 +56,7 @@ struct TranscriptionSettings: View {
 
             SpeakerNamesSection()
             LiveSettings()
-
-            SilenceTrimSection()
-            PriceSection(kind: kind).id("price-\(kind.rawValue)")
+            AdvancedTranscriptionSettings(kind: kind, onChange: { refresh += 1 })
             ActionItemsSettings()
         }
         .task(id: language) { await refreshSpeechModel() }
@@ -169,7 +167,6 @@ private extension ProviderKind {
 // MARK: - whisper.cpp
 
 private struct WhisperSettings: View {
-    @AppStorage(Keys.whisperPath) private var whisperPath = ""
     @AppStorage(Keys.whisperModel) private var whisperModel = ""
     @ObservedObject private var models = WhisperModels.shared
     let onChange: () -> Void
@@ -200,14 +197,6 @@ private struct WhisperSettings: View {
         }
         .onChange(of: models.version) { _, _ in onChange() }
         .onChange(of: whisperModel) { _, _ in onChange() }
-
-        SettingsGroup("whisper.cpp", footer: "Leave empty to use the whisper-cli bundled with the app. Detect clears a custom path.") {
-            PathField(label: "whisper-cli", path: $whisperPath, placeholder: "Automatic",
-                      fallback: WhisperModels.detectWhisperCLI()) {
-                whisperPath = ""
-            }
-            .onChange(of: whisperPath) { _, _ in onChange() }
-        }
     }
 
     private func chooseModel() {
@@ -437,6 +426,82 @@ private struct SpeakerNamesSection: View {
     }
 }
 
+// MARK: - Advanced
+
+/// whisper-cli, silence trimming and prices, folded away. Opens by itself when whisper-cli
+/// can't be found, or when a link points inside it.
+private struct AdvancedTranscriptionSettings: View {
+    let kind: ProviderKind
+    let onChange: () -> Void
+    @AppStorage(Keys.whisperPath) private var whisperPath = ""
+    @AppStorage(Keys.liveEnabled) private var liveEnabled = false
+    @AppStorage(Keys.liveEngine) private var liveEngine = LiveEngineKind.apple.rawValue
+    @ObservedObject private var nav = AppNavigation.shared
+    @State private var open = false
+    @Environment(\.colorScheme) private var scheme
+
+    private static let anchors: Set<String> = ["advanced", "whisperCli", "silence", "prices"]
+
+    /// whisper.cpp transcribes after the call or live.
+    private var usesWhisper: Bool {
+        kind == .whisperCpp || (liveEnabled && LiveTranscription.isSupported && liveEngine == LiveEngineKind.whisper.rawValue)
+    }
+
+    private var whisperMissing: Bool { usesWhisper && !FileManager.default.isExecutableFile(atPath: AppSettings.whisperPath) }
+
+    var body: some View {
+        let ink = Ink(scheme)
+        SettingsGroup {
+            Button { open.toggle() } label: {
+                HStack(spacing: PUI.Space.s) {
+                    Image(systemName: open ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(ink.tertiary)
+                        .frame(width: 12)
+                    Text("Advanced").font(PUI.Font.body).foregroundStyle(ink.primary)
+                    Spacer()
+                    Text(summary).font(PUI.Font.callout).foregroundStyle(ink.secondary)
+                }
+                .padding(.horizontal, PUI.Space.l)
+                .frame(minHeight: 38)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Advanced")
+            .accessibilityValue(open ? "Shown" : "Hidden")
+        }
+        .settingsAnchor("advanced")
+        .onAppear {
+            if whisperMissing || nav.wants(Self.anchors, in: .transcription) { open = true }
+        }
+        .onChange(of: nav.request) { _, _ in if nav.wants(Self.anchors, in: .transcription) { open = true } }
+
+        if open {
+            if usesWhisper {
+                SettingsGroup("whisper-cli", footer: "Leave empty to use the one bundled with Kaiku.") {
+                    PathField(label: "whisper-cli", path: $whisperPath, placeholder: "Automatic",
+                              fallback: WhisperModels.detectWhisperCLI()) {
+                        whisperPath = ""
+                    }
+                    .onChange(of: whisperPath) { _, _ in onChange() }
+                }
+                .settingsAnchor("whisperCli")
+            }
+            SilenceTrimSection()
+                .settingsAnchor("silence")
+            PriceSection(kind: kind).id("price-\(kind.rawValue)")
+                .settingsAnchor("prices")
+        }
+    }
+
+    private var summary: String {
+        var parts = ["Silence"]
+        if usesWhisper { parts.insert("whisper-cli", at: 0) }
+        if kind.isCloud { parts.append("Cost estimate") }
+        return parts.joined(separator: ", ")
+    }
+}
+
 // MARK: - Silence trimming
 
 private struct SilenceTrimSection: View {
@@ -445,7 +510,7 @@ private struct SilenceTrimSection: View {
     @AppStorage(Keys.trimMinSilence) private var minSilence = 2.0
 
     var body: some View {
-        SettingsGroup("Silence", footer: "Long pauses are cut from a temporary copy sent for transcription, so cloud providers bill fewer minutes. Your audio files are never changed and timestamps still match the recording.") {
+        SettingsGroup("Silence", footer: "Pauses are cut from a temporary copy, so cloud providers bill fewer minutes.") {
             SettingsRow("Skip long silences") {
                 Picker("Skip long silences", selection: $mode) {
                     ForEach(TrimSilenceMode.allCases) { Text($0.displayName).tag($0.rawValue) }
@@ -486,7 +551,7 @@ private struct PriceSection: View {
 
     var body: some View {
         if kind.isCloud {
-            SettingsGroup("Cost Estimate", footer: "Used for the estimated cost shown in the library and sent with the webhook. Defaults are the providers' list prices from September 2026; check your plan, prices change. Transcribing on this Mac is free.") {
+            SettingsGroup("Cost Estimate", footer: "Used for the estimates in the library and the webhook. List prices from September 2026.") {
                 ForEach(models, id: \.self) { model in
                     SettingsRow(model) {
                         HStack(spacing: 4) {
