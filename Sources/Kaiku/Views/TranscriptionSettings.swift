@@ -15,25 +15,47 @@ struct TranscriptionSettings: View {
 
     private var kind: ProviderKind { AppSettings.provider(saved: provider) }
 
+    /// The system recognizer transcribes after the call or live, where it can't detect the language.
+    private var usesAppleRecognizer: Bool {
+        kind == .apple || (AppSettings.liveEnabled && AppSettings.liveEngine == .apple)
+    }
+
     var body: some View {
-        KaikuPane(pane: .transcription, subtitle: "Who turns your calls into text, and with which model.") {
-            SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so the transcript knows who said what.") {
-                ForEach(ProviderKind.available) { p in
+        KaikuPane(pane: .transcription, subtitle: "How your calls become text, during and after the call.") {
+            SettingsGroup("Language", footer: "Auto-detect handles most calls, even mixed languages. You can change it per call.") {
+                LanguagePicker(language: $language, label: "Default language")
+                if AppSettings.normalizedLanguage(language) == "auto" && usesAppleRecognizer {
+                    GroupRow {
+                        Text("Apple's recognizer can't detect the language, so Auto-detect transcribes in your Mac's language.")
+                            .font(PUI.Font.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .settingsAnchor("language")
+
+            SettingsGroup("Provider", footer: "Your microphone and the call audio are transcribed separately, so Kaiku knows who said what.") {
+                ForEach(ProviderKind.allCases) { p in
                     ProviderRow(kind: p, selected: p == kind, status: status(of: p), refresh: refresh) {
                         provider = p.rawValue
                     }
                 }
             }
+            .settingsAnchor("provider")
 
-            if kind == .whisperCpp {
-                WhisperSettings(onChange: { refresh += 1 })
-            } else if kind == .apple {
-                AppleSettings(speech: speech, language: language) { Task { await downloadSpeechModel() } }
-            } else {
-                CloudProviderSettings(kind: kind, onChange: { refresh += 1 }).id(kind)
+            Group {
+                if kind == .whisperCpp {
+                    WhisperSettings(onChange: { refresh += 1 })
+                } else if kind == .apple {
+                    AppleSettings(speech: speech) { Task { await downloadSpeechModel() } }
+                } else {
+                    CloudProviderSettings(kind: kind, onChange: { refresh += 1 }).id(kind)
+                }
             }
+            .settingsAnchor("model")
 
-            ProviderTestSection(kind: kind).id("test-\(kind.rawValue)")
+            SpeakerNamesSection()
+            LiveSettings()
 
             SilenceTrimSection()
             PriceSection(kind: kind).id("price-\(kind.rawValue)")
@@ -44,6 +66,7 @@ struct TranscriptionSettings: View {
 
     /// A provider's state in the list. Apple's is the state of its speech model.
     private func status(of provider: ProviderKind) -> (ready: Bool, text: String) {
+        guard provider.isAvailable else { return (false, "Needs macOS 26") }
         guard provider == .apple else {
             let readiness = provider.readiness
             return (readiness == .ready, readiness.text)
@@ -86,28 +109,37 @@ private struct ProviderRow: View {
 
     var body: some View {
         let ink = Ink(scheme)
-        Button(action: select) {
-            HStack(spacing: PUI.Space.m + 2) {
-                IconTile(kind.symbol, color: kind.tileColor, size: 26)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(kind.displayName).font(PUI.Font.body).foregroundStyle(ink.primary)
-                    Text(kind.tagline).font(PUI.Font.caption).foregroundStyle(ink.secondary)
+        HStack(spacing: PUI.Space.m) {
+            Button(action: select) {
+                HStack(spacing: PUI.Space.m + 2) {
+                    IconTile(kind.symbol, color: kind.tileColor, size: 26)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(kind.displayName).font(PUI.Font.body).foregroundStyle(ink.primary)
+                        Text(kind.tagline).font(PUI.Font.caption).foregroundStyle(ink.secondary)
+                    }
+                    Spacer(minLength: PUI.Space.l)
+                    HStack(spacing: PUI.Space.xs) {
+                        Circle().fill(status.ready ? ink.green : (selected ? ink.orange : ink.tertiary)).frame(width: 6, height: 6)
+                        Text(status.text).font(PUI.Font.caption).foregroundStyle(ink.secondary)
+                    }
                 }
-                Spacer(minLength: PUI.Space.l)
-                HStack(spacing: PUI.Space.xs) {
-                    Circle().fill(status.ready ? ink.green : ink.tertiary).frame(width: 6, height: 6)
-                    Text(status.text).font(PUI.Font.caption).foregroundStyle(ink.secondary)
-                }
-                CheckMark(selected)
-                    .padding(.leading, PUI.Space.m)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, PUI.Space.l)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(!kind.isAvailable)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityLabel("\(kind.displayName), \(status.text)")
+            if kind.readiness == .needsKey, let service = AccountService.of(kind) {
+                Button("Set Up…") { WindowManager.shared.showSettings(.accounts, anchor: service.anchor) }
+                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+                    .controlSize(.mini)
+            }
+            CheckMark(selected)
+                .padding(.leading, PUI.Space.xs)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityLabel("\(kind.displayName), \(status.text)")
+        .padding(.horizontal, PUI.Space.l)
+        .frame(minHeight: 44)
+        .opacity(kind.isAvailable ? 1 : 0.5)
     }
 }
 
@@ -143,7 +175,7 @@ private struct WhisperSettings: View {
     let onChange: () -> Void
 
     var body: some View {
-        SettingsGroup("Model", footer: "Models are downloaded from Hugging Face into ~/Library/Application Support/Kaiku/models. Larger models are more accurate but slower.") {
+        SettingsGroup("Model", footer: "Larger models are more accurate but slower. Downloaded from Hugging Face into ~/Library/Application Support/Kaiku/models.") {
             ForEach(WhisperModel.catalog) { model in
                 ModelRow(model: model, active: whisperModel == model.localURL.path)
             }
@@ -164,6 +196,7 @@ private struct WhisperSettings: View {
                 }
                 .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
             }
+            ProviderTestRow(kind: .whisperCpp)
         }
         .onChange(of: models.version) { _, _ in onChange() }
         .onChange(of: whisperModel) { _, _ in onChange() }
@@ -245,25 +278,16 @@ private struct ModelRow: View {
 
 private struct AppleSettings: View {
     @ObservedObject var speech: SpeechModelStatus
-    let language: String
     let download: () -> Void
 
     var body: some View {
-        SettingsGroup(Text(ProviderKind.apple.displayName), footer: Text("The speech recognizer built into macOS 26. Free and private: audio is transcribed on this Mac and never leaves it. There is no API key and no model to choose.")) {
-            SettingsRow(Text("Language"), subtitle: Text("The default for new calls, set in General.")) {
-                ValueText(LanguagePicker.recognizerName(language))
-            }
-            if AppSettings.normalizedLanguage(language) == "auto" {
-                GroupRow {
-                    Text("The recognizer can't detect the language, so Auto-detect transcribes in your Mac's language.")
-                        .font(PUI.Font.callout).foregroundStyle(.secondary)
-                }
-            }
+        SettingsGroup(Text("Model"), footer: Text("Built into macOS. Nothing leaves your Mac.")) {
             SpeechModelStatusRow(readiness: speech.readiness, readyText: "Ready. The speech model is on this Mac.",
                                  downloadNote: "Calls are transcribed once it is downloaded.", download: download)
             if let error = speech.downloadError {
                 GroupRow { StatusDot(kind: .error, text: error) }
             }
+            ProviderTestRow(kind: .apple)
         }
     }
 }
@@ -277,7 +301,7 @@ private struct CloudProviderSettings: View {
     @State private var customModel = false
 
     var body: some View {
-        SettingsGroup(Text(kind.displayName), footer: Text(modelHint)) {
+        SettingsGroup(Text("Model"), footer: Text(modelHint)) {
             SettingsRow("Model") {
                 Picker("Model", selection: Binding(
                     get: { customModel ? "__custom" : model },
@@ -298,6 +322,7 @@ private struct CloudProviderSettings: View {
                 }
             }
             CloudKeyStatusRow(kind: kind)
+            ProviderTestRow(kind: kind)
         }
         .onAppear {
             model = AppSettings.model(for: kind)
@@ -349,14 +374,15 @@ struct CloudKeyStatusRow: View {
 
 // MARK: - Test
 
-private struct ProviderTestSection: View {
+/// Transcribes a second of sound with the provider, at the bottom of its Model group.
+private struct ProviderTestRow: View {
     let kind: ProviderKind
     @State private var running = false
     @State private var result: (ok: Bool, message: String)?
 
     var body: some View {
-        SettingsGroup(footer: !kind.isCloud ? "Runs locally, nothing leaves your Mac." : "Sends one second of audio. Costs a fraction of a cent.") {
-            GroupRow {
+        GroupRow {
+            VStack(alignment: .leading, spacing: PUI.Space.xs) {
                 HStack(spacing: PUI.Space.m) {
                     Button {
                         running = true
@@ -382,8 +408,32 @@ private struct ProviderTestSection: View {
                     }
                     Spacer()
                 }
+                Text(kind.isCloud ? "Sends one second of audio." : "Runs on this Mac.")
+                    .font(PUI.Font.caption).foregroundStyle(.secondary)
             }
         }
+        .id("test-\(kind.rawValue)")
+    }
+}
+
+// MARK: - Speaker names
+
+private struct SpeakerNamesSection: View {
+    @AppStorage(Keys.meLabel) private var meLabel = "Me"
+    @AppStorage(Keys.othersLabel) private var othersLabel = "Others"
+
+    var body: some View {
+        SettingsGroup("Speaker Names", footer: "Providers that tell voices apart add Speaker 1, Speaker 2… Rename them per call.") {
+            SettingsRow("Your microphone") {
+                TextField("Your microphone", text: $meLabel, prompt: Text("Me"))
+                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 200)
+            }
+            SettingsRow("Call audio") {
+                TextField("Call audio", text: $othersLabel, prompt: Text("Others"))
+                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 200)
+            }
+        }
+        .settingsAnchor("speakers")
     }
 }
 

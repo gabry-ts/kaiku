@@ -79,9 +79,9 @@ enum Snapshots {
         }
         if LiveTranscription.isSupported {
             defaults.register(defaults: [Keys.liveEnabled: true])
-            for dark in [false, true] { settings("settings-live-on-\(dark ? "dark" : "light")", .live, dark: dark) }
+            for dark in [false, true] { settings("settings-transcription-live-on-\(dark ? "dark" : "light")", .transcription, dark: dark) }
             LiveSettings.previewReadiness = .needsDownload("The speech model for English (United States) isn't on this Mac yet.")
-            settings("settings-live-download-light", .live, dark: false)
+            settings("settings-transcription-live-download-light", .transcription, dark: false)
             LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveAssistEnabled: true])
             settings("settings-ai-live-assist-light", .ai, dark: false)
@@ -92,10 +92,10 @@ enum Snapshots {
             // Every other engine, and a cloud one without its API key.
             for kind in LiveEngineKind.allCases where kind != .apple {
                 defaults.register(defaults: [Keys.liveEngine: kind.rawValue])
-                settings("settings-live-\(kind.rawValue)-light", .live, dark: false)
+                settings("settings-transcription-live-\(kind.rawValue)-light", .transcription, dark: false)
             }
             LiveSettings.previewReadiness = .unavailable("Add an ElevenLabs API key in Settings > Transcription.")
-            settings("settings-live-elevenlabs-nokey-light", .live, dark: false)
+            settings("settings-transcription-live-elevenlabs-nokey-light", .transcription, dark: false)
             LiveSettings.previewReadiness = .ready
             defaults.register(defaults: [Keys.liveEngine: LiveEngineKind.apple.rawValue, Keys.liveEnabled: false])
         }

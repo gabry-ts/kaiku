@@ -129,7 +129,7 @@ private struct LiveAssistSection: View {
                     HStack {
                         StatusDot(kind: .neutral, text: "Needs live transcription, which is off.")
                         Spacer(minLength: PUI.Space.m)
-                        Button("Turn On…") { WindowManager.shared.showSettings(.live) }
+                        Button("Turn On…") { WindowManager.shared.showSettings(.transcription, anchor: "live") }
                             .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                     }
                 }

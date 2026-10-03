@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, sources, transcription, live, ai, accounts, agents, webhook, notifications, permissions, about
+    case general, popover, shortcuts, recording, sources, transcription, ai, accounts, agents, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -14,7 +14,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "Recording"
         case .sources: return "Sources"
         case .transcription: return "Transcription"
-        case .live: return "Live"
         case .ai: return "AI"
         case .accounts: return "Accounts"
         case .agents: return "Agents (MCP)"
@@ -33,7 +32,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "mic.fill"
         case .sources: return "dot.radiowaves.left.and.right"
         case .transcription: return "text.quote"
-        case .live: return "captions.bubble.fill"
         case .ai: return "sparkles"
         case .accounts: return "key.fill"
         case .agents: return "terminal.fill"
@@ -52,7 +50,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return AppAccent.kaiku.color
         case .sources: return .teal
         case .transcription: return .blue
-        case .live: return .pink
         case .ai: return .indigo
         case .accounts: return .yellow
         case .agents: return .mint
@@ -63,8 +60,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The panes this Mac can show: Live only where an engine can run.
-    static var available: [SettingsPane] { allCases.filter { $0 != .live || LiveTranscription.isSupported } }
+    static var available: [SettingsPane] { allCases }
 
     var sidebarItem: SidebarItem {
         SidebarItem(Text(title), id: rawValue, symbol: symbol, style: .tile(tint))
@@ -86,7 +82,6 @@ struct SettingsView: View {
             case .recording: RecordingSettings()
             case .sources: SourcesSettings()
             case .transcription: TranscriptionSettings()
-            case .live: LiveSettings()
             case .ai: AISettings()
             case .accounts: AccountsSettings()
             case .agents: AgentSettings()
@@ -111,7 +106,6 @@ struct SettingsView: View {
 
 struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
-    @AppStorage(Keys.language) private var language = "auto"
     @AppStorage(Keys.showInDock) private var showInDock = true
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
@@ -128,10 +122,6 @@ struct GeneralSettings: View {
                     .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
                 }
                 .help(baseFolder)
-            }
-
-            SettingsGroup("Language", footer: "Auto-detect handles most calls, including mixed languages. Choosing one can improve accuracy. You can also change it per call.") {
-                LanguagePicker(language: $language, label: "Default for new calls")
             }
 
             SettingsGroup("Startup") {
@@ -306,8 +296,6 @@ struct StorageSection: View {
 struct RecordingSettings: View {
     @AppStorage(Keys.microphone) private var microphone = AudioDevices.automatic
     @AppStorage(Keys.followCallMicrophone) private var followCall = true
-    @AppStorage(Keys.meLabel) private var meLabel = "Me"
-    @AppStorage(Keys.othersLabel) private var othersLabel = "Others"
     @AppStorage(Keys.systemAudioVerified) private var systemAudioVerified = false
     @AppStorage(Keys.removeEcho) private var removeEcho = true
     @State private var devices: [AudioDevice] = []
@@ -393,17 +381,6 @@ struct RecordingSettings: View {
             CallDetectionSection()
             AutoStopSection()
             CalendarSection()
-
-            SettingsGroup("Speaker Names", footer: "Providers that tell voices apart label people Speaker 1, Speaker 2… Rename them for each call in the library.") {
-                SettingsRow("Your microphone") {
-                    TextField("Your microphone", text: $meLabel, prompt: Text("Me"))
-                        .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 200)
-                }
-                SettingsRow("Call audio") {
-                    TextField("Call audio", text: $othersLabel, prompt: Text("Others"))
-                        .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 200)
-                }
-            }
         }
         .onAppear { devices = AudioDevices.inputs() }
         .onDisappear { monitor.stop() }
