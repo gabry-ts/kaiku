@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, menuBar, recording, callDetection, transcription, ai, accounts, agents, webhook, notifications, permissions, about
+    case general, menuBar, recording, callDetection, transcription, ai, accounts, integrations, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -15,8 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return "Transcription"
         case .ai: return "AI"
         case .accounts: return "Accounts"
-        case .agents: return "Agents (MCP)"
-        case .webhook: return "Webhook"
+        case .integrations: return "Integrations"
         case .notifications: return "Notifications"
         case .permissions: return "Permissions"
         case .about: return "About"
@@ -32,8 +31,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return "text.quote"
         case .ai: return "sparkles"
         case .accounts: return "key.fill"
-        case .agents: return "terminal.fill"
-        case .webhook: return "paperplane.fill"
+        case .integrations: return "point.3.connected.trianglepath.dotted"
         case .notifications: return "bell.badge.fill"
         case .permissions: return "lock.shield.fill"
         case .about: return "info"
@@ -49,8 +47,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .transcription: return .blue
         case .ai: return .indigo
         case .accounts: return .yellow
-        case .agents: return .mint
-        case .webhook: return .purple
+        case .integrations: return .purple
         case .notifications: return .red
         case .permissions: return .green
         case .about: return .teal
@@ -80,8 +77,7 @@ struct SettingsView: View {
             case .transcription: TranscriptionSettings()
             case .ai: AISettings()
             case .accounts: AccountsSettings()
-            case .agents: AgentSettings()
-            case .webhook: WebhookSettings()
+            case .integrations: IntegrationsSettings()
             case .notifications: NotificationSettings()
             case .permissions: PermissionsSettings()
             case .about: AboutSettings()

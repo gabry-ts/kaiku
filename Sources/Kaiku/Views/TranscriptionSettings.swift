@@ -57,7 +57,6 @@ struct TranscriptionSettings: View {
             SpeakerNamesSection()
             LiveSettings()
             AdvancedTranscriptionSettings(kind: kind, onChange: { refresh += 1 })
-            ActionItemsSettings()
         }
         .task(id: language) { await refreshSpeechModel() }
     }

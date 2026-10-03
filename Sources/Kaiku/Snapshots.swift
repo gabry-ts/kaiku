@@ -128,7 +128,7 @@ enum Snapshots {
             TranscriptionSettings.previewSpeechReadiness = .ready
         }
         defaults.register(defaults: [Keys.provider: ProviderKind.whisperCpp.rawValue, Keys.webhookBodyMode: "template"])
-        settings("settings-webhook-template-light", .webhook, dark: false)
+        settings("settings-integrations-template-light", .integrations, dark: false)
         defaults.register(defaults: [Keys.webhookBodyMode: "default"])
 
         // Menu bar panel. The popover's own glass comes from NSPopover, so it's painted in

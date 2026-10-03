@@ -3,7 +3,7 @@ import KaikuCore
 import PartitiUI
 import SwiftUI
 
-/// Settings > Transcription > Action Items: where the tasks of a call can be sent from the library.
+/// Settings > Integrations > Action Items: where the tasks of a call can be sent from the library.
 struct ActionItemsSettings: View {
     @AppStorage(Keys.remindersListID) private var remindersList = ""
     @AppStorage(Keys.linearTeamID) private var teamID = ""
@@ -16,7 +16,7 @@ struct ActionItemsSettings: View {
     @State private var linearError: String?
 
     var body: some View {
-        SettingsGroup("Action Items", footer: "Every summary also lists the tasks of the call. Send them from the call in the library: nothing leaves your Mac until you do. Things needs no setup.") {
+        SettingsGroup("Action Items", footer: "Summaries list the tasks of each call. Send them from the call; nothing leaves your Mac until you do.") {
             remindersRows
             if linearKey.isEmpty {
                 SettingsRow(Text("Linear"), subtitle: Text("Connect Linear to send tasks to a team.")) {
@@ -44,7 +44,9 @@ struct ActionItemsSettings: View {
                     GroupRow { StatusDot(kind: .error, text: linearError) }
                 }
             }
+            SettingsRow("Things") { StatusDot(kind: .ok, text: "Ready · no setup needed") }
         }
+        .settingsAnchor("actionItems")
         .onAppear {
             linearKey = LinearAPI.key ?? ""
             loadLists()
@@ -66,7 +68,7 @@ struct ActionItemsSettings: View {
                 .fixedSize()
             }
         case .notAsked:
-            SettingsRow(Text("Reminders list"), subtitle: Text("Kaiku needs access to your reminders.")) {
+            SettingsRow(Text("Reminders list"), subtitle: Text("Needs access to Reminders.")) {
                 Button("Allow…") {
                     Task {
                         _ = await RemindersService.shared.requestAccess()

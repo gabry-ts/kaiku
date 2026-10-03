@@ -3,7 +3,7 @@ import KaikuCore
 import PartitiUI
 import SwiftUI
 
-/// Settings > Agents (MCP): lets Claude Code, Codex and Claude Desktop use the calls
+/// Settings > Integrations > Agents (MCP): lets Claude Code, Codex and Claude Desktop use the calls
 /// through kaiku-mcp, the MCP server bundled with the app.
 struct AgentSettings: View {
     @AppStorage(Keys.agentsAllowEdits) private var allowEdits = false
@@ -13,51 +13,58 @@ struct AgentSettings: View {
 
     private let path = AgentInstaller.serverPath
 
+    @State private var confirmEdits = false
+    @State private var showManual = false
+    @ObservedObject private var nav = AppNavigation.shared
+
     var body: some View {
-        KaikuPane(pane: .agents, subtitle: "Let Claude Code, Codex and Claude Desktop find, read and search your calls.") {
-            SettingsGroup("MCP Server", footer: "Agents start the server themselves when they need it, even while Kaiku is closed. It reads the calls in your recordings folder on this Mac and sends nothing anywhere; the agent decides what to do with what it reads.") {
-                if let path {
+        SettingsGroup("Agents (MCP)", footer: "Agents read the calls on this Mac. Reading is always allowed; editing only with the switch on.") {
+            if let path {
+                clientRow(.claudeCode, path: path)
+                clientRow(.codex, path: path)
+                clientRow(.claudeDesktop, path: path)
+                if let problem = AgentInstaller.locationProblem {
+                    GroupRow { StatusDot(kind: .warning, text: problem) }
+                }
+            } else {
+                GroupRow { StatusDot(kind: .warning, text: "kaiku-mcp isn't in this build.") }
+            }
+            SwitchRow("Allow agents to edit calls", isOn: Binding(get: { allowEdits }, set: { on in
+                if on { confirmEdits = true } else { allowEdits = false }
+            }))
+            .settingsAnchor("agentsEdit")
+            if let path {
+                DisclosureRow(title: "Manual Setup", detail: "For other agents", isOpen: $showManual)
+                    .settingsAnchor("manualSetup")
+                if showManual {
                     SettingsRow(Text("Server"), subtitle: Text(path)) {
                         copyButton("Copy Path", text: path)
                     }
                     .help(path)
-                } else {
-                    GroupRow {
-                        StatusDot(kind: .warning, text: "kaiku-mcp isn't in this build. Build the app with scripts/build-app.sh to add agents from here.")
-                    }
-                }
-            }
-
-            if let path {
-                SettingsGroup("Add to an Agent", footer: "Adds a server named kaiku to the agent's own settings, keeping everything else in them.") {
-                    clientRow(.claudeCode, path: path)
-                    clientRow(.codex, path: path)
-                    clientRow(.claudeDesktop, path: path)
-                    if let problem = AgentInstaller.locationProblem {
-                        GroupRow { StatusDot(kind: .warning, text: problem) }
-                    }
-                }
-
-                SettingsGroup("Manual Setup", footer: "For other agents, run the server path as a stdio MCP server, with no arguments.") {
                     snippetRow("Claude Code", AgentConfig.claudeCommandLine(path: path))
                     snippetRow("Codex, in ~/.codex/config.toml", AgentConfig.codexSnippet(path: path))
                     snippetRow("Claude Desktop, in claude_desktop_config.json", AgentConfig.claudeDesktopSnippet(path: path))
                 }
             }
+        }
+        .settingsAnchor("agents")
+        .confirmationDialog("Allow agents to edit calls?", isPresented: $confirmEdits) {
+            Button("Allow Editing") { allowEdits = true }
+        } message: {
+            Text("Agents will be able to rename calls, change tags and speakers, and run transcriptions and summaries again.")
+        }
+        .onAppear { if nav.wants(["manualSetup"], in: .integrations) { showManual = true } }
+        .onChange(of: nav.request) { _, _ in if nav.wants(["manualSetup"], in: .integrations) { showManual = true } }
 
-            SettingsGroup("Raycast", footer: "Needs the Kaiku extension from the Raycast Store.") {
-                SettingsRow(Text("Raycast"), subtitle: Text("Control recordings and search your calls from Raycast.")) {
-                    Button("Install in Raycast") {
-                        if let url = URL(string: "raycast://extensions/gabry-ts/kaiku") { NSWorkspace.shared.open(url) }
-                    }
-                    .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
+        SettingsGroup("Raycast", footer: "Needs the Kaiku extension from the Raycast Store.") {
+            SettingsRow(Text("Raycast"), subtitle: Text("Control recordings and search your calls from Raycast.")) {
+                Button("Install in Raycast") {
+                    if let url = URL(string: "raycast://extensions/gabry-ts/kaiku") { NSWorkspace.shared.open(url) }
                 }
-            }
-
-            SettingsGroup("Permissions", footer: "Agents can always list, read and search your calls. With editing allowed they can also rename calls, change tags and speaker names (which rewrites meta.json and transcript.md), and ask Kaiku to transcribe or summarize a call again with the providers chosen here. Agents see the change in new sessions; sessions already open keep the tools they had.") {
-                SwitchRow("Allow agents to edit calls", isOn: $allowEdits)
+                .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
             }
         }
+        .settingsAnchor("raycast")
     }
 
     @ViewBuilder
