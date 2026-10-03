@@ -189,9 +189,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// The window that puts Kaiku in the Dock and the app switcher while open, so it is easy to find again.
     private static let dockWindows: Set<String> = [mainID]
 
-    /// A Dock icon while the main window is open (when enabled), else menu bar only.
+    /// A Dock icon while the main window is open, so it can go full screen and show in the app
+    /// switcher; menu bar only otherwise.
     func updateDockPresence() {
-        let show = AppSettings.showInDock && windows.keys.contains { Self.dockWindows.contains($0) }
+        let show = windows.keys.contains { Self.dockWindows.contains($0) }
         let policy: NSApplication.ActivationPolicy = show ? .regular : .accessory
         if NSApp.activationPolicy() != policy { NSApp.setActivationPolicy(policy) }
     }

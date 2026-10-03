@@ -82,7 +82,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 struct GeneralSettings: View {
     @AppStorage(Keys.baseFolder) private var baseFolder = AppSettings.defaultBaseFolder.path
-    @AppStorage(Keys.showInDock) private var showInDock = true
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
     /// What was found in the folder just chosen, shown for a few seconds.
@@ -101,8 +100,6 @@ struct GeneralSettings: View {
                 if let loginError {
                     GroupRow { StatusDot(kind: .error, text: loginError) }
                 }
-                SwitchRow("Show in the Dock while Settings or the library is open", isOn: $showInDock)
-                    .onChange(of: showInDock) { _, _ in WindowManager.shared.updateDockPresence() }
             }
             .settingsAnchor("startup")
 
