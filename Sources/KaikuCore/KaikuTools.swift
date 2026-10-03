@@ -369,7 +369,7 @@ public struct KaikuToolSet: MCPToolSet {
 
     private static let filterProperties: [String: JSONValue] = [
         "tag": ["type": "string", "description": "Only calls with this tag."],
-        "source": ["type": "string", "description": "Only calls from this source, e.g. Zoom, Google Meet, WhatsApp, Manual."],
+        "source": ["type": "string", "description": "Only calls from this source, e.g. Zoom, Google Meet, WhatsApp, Manual, Imported."],
         "from": ["type": "string", "description": "Calls on or after this date: 2026-09-23 or ISO 8601."],
         "to": ["type": "string", "description": "Calls on or before this date (the whole day when only a date): 2026-09-30 or ISO 8601."],
     ]
