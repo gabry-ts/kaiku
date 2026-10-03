@@ -49,6 +49,9 @@ public struct CallSource: Equatable, Sendable {
     /// Source of recordings started by hand.
     public static let manual = "Manual"
 
+    /// Source of calls made from imported audio or video files.
+    public static let imported = "Imported"
+
     public static let known: [CallSource] = [
         CallSource(name: "Zoom", bundlePrefixes: ["us.zoom."], titleKeywords: ["Zoom"], defaultRule: .always),
         CallSource(name: "Microsoft Teams", bundlePrefixes: ["com.microsoft.teams"], titleKeywords: ["Microsoft Teams"], defaultRule: .always),
