@@ -115,6 +115,20 @@ final class SettingsHealth: ObservableObject {
             add(.warning, problem, "Chat · Accounts", .ai, SettingsTarget(.accounts, AccountService.of(AppSettings.chatProvider).anchor))
         }
 
+        if DictationConfig.enabled {
+            let dictation = DictationConfig.provider
+            if dictation.isCloud, Keychain.apiKey(for: dictation) == nil, let service = AccountService.of(dictation) {
+                add(.warning, "\(service.displayName) key missing", "Dictation · Accounts", .dictation, SettingsTarget(.accounts, service.anchor))
+            }
+            if DictationConfig.polish, let problem = problem(of: DictationConfig.polishProvider) {
+                add(.warning, problem, "Dictation polish · Accounts", .dictation,
+                    SettingsTarget(.accounts, AccountService.of(DictationConfig.polishProvider).anchor))
+            }
+            if !permissions.accessibilityGranted {
+                add(.warning, "Dictations can only be copied", "Permissions › Accessibility", .dictation,
+                    SettingsTarget(.permissions, "accessibility"))
+            }
+        }
         if AppSettings.callEndMode == .ask && AppSettings.callEndBehavior != .ask {
             add(.warning, "Kaiku can't ask when a call ends", "Call Detection › Detection", .callDetection,
                 SettingsTarget(.callDetection, "detection"))
