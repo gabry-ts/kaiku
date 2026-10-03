@@ -76,11 +76,13 @@ export default function Command() {
           key={c.id}
           id={c.id}
           title={c.title}
-          subtitle={c.duration}
+          icon={{ source: c.source && c.source !== "Manual" ? Icon.Video : Icon.Microphone, tintColor: Color.Red }}
+          keywords={[c.source ?? "", ...c.tags]}
           accessories={[
-            ...(c.source ? [{ tag: c.source }] : []),
-            ...c.tags.slice(0, 2).map((t) => ({ tag: { value: t, color: Color.SecondaryText } })),
-            { text: new Date(c.date).toLocaleDateString(undefined, { dateStyle: "medium" }) },
+            {
+              text: new Date(c.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+              tooltip: [c.source, c.duration].filter(Boolean).join(" · "),
+            },
           ]}
           detail={
             <List.Item.Detail
