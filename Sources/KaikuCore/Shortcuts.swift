@@ -84,7 +84,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .pause: return "Pause or resume"
         case .bookmark: return "Add bookmark"
         case .muteMicrophones: return "Mute or unmute all microphones"
-        case .openLibrary: return "Open recordings library"
+        case .openLibrary: return "Open Kaiku"
         case .showPanel: return "Show panel"
         }
     }

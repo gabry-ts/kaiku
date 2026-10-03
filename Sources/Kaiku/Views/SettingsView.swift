@@ -3,14 +3,13 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, popover, shortcuts, recording, callDetection, transcription, ai, accounts, agents, webhook, notifications, permissions, about
+    case general, menuBar, recording, callDetection, transcription, ai, accounts, agents, webhook, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
-        case .popover: return "Popover"
-        case .shortcuts: return "Shortcuts"
+        case .menuBar: return "Menu Bar & Shortcuts"
         case .recording: return "Recording"
         case .callDetection: return "Call Detection"
         case .transcription: return "Transcription"
@@ -27,8 +26,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: return "gearshape.fill"
-        case .popover: return "menubar.rectangle"
-        case .shortcuts: return "keyboard.fill"
+        case .menuBar: return "menubar.rectangle"
         case .recording: return "mic.fill"
         case .callDetection: return "phone.and.waveform.fill"
         case .transcription: return "text.quote"
@@ -45,8 +43,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: return .gray
-        case .popover: return .orange
-        case .shortcuts: return .indigo
+        case .menuBar: return .orange
         case .recording: return AppAccent.kaiku.color
         case .callDetection: return .teal
         case .transcription: return .blue
@@ -77,8 +74,7 @@ struct SettingsView: View {
         SettingsWindow(sections: Self.sections, selection: selection) {
             switch nav.pane {
             case .general: GeneralSettings()
-            case .popover: PopoverSettings()
-            case .shortcuts: ShortcutSettings()
+            case .menuBar: MenuBarSettings()
             case .recording: RecordingSettings()
             case .callDetection: CallDetectionSettings()
             case .transcription: TranscriptionSettings()
@@ -168,7 +164,7 @@ struct GeneralSettings: View {
     }
 }
 
-// MARK: - Popover
+// MARK: - Menu bar panel
 
 extension PopoverSection {
     var title: String {
@@ -189,7 +185,7 @@ extension PopoverSection {
         case .mute: return "The switch that silences every microphone."
         case .status: return "Progress and result of the latest transcription."
         case .recovered: return "Calls saved after an interruption."
-        case .recent: return "Your latest calls, one click from the library."
+        case .recent: return "Your latest calls, one click from the window."
         }
     }
 
@@ -205,22 +201,29 @@ extension PopoverSection {
     }
 }
 
-struct PopoverSettings: View {
+/// What the menu bar panel shows and in which order; the number of recent calls when they show.
+struct PanelSettings: View {
     @State private var items = AppSettings.popoverItems
     @AppStorage(Keys.popoverRecentCount) private var recentCount = PopoverLayout.defaultRecentCount
 
+    private var showsRecent: Bool { items.contains { $0.section == .recent && $0.isOn } }
+
     var body: some View {
-        KaikuPane(pane: .popover, subtitle: "What the menu bar popover shows, and in which order.") {
-            ReorderableGroup("Sections", footer: "Drag to reorder. Switch off what you don't need.",
+        Group {
+            ReorderableGroup("Panel", footer: "Drag to reorder. Problems, like a failed transcription, always show.",
                              items: $items, isOn: \.isOn, isLocked: { $0.section.isLocked }) { item in
                 ReorderableLabel(item.section.title, subtitle: item.section.detail, symbol: item.section.symbol)
             }
+            .settingsAnchor("panel")
 
-            SettingsGroup("Recent Calls", footer: "Problems, like a failed transcription or muted microphones, always show in the popover.") {
-                SettingsRow("Calls to show") {
-                    SegmentedPill(PopoverLayout.recentCounts.map { (value: $0, title: "\($0)") },
-                                  selection: Binding(get: { PopoverLayout.recentCount(recentCount) }, set: { recentCount = $0 }))
+            if showsRecent {
+                SettingsGroup {
+                    SettingsRow("Recent calls to show") {
+                        SegmentedPill(PopoverLayout.recentCounts.map { (value: $0, title: "\($0)") },
+                                      selection: Binding(get: { PopoverLayout.recentCount(recentCount) }, set: { recentCount = $0 }))
+                    }
                 }
+                .settingsAnchor("recentCount")
             }
         }
         .onChange(of: items) { _, new in AppSettings.popoverItems = new }

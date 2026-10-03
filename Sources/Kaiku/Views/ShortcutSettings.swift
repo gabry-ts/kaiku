@@ -3,17 +3,32 @@ import PartitiUI
 import SwiftUI
 import KaikuCore
 
+// MARK: - Menu Bar & Shortcuts
+
+/// Settings > Menu Bar & Shortcuts: what the menu bar panel shows, and keys that work from any app.
+struct MenuBarSettings: View {
+    var body: some View {
+        KaikuPane(pane: .menuBar, subtitle: "What the menu bar panel shows, and keys that work from any app.") {
+            PanelSettings()
+            ShortcutSettings()
+        }
+    }
+}
+
 // MARK: - Shortcuts
 
+/// The global shortcuts, and the keys the panel answers to.
 struct ShortcutSettings: View {
     @State private var combos = Shortcuts.assignments
     @State private var recording: ShortcutAction?
     @State private var warnings: [ShortcutAction: String] = [:]
     @State private var monitor: Any?
+    @State private var showPanelKeys = false
+    @ObservedObject private var nav = AppNavigation.shared
 
     var body: some View {
-        KaikuPane(pane: .shortcuts, subtitle: "Keys that work from any app, and the ones the panel answers to.") {
-            SettingsGroup("Global Shortcuts", footer: "Work from any app, even when Kaiku is in the background. Click a shortcut and type a new one; Esc cancels, Delete clears it. A bookmark is added instantly; you can label it in the panel or later in the library.") {
+        Group {
+            SettingsGroup("Global Shortcuts", footer: "Click a shortcut and type a new one. Esc cancels, Delete clears.") {
                 ForEach(ShortcutAction.allCases) { action in
                     row(action)
                 }
@@ -27,16 +42,30 @@ struct ShortcutSettings: View {
                 }
             }
 
-            SettingsGroup("In the Panel") {
-                SettingsRow("Start Recording…") { ValueText("⌘R") }
-                SettingsRow("Pause or resume") { ValueText("⌘P") }
-                SettingsRow("Add bookmark") { ValueText("⌘B") }
-                SettingsRow("Stop recording") { ValueText("⌘S") }
-                SettingsRow("All recordings") { ValueText("⌘L") }
-                SettingsRow("Settings") { ValueText("⌘,") }
-                SettingsRow("Mute or unmute all microphones") { ValueText("Option-click the menu bar icon") }
+            .settingsAnchor("shortcuts")
+
+            SettingsGroup {
+                GroupRow {
+                    DisclosureGroup(isExpanded: $showPanelKeys) {
+                        VStack(spacing: 0) {
+                            keyLine("Start Recording", "⌘R")
+                            keyLine("Pause or resume", "⌘P")
+                            keyLine("Add bookmark", "⌘B")
+                            keyLine("Stop recording", "⌘S")
+                            keyLine("Open Kaiku", "⌘L")
+                            keyLine("Settings", "⌘,")
+                            keyLine("Mute or unmute all microphones", "Option-click the menu bar icon")
+                        }
+                        .padding(.top, PUI.Space.s)
+                    } label: {
+                        Text("Keys in the panel").font(PUI.Font.body)
+                    }
+                }
             }
+            .settingsAnchor("panelKeys")
         }
+        .onAppear { if nav.wants(["panelKeys"], in: .menuBar) { showPanelKeys = true } }
+        .onChange(of: nav.request) { _, _ in if nav.wants(["panelKeys"], in: .menuBar) { showPanelKeys = true } }
         .onDisappear { stopRecording() }
     }
 
@@ -44,7 +73,12 @@ struct ShortcutSettings: View {
         GroupRow {
             VStack(alignment: .leading, spacing: PUI.Space.s) {
                 HStack(spacing: PUI.Space.s) {
-                    Text(action.title).font(PUI.Font.body)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(action.title).font(PUI.Font.body)
+                        if action == .bookmark {
+                            Text("Label it later in the panel or the call.").font(PUI.Font.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer(minLength: PUI.Space.l)
                     Button {
                         recording == action ? stopRecording() : startRecording(action)
@@ -78,6 +112,15 @@ struct ShortcutSettings: View {
                 }
             }
         }
+    }
+
+    private func keyLine(_ title: String, _ keys: String) -> some View {
+        HStack {
+            Text(title).font(PUI.Font.callout).foregroundStyle(.secondary)
+            Spacer()
+            Text(keys).font(PUI.Font.callout).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
     }
 
     private func label(for action: ShortcutAction) -> String {
