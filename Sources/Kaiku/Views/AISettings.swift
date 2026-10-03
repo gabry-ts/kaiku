@@ -54,14 +54,8 @@ private struct SummariesSection: View {
         SettingsGroup("Summaries", footer: "Saves summary.md in the call folder, with the call's action items. You can also summarize any call by hand.") {
             SwitchRow("Summarize every call after transcription", isOn: $enabled)
                 .settingsAnchor("summarize")
-            SettingsRow("Provider") {
-                Picker("Provider", selection: $provider) {
-                    ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
-                }
-                .labelsHidden()
-                .fixedSize()
-            }
-            .settingsAnchor("summaryProvider")
+            ProviderPicker(selection: $provider)
+                .settingsAnchor("summaryProvider")
             ModelField(kind: kind, text: $model)
             ProviderStatusRow(access: access, modelMissing: kind.requiresModel && model.isEmpty)
             GroupRow {
@@ -120,9 +114,8 @@ private struct LiveAssistSection: View {
     @State private var askModel = ""
     @StateObject private var access = ProviderAccess()
 
-    private var kind: SummaryProviderKind {
-        SummaryProviderKind(rawValue: liveProvider) ?? SummaryProviderKind(rawValue: summaryProvider) ?? .openAI
-    }
+    private var summaryKind: SummaryProviderKind { SummaryProviderKind(rawValue: summaryProvider) ?? .openAI }
+    private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: liveProvider) ?? summaryKind }
 
     /// Live transcription runs, so the assistant has something to read.
     private var available: Bool { LiveTranscription.isSupported && liveEnabled }
@@ -145,13 +138,7 @@ private struct LiveAssistSection: View {
                 .disabled(!available)
                 .opacity(available ? 1 : 0.5)
             if assist && available {
-                SettingsRow("Provider") {
-                    Picker("Provider", selection: Binding(get: { kind.rawValue }, set: { liveProvider = $0 })) {
-                        ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
+                ProviderPicker(selection: $liveProvider, sameAs: summaryKind)
                 ModelField(kind: kind, text: $summaryModel, title: "Summary model", subtitle: "Refreshes about every minute.")
                 ModelField(kind: kind, text: $askModel, title: "Ask model",
                            subtitle: kind.cli == nil ? "A fast model keeps answers quick." : "Slower with a command-line tool.")
@@ -186,19 +173,12 @@ private struct ChatSection: View {
     @State private var model = ""
     @StateObject private var access = ProviderAccess()
 
-    private var kind: SummaryProviderKind {
-        SummaryProviderKind(rawValue: chatProvider) ?? SummaryProviderKind(rawValue: summaryProvider) ?? .openAI
-    }
+    private var summaryKind: SummaryProviderKind { SummaryProviderKind(rawValue: summaryProvider) ?? .openAI }
+    private var kind: SummaryProviderKind { SummaryProviderKind(rawValue: chatProvider) ?? summaryKind }
 
     var body: some View {
         SettingsGroup("Chat", footer: "Each question sends the calls in the chat to this provider. Chats stay on this Mac.") {
-            SettingsRow("Provider") {
-                Picker("Provider", selection: Binding(get: { kind.rawValue }, set: { chatProvider = $0 })) {
-                    ForEach(SummaryProviderKind.allCases) { Text($0.displayName).tag($0.rawValue) }
-                }
-                .labelsHidden()
-                .fixedSize()
-            }
+            ProviderPicker(selection: $chatProvider, sameAs: summaryKind)
             ModelField(kind: kind, text: $model,
                        subtitle: kind.cli == nil ? "Answers appear as they are written." : "Reads the calls first, so the answer takes a little longer.")
             ProviderStatusRow(access: access, modelMissing: kind.requiresModel && model.isEmpty)
@@ -226,5 +206,57 @@ private struct ChatSection: View {
         let folder = AppSettings.chatsFolder
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+}
+
+// MARK: - Provider picker
+
+/// Chooses a provider: the ready ones first, then the ones not set up yet, then a way to
+/// set one up. With `sameAs`, an empty selection follows the summaries' provider.
+private struct ProviderPicker: View {
+    @Binding var selection: String
+    var sameAs: SummaryProviderKind?
+
+    private static let setUp = "__setup"
+
+    var body: some View {
+        let ready = SummaryProviderKind.allCases.filter { $0.problem == nil }
+        let others = SummaryProviderKind.allCases.filter { $0.problem != nil }
+        SettingsRow("Provider") {
+            Picker("Provider", selection: Binding(get: { current }, set: { value in
+                if value == Self.setUp {
+                    WindowManager.shared.showSettings(.accounts)
+                } else {
+                    selection = value
+                }
+            })) {
+                if let sameAs {
+                    Text("Same as Summaries (\(sameAs.displayName))").tag("")
+                    Divider()
+                }
+                Section("Ready") {
+                    ForEach(ready) { Text(label(for: $0)).tag($0.rawValue) }
+                }
+                Section("Not set up") {
+                    ForEach(others) { Text($0.displayName).tag($0.rawValue) }
+                }
+                Divider()
+                Text("Set Up a Provider…").tag(Self.setUp)
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    /// The saved value, or the summaries' provider when this one follows it.
+    private var current: String {
+        if sameAs != nil { return SummaryProviderKind(rawValue: selection)?.rawValue ?? "" }
+        return SummaryProviderKind(rawValue: selection)?.rawValue ?? SummaryProviderKind.openAI.rawValue
+    }
+
+    private func label(for kind: SummaryProviderKind) -> String {
+        if kind.cli != nil { return "\(kind.displayName) · your sign-in" }
+        if kind == .ollama { return "Ollama · on this Mac" }
+        return kind.displayName
     }
 }
