@@ -969,6 +969,9 @@ private struct RecordingDetail: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            TextSizeControl(size: $textSize)
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { copy(item.folder) } label: { Label("Copy Transcript", systemImage: "doc.on.doc") }
                 .help("Copy transcript")
@@ -1034,6 +1037,56 @@ private struct RecordingDetail: View {
             webhookStatus = status
             sendingWebhook = false
         }
+    }
+}
+
+/// "A ••••• A": steps the reading text size down or up, also with ⌘− and ⌘+; ⌘0 goes back to the default.
+private struct TextSizeControl: View {
+    @Binding var size: Double
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Button { size = ReadingSize.smaller(than: size) } label: {
+                Text("A").font(.system(size: 10, weight: .semibold))
+            }
+            .keyboardShortcut("-", modifiers: .command)
+            .disabled(size <= ReadingSize.steps[0])
+            .help("Smaller text (⌘−)")
+            .accessibilityLabel("Smaller text")
+            HStack(spacing: 3) {
+                ForEach(ReadingSize.steps, id: \.self) { step in
+                    let on = abs(step - size) < 0.01
+                    Circle()
+                        .fill(on ? AnyShapeStyle(AppAccent.kaiku.color) : AnyShapeStyle(.quaternary))
+                        .frame(width: on ? 8 : 6, height: on ? 8 : 6)
+                        .frame(width: 8, height: 8)
+                        .contentShape(Rectangle())
+                        .onTapGesture { size = step }
+                }
+            }
+            .accessibilityHidden(true)
+            Button { size = ReadingSize.larger(than: size) } label: {
+                Text("A").font(.system(size: 15, weight: .semibold))
+            }
+            .keyboardShortcut("+", modifiers: .command)
+            .disabled(size >= ReadingSize.steps[ReadingSize.steps.count - 1])
+            .help("Larger text (⌘+)")
+            .accessibilityLabel("Larger text")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .background {
+            // ⌘= is ⌘+ without Shift on most layouts; ⌘0 restores the default size.
+            Group {
+                Button("") { size = ReadingSize.larger(than: size) }.keyboardShortcut("=", modifiers: .command)
+                Button("") { size = ReadingSize.standard }.keyboardShortcut("0", modifiers: .command)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .help("Text size")
     }
 }
 
