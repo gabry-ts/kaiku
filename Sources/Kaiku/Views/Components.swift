@@ -81,7 +81,7 @@ struct KaikuPane<Content: View>: View {
     @ObservedObject private var nav = AppNavigation.shared
 
     /// Widest the form grows, and its minimum side margin.
-    static var maxWidth: CGFloat { 720 }
+    static var maxWidth: CGFloat { 900 }
     static var margin: CGFloat { 40 }
 
     var body: some View {

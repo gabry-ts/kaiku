@@ -40,7 +40,7 @@ struct ChatPanel: View {
 
     private static let end = "end"
     /// Widest the conversation reads at.
-    static let readingWidth: CGFloat = 720
+    static let readingWidth: CGFloat = 880
 
     static let suggestions: [(symbol: String, text: String)] = [
         ("checkmark.seal", "What was decided?"),
