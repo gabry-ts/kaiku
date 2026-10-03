@@ -6,10 +6,10 @@ public enum AudioImport {
     /// Kinds of files offered in the Import panel and accepted when dropped.
     public static let contentTypes: [UTType] = [.audio, .movie]
 
-    /// Whether the file looks like audio or video, judged by its extension. Whether it
-    /// really holds a readable audio track is only known once it is opened.
+    /// Whether the file looks like audio or video, judged by its extension; web links are
+    /// left out. Whether it really holds a readable audio track is only known once it is opened.
     public static func isSupported(_ url: URL) -> Bool {
-        guard !url.hasDirectoryPath, let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        guard url.isFileURL, !url.hasDirectoryPath, let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return contentTypes.contains { type.conforms(to: $0) }
     }
 

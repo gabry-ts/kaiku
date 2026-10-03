@@ -13,6 +13,7 @@ final class AudioImportTests: XCTestCase {
             XCTAssertFalse(AudioImport.isSupported(URL(fileURLWithPath: "/tmp/\(name)")), name)
         }
         XCTAssertFalse(AudioImport.isSupported(URL(fileURLWithPath: "/tmp/folder.mp3", isDirectory: true)))
+        XCTAssertFalse(AudioImport.isSupported(URL(string: "https://example.com/a.mp3")!))
     }
 
     func testSplitKeepsOrderAndDropsDuplicates() {
