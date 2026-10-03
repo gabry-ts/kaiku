@@ -125,10 +125,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// kaiku:// URLs opened by kaiku-mcp for agents.
+    /// kaiku:// URLs opened by kaiku-mcp for agents, and audio or video files dropped on
+    /// the Dock icon or opened with Kaiku, which are imported.
     func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
-            for url in urls { AppState.shared.handleAgentURL(url) }
+            let files = urls.filter(\.isFileURL)
+            if !files.isEmpty { CallImporter.shared.importFiles(files) }
+            for url in urls where !url.isFileURL { AppState.shared.handleAgentURL(url) }
         }
     }
 
