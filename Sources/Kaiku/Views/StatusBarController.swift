@@ -17,6 +17,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     /// When the popover last closed. A click on the icon closes a transient popover on
     /// mouse-down; the button action then fires on mouse-up and must not reopen it.
     private var lastClose = Date.distantPast
+    /// Turns ⌘Q in the open panel into closing it; Quit stays a click away.
+    private var quitKeyMonitor: Any?
 
     func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -72,6 +74,20 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         popover.contentViewController?.view.window?.makeKey()
         button.highlight(true)
         AppState.shared.panelVisible = true
+        if quitKeyMonitor == nil {
+            quitKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                let isQuit = event.charactersIgnoringModifiers?.lowercased() == "q"
+                    && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+                guard isQuit else { return event }
+                let handled = MainActor.assumeIsolated { () -> Bool in
+                    guard let panel = StatusBarController.shared.popover,
+                          event.window === panel.contentViewController?.view.window else { return false }
+                    StatusBarController.shared.closePanel()
+                    return true
+                }
+                return handled ? nil : event
+            }
+        }
     }
 
     func togglePanel() {
@@ -87,6 +103,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         lastClose = Date()
         item?.button?.highlight(false)
         AppState.shared.panelVisible = false
+        if let quitKeyMonitor { NSEvent.removeMonitor(quitKeyMonitor) }
+        quitKeyMonitor = nil
     }
 
     private func makePopover() -> NSPopover {
