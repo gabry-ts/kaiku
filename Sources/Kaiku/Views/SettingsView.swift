@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, menuBar, recording, callDetection, transcription, ai, accounts, integrations, notifications, permissions, about
+    case general, menuBar, recording, callDetection, transcription, dictation, ai, accounts, integrations, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -13,6 +13,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "Recording"
         case .callDetection: return "Call Detection"
         case .transcription: return "Transcription"
+        case .dictation: return "Dictation"
         case .ai: return "AI"
         case .accounts: return "Accounts"
         case .integrations: return "Integrations"
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return "mic.fill"
         case .callDetection: return "phone.and.waveform.fill"
         case .transcription: return "text.quote"
+        case .dictation: return "waveform.and.mic"
         case .ai: return "sparkles"
         case .accounts: return "key.fill"
         case .integrations: return "point.3.connected.trianglepath.dotted"
@@ -45,6 +47,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .recording: return AppAccent.kaiku.color
         case .callDetection: return .teal
         case .transcription: return .blue
+        case .dictation: return .pink
         case .ai: return .indigo
         case .accounts: return .yellow
         case .integrations: return .purple
@@ -71,7 +74,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var section: Section {
         switch self {
         case .general, .menuBar: return .main
-        case .recording, .callDetection, .transcription: return .capture
+        case .recording, .callDetection, .transcription, .dictation: return .capture
         case .ai, .accounts, .integrations: return .intelligence
         case .notifications, .permissions, .about: return .system
         }
@@ -557,7 +560,7 @@ struct PermissionsSettings: View {
                 .settingsAnchor("calendar")
                 PermissionRow(
                     symbol: "accessibility", tint: .purple, title: "Accessibility",
-                    detail: "Optional. Reads the browser window title to tell web calls apart, like WhatsApp Web and Google Meet.",
+                    detail: "Optional. Reads the browser window title to tell web calls apart, like WhatsApp Web and Google Meet, and pastes dictations where the cursor is.",
                     state: permissions.accessibility,
                     action: permissions.accessibility == .notAsked ? "Allow…" : "Open Settings…",
                     perform: { permissions.requestAccessibility() },

@@ -213,7 +213,7 @@ private struct ChatSection: View {
 
 /// Chooses a provider: the ready ones first, then the ones not set up yet, then a way to
 /// set one up. With `sameAs`, an empty selection follows the summaries' provider.
-private struct ProviderPicker: View {
+struct ProviderPicker: View {
     @Binding var selection: String
     var sameAs: SummaryProviderKind?
 

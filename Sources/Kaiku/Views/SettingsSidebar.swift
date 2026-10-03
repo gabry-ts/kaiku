@@ -320,6 +320,7 @@ struct SettingsDetailView: View {
             case .recording: RecordingSettings()
             case .callDetection: CallDetectionSettings()
             case .transcription: TranscriptionSettings()
+            case .dictation: DictationSettings()
             case .ai: AISettings()
             case .accounts: AccountsSettings()
             case .integrations: IntegrationsSettings()

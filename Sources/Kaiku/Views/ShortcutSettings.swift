@@ -29,7 +29,8 @@ struct ShortcutSettings: View {
     var body: some View {
         Group {
             SettingsGroup("Global Shortcuts", footer: "Click a shortcut and type a new one. Esc cancels, Delete clears.") {
-                ForEach(ShortcutAction.allCases) { action in
+                // The dictation shortcuts are set in Settings > Dictation.
+                ForEach(ShortcutAction.allCases.filter { !$0.isDictation }) { action in
                     row(action)
                 }
                 GroupRow {
@@ -37,7 +38,7 @@ struct ShortcutSettings: View {
                         Spacer()
                         Button("Restore Defaults", action: restoreDefaults)
                             .buttonStyle(SecondaryButtonStyle(height: PUI.Control.small))
-                            .disabled(ShortcutAction.allCases.allSatisfy { combos[$0] == $0.defaultCombo })
+                            .disabled(ShortcutAction.allCases.filter { !$0.isDictation }.allSatisfy { combos[$0] == $0.defaultCombo })
                     }
                 }
             }
@@ -209,7 +210,7 @@ struct ShortcutSettings: View {
 
     private func restoreDefaults() {
         stopRecording()
-        ShortcutAction.allCases.forEach(Shortcuts.reset)
+        ShortcutAction.allCases.filter { !$0.isDictation }.forEach(Shortcuts.reset)
         HotKeyManager.apply()
         warnings = [:]
         for action in HotKeyManager.failed { warnings[action] = "This shortcut is in use by another app." }
