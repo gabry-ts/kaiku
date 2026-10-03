@@ -58,6 +58,8 @@ struct LibraryView: View {
     @State private var mode = LibraryView.initialMode
     /// Search by meaning instead of by the words typed.
     @State private var smartSearch = false
+    /// Smart search switched on, here or in Settings > General.
+    @AppStorage(Keys.smartSearchUsed) private var smartSearchOn = false
 
     /// Smart search is on and something was typed: passages are listed instead of calls.
     private var showingPassages: Bool {
@@ -201,6 +203,7 @@ struct LibraryView: View {
         .onChange(of: state.chatRequested) { _, _ in openRequestedChat() }
         .onChange(of: state.libraryVersion) { _, _ in reload() }
         .onChange(of: search) { _, v in if smartSearch { state.semantic.search(v) } }
+        .onChange(of: smartSearchOn) { _, on in if !on { smartSearch = false } }
         .onChange(of: smartSearch) { _, on in
             guard on else { return }
             state.semantic.activate()

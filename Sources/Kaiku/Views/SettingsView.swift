@@ -131,6 +131,7 @@ struct GeneralSettings: View {
                     .onChange(of: showInDock) { _, _ in WindowManager.shared.updateDockPresence() }
             }
 
+            LibrarySection()
             StorageSection()
         }
     }
@@ -223,6 +224,31 @@ struct PanelSettings: View {
             }
         }
         .onChange(of: items) { _, new in AppSettings.popoverItems = new }
+    }
+}
+
+// MARK: - Library
+
+/// How the library window searches the calls.
+struct LibrarySection: View {
+    @AppStorage(Keys.smartSearchUsed) private var smartSearch = false
+    @ObservedObject private var semantic = AppState.shared.semantic
+
+    private var status: String {
+        guard smartSearch else { return "Off. New calls aren't indexed." }
+        if semantic.unavailable { return "Not available on this Mac" }
+        if let p = semantic.progress { return "\(min(p.done + 1, p.total)) of \(p.total) calls indexed…" }
+        return "Up to date"
+    }
+
+    var body: some View {
+        SettingsGroup("Library", footer: "Smart search finds passages by meaning, with a language model built into macOS. The index stays on this Mac.") {
+            SwitchRow(Text("Smart search"), subtitle: Text(status), isOn: Binding(get: { smartSearch }, set: { on in
+                if on { semantic.activate() } else { semantic.deactivate() }
+            }))
+            .settingsAnchor("smartSearch")
+        }
+        .settingsAnchor("library")
     }
 }
 

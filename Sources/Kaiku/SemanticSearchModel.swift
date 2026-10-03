@@ -33,10 +33,19 @@ final class SemanticSearchModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var query = ""
 
-    /// True once Smart search was used: from then on new transcriptions are indexed too.
-    private var isActive: Bool {
+    /// True once Smart search was turned on, in the library or in Settings: from then on new
+    /// transcriptions are indexed too. Turning it off in Settings stops indexing.
+    var isActive: Bool {
         get { AppSettings.defaults.bool(forKey: Keys.smartSearchUsed) }
         set { AppSettings.defaults.set(newValue, forKey: Keys.smartSearchUsed) }
+    }
+
+    /// Turned off in Settings: indexing stops, the index already built stays.
+    func deactivate() {
+        isActive = false
+        indexTask?.cancel()
+        indexTask = nil
+        progress = nil
     }
 
     /// Called when Smart search is turned on: checks the model and indexes the calls.
@@ -63,6 +72,7 @@ final class SemanticSearchModel: ObservableObject {
                 }.value.filter { !attempted.contains($0.id) }
                 if pending.isEmpty { break }
                 for (n, call) in pending.enumerated() {
+                    guard !Task.isCancelled else { break }
                     progress = Progress(done: n, total: pending.count)
                     attempted.insert(call.id)
                     await Task.detached(priority: .background) {
@@ -70,6 +80,7 @@ final class SemanticSearchModel: ObservableObject {
                     }.value
                 }
             }
+            guard !Task.isCancelled else { return }
             progress = nil
             indexTask = nil
             if !query.isEmpty { search(query) }
