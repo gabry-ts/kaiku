@@ -70,13 +70,13 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 /// Settings window: Partiti UI's floating sidebar with the panes, the selected pane on the right.
 struct SettingsView: View {
-    @State var pane: SettingsPane = .general
+    @ObservedObject private var nav = AppNavigation.shared
 
     private static let sections = [SidebarSection(nil, SettingsPane.available.map(\.sidebarItem))]
 
     var body: some View {
         SettingsWindow(sections: Self.sections, selection: selection) {
-            switch pane {
+            switch nav.pane {
             case .general: GeneralSettings()
             case .popover: PopoverSettings()
             case .shortcuts: ShortcutSettings()
@@ -99,7 +99,7 @@ struct SettingsView: View {
 
     /// The sidebar selects by the pane's raw value, the id of its item.
     private var selection: Binding<String> {
-        Binding(get: { pane.rawValue }, set: { id in if let p = SettingsPane(rawValue: id) { pane = p } })
+        Binding(get: { nav.pane.rawValue }, set: { id in if let p = SettingsPane(rawValue: id) { nav.open(p) } })
     }
 }
 

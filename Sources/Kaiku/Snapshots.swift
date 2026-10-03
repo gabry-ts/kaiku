@@ -70,7 +70,8 @@ enum Snapshots {
         // Settings panes, in a window with a clear title bar like the real one, grown to
         // the pane's height so long panes aren't cropped.
         func settings(_ name: String, _ pane: SettingsPane, dark: Bool) {
-            snap(AnyView(SettingsView(pane: pane).environmentObject(state)), name: name, size: PUI.Window.settings,
+            AppNavigation.shared.open(pane)
+            snap(AnyView(SettingsView().environmentObject(state)), name: name, size: PUI.Window.settings,
                  dark: dark, chrome: true, dir: dir, chromeless: false, growToContent: true)
         }
         for pane in SettingsPane.available {

@@ -34,8 +34,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// Top center of the title prompt when it opened; it grows downwards from there.
     private var titleAnchor: NSPoint?
 
-    func showSettings(_ pane: SettingsPane = .general) {
-        let view = SettingsView(pane: pane).environmentObject(AppState.shared)
+    /// Opens Settings on `pane` (the last one shown when nil), scrolled to the row `anchor`.
+    /// An open Settings window switches to it.
+    func showSettings(_ pane: SettingsPane? = nil, anchor: String? = nil) {
+        AppNavigation.shared.open(pane, anchor: anchor)
+        let view = SettingsView().environmentObject(AppState.shared)
         // A full-size content view under a clear title bar, so Partiti UI's floating
         // sidebar runs under the traffic lights and each pane carries its own header.
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: PUI.Window.settings),

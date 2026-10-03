@@ -71,21 +71,50 @@ struct StatusDot: View {
 
 // MARK: - Settings
 
-/// A scrolling settings pane that opens with Partiti UI's header for `pane`.
+/// A scrolling settings pane that opens with Partiti UI's header for `pane`. It scrolls to
+/// the row a link or a search result asked for, which then shows a highlight for a moment.
+/// The form keeps a readable width on the left, however wide the window.
 struct KaikuPane<Content: View>: View {
     let pane: SettingsPane
     let subtitle: String
     @ViewBuilder let content: Content
+    @ObservedObject private var nav = AppNavigation.shared
+
+    /// Widest the form grows, and its margin from the sidebar.
+    static var maxWidth: CGFloat { 720 }
+    static var margin: CGFloat { 40 }
 
     var body: some View {
-        ScrollView {
-            PartitiUI.SettingsPane {
-                PaneHeader(Text(pane.title), subtitle: Text(subtitle), symbol: pane.symbol, color: pane.tint)
-            } content: {
-                content
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: PUI.Space.xl + 2) {
+                    PaneHeader(Text(pane.title), subtitle: Text(subtitle), symbol: pane.symbol, color: pane.tint)
+                        .id(Self.top)
+                    content
+                }
+                .frame(maxWidth: Self.maxWidth, alignment: .leading)
+                .padding(.horizontal, Self.margin)
+                .padding(.top, PUI.Space.xxl + PUI.Space.xs)
+                .padding(.bottom, PUI.Space.xxl)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .onAppear { jump(proxy) }
+            .onChange(of: nav.request) { _, _ in jump(proxy) }
+            .onChange(of: nav.pane) { _, _ in proxy.scrollTo(Self.top, anchor: .top) }
         }
-        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private static var top: String { "pane-top" }
+
+    /// Scrolls to the requested row once disclosures it lives in had a turn to open.
+    private func jump(_ proxy: ScrollViewProxy) {
+        guard let request = nav.request, request.pane == pane, let anchor = request.anchor else { return }
+        Task { @MainActor in
+            await Task.yield()
+            proxy.scrollTo(anchor, anchor: .center)
+            nav.reached(request)
+        }
     }
 }
 
