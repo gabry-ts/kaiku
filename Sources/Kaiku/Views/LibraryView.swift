@@ -41,8 +41,6 @@ enum LibraryDetailMode: String {
 struct LibraryView: View {
     /// Snapshot rendering opens calls that have a summary on the Summary tab.
     static var preferSummaryTab = false
-    /// Snapshot rendering opens on the chat.
-    static var initialMode = LibraryDetailMode.call
 
     @EnvironmentObject var state: AppState
     @State private var items: [LibraryItem] = []
@@ -55,7 +53,11 @@ struct LibraryView: View {
     @State private var tagTargets: [RecordingFolder] = []
     @State private var speakersTarget: LibraryItem?
     @State private var errorMessage: String?
-    @State private var mode = LibraryView.initialMode
+    @ObservedObject private var nav = AppNavigation.shared
+    private var mode: LibraryDetailMode {
+        get { nav.mode }
+        nonmutating set { nav.mode = newValue }
+    }
     /// Search by meaning instead of by the words typed.
     @State private var smartSearch = false
     /// Smart search switched on, here or in Settings > General.
@@ -124,10 +126,28 @@ struct LibraryView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
+                VStack(spacing: 1) {
+                    MainSidebarButton(title: "Calls", symbol: "phone.fill", selected: mode == .call) { mode = .call }
+                    MainSidebarButton(title: "Chat", symbol: "bubble.left.and.text.bubble.right.fill", selected: mode == .chat) { mode = .chat }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 smartSearchBar
                 if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
                 if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                MainSidebarButton(title: "Settings", symbol: "gearshape") {
+                    WindowManager.shared.showSettings()
+                }
+                .help("Settings (⌘,)")
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .background(.bar)
         }
         .searchable(text: $search, placement: .sidebar, prompt: "Search calls, tags, sources and transcripts")
         .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 380)
@@ -176,23 +196,19 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationSplitView {
-            sidebar
+            if nav.showingSettings {
+                SettingsSidebarView()
+            } else {
+                sidebar
+            }
         } detail: {
-            detailColumn
-        }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Picker("Show", selection: $mode) {
-                    Text("Call").tag(LibraryDetailMode.call)
-                    Text("Chat").tag(LibraryDetailMode.chat)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help("Show the selected call or the chat with your calls")
+            if nav.showingSettings {
+                SettingsDetailView()
+            } else {
+                detailColumn
             }
         }
-        .navigationTitle("Recordings")
+        .navigationTitle("Kaiku")
         .frame(minWidth: 820, minHeight: 520)
         .puiAccent(.kaiku)
         .onAppear {
@@ -1442,7 +1458,7 @@ private struct PlayerCard: View {
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard event.charactersIgnoringModifiers == " ",
                       event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty,
-                      let window = event.window, window === WindowManager.shared.window("library"),
+                      let window = event.window, window === WindowManager.shared.window(WindowManager.mainID),
                       !(window.firstResponder is NSText) else { return false }
                 player.toggle()
                 return true

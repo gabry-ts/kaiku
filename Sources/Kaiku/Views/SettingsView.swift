@@ -50,47 +50,31 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .integrations: return .purple
         case .notifications: return .red
         case .permissions: return .green
-        case .about: return .teal
+        case .about: return .cyan
         }
     }
 
-    static var available: [SettingsPane] { allCases }
+    /// The sidebar section the pane is listed in.
+    enum Section: CaseIterable {
+        case main, capture, intelligence, system
 
-    var sidebarItem: SidebarItem {
-        SidebarItem(Text(title), id: rawValue, symbol: symbol, style: .tile(tint))
-    }
-}
-
-/// Settings window: Partiti UI's floating sidebar with the panes, the selected pane on the right.
-struct SettingsView: View {
-    @ObservedObject private var nav = AppNavigation.shared
-
-    private static let sections = [SidebarSection(nil, SettingsPane.available.map(\.sidebarItem))]
-
-    var body: some View {
-        SettingsWindow(sections: Self.sections, selection: selection) {
-            switch nav.pane {
-            case .general: GeneralSettings()
-            case .menuBar: MenuBarSettings()
-            case .recording: RecordingSettings()
-            case .callDetection: CallDetectionSettings()
-            case .transcription: TranscriptionSettings()
-            case .ai: AISettings()
-            case .accounts: AccountsSettings()
-            case .integrations: IntegrationsSettings()
-            case .notifications: NotificationSettings()
-            case .permissions: PermissionsSettings()
-            case .about: AboutSettings()
+        var title: String? {
+            switch self {
+            case .main: return nil
+            case .capture: return "Capture"
+            case .intelligence: return "Intelligence"
+            case .system: return "System"
             }
         }
-        .frame(minWidth: PUI.Window.settingsMin.width, minHeight: PUI.Window.settingsMin.height)
-        .defaultAppStorage(AppSettings.defaults)
-        .puiAccent(.kaiku)
     }
 
-    /// The sidebar selects by the pane's raw value, the id of its item.
-    private var selection: Binding<String> {
-        Binding(get: { nav.pane.rawValue }, set: { id in if let p = SettingsPane(rawValue: id) { nav.open(p) } })
+    var section: Section {
+        switch self {
+        case .general, .menuBar: return .main
+        case .recording, .callDetection, .transcription: return .capture
+        case .ai, .accounts, .integrations: return .intelligence
+        case .notifications, .permissions, .about: return .system
+        }
     }
 }
 

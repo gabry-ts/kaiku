@@ -68,7 +68,7 @@ struct KaikuApp: App {
         // mute the microphones; SwiftUI still needs one scene.
         Settings { EmptyView() }
             .commands {
-                // Cmd+, would otherwise open this empty scene instead of the real Settings window.
+                // Cmd+, would otherwise open this empty scene instead of Settings in the main window.
                 CommandGroup(replacing: .appSettings) {
                     Button("Settings…") { WindowManager.shared.showSettings() }
                         .keyboardShortcut(",", modifiers: .command)

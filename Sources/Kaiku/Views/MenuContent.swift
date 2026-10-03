@@ -44,7 +44,7 @@ struct MenuPanel: View {
             }
         } footer: {
             PopoverFooter(
-                actions: [.init("Recordings", symbol: "list.bullet.rectangle",
+                actions: [.init("Open Kaiku", symbol: "macwindow",
                                 shortcut: KeyboardShortcut("l", modifiers: .command)) { openRecordings() }],
                 onSettings: {
                     closePanel()

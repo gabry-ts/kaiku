@@ -67,14 +67,16 @@ enum Snapshots {
             }
         }
 
-        // Settings panes, in a window with a clear title bar like the real one, grown to
-        // the pane's height so long panes aren't cropped.
+        // Settings panes, in the main window like the real one, grown to the pane's height so
+        // long panes aren't cropped.
         func settings(_ name: String, _ pane: SettingsPane, dark: Bool) {
             AppNavigation.shared.open(pane)
-            snap(AnyView(SettingsView().environmentObject(state)), name: name, size: PUI.Window.settings,
-                 dark: dark, chrome: true, dir: dir, chromeless: false, growToContent: true)
+            AppNavigation.shared.showingSettings = true
+            snap(AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)), name: name,
+                 size: CGSize(width: 1100, height: 720), dark: dark, chrome: true, dir: dir, growToContent: true)
+            AppNavigation.shared.showingSettings = false
         }
-        for pane in SettingsPane.available {
+        for pane in SettingsPane.allCases {
             for dark in [false, true] { settings("settings-\(pane.rawValue)-\(dark ? "dark" : "light")", pane, dark: dark) }
         }
         if LiveTranscription.isSupported {
@@ -202,7 +204,7 @@ enum Snapshots {
         let question = ChatMessage(role: .user, text: "What did we decide about billing and the roadmap?")
         let answer = ChatMessage(role: .assistant, text: Fixtures.chatAnswer(design))
         state.librarySelection = folders[0].key
-        LibraryView.initialMode = .chat
+        AppNavigation.shared.mode = .chat
         let chatView = { AnyView(LibraryView().environmentObject(state).defaultAppStorage(defaults)) }
         state.chat.setPreview(ChatConversation(calls: chatCalls))
         both("chat-empty", size: CGSize(width: 1100, height: 720), chatView)
@@ -216,7 +218,7 @@ enum Snapshots {
         both("chat-answering", size: CGSize(width: 1100, height: 720), chatView)
         state.chat.setPreview(ChatConversation())
         snap(chatView(), name: "chat-nocalls-light", size: CGSize(width: 1100, height: 720), dark: false, chrome: true, dir: dir)
-        LibraryView.initialMode = .call
+        AppNavigation.shared.mode = .call
         // The calls picker, as shown in its popover.
         state.chat.setPreview(ChatConversation(calls: chatCalls))
         let items = LibraryItem.loadAll(base: library)

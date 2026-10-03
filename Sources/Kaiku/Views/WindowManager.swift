@@ -34,35 +34,34 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// Top center of the title prompt when it opened; it grows downwards from there.
     private var titleAnchor: NSPoint?
 
-    /// Opens Settings on `pane` (the last one shown when nil), scrolled to the row `anchor`.
-    /// An open Settings window switches to it.
+    /// Opens the main window on Settings, on `pane` (the last one shown when nil), scrolled to
+    /// the row `anchor`. An open window switches to it.
     func showSettings(_ pane: SettingsPane? = nil, anchor: String? = nil) {
         AppNavigation.shared.open(pane, anchor: anchor)
-        let view = SettingsView().environmentObject(AppState.shared)
-        // A full-size content view under a clear title bar, so Partiti UI's floating
-        // sidebar runs under the traffic lights and each pane carries its own header.
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: PUI.Window.settings),
-                              styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
-                              backing: .buffered, defer: false)
-        window.puiConfigureForSettings()
-        window.minSize = PUI.Window.settingsMin
-        // A fixed, small window: no resizing, zoom or full screen.
-        window.styleMask.remove(.resizable)
-        window.collectionBehavior.insert(.fullScreenNone)
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
-        present(id: "settings", window: window, view: view, title: "Settings", recreate: false,
-                size: PUI.Window.settings)
+        AppNavigation.shared.showingSettings = true
+        showMain()
     }
 
+    /// Opens the main window on the calls.
     func showLibrary() {
+        AppNavigation.shared.closeSettings()
+        showMain()
+    }
+
+    /// The main window, Kaiku: the calls, the chat and Settings in one resizable window.
+    private func showMain() {
         let view = LibraryView().environmentObject(AppState.shared).defaultAppStorage(AppSettings.defaults)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 680),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
                               styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.toolbarStyle = .unified
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.setFrameAutosaveName("kaiku.library")
-        present(id: "library", window: window, view: view, title: "Recordings", recreate: false, bridgeToolbar: true)
+        present(id: Self.mainID, window: window, view: view, title: "Kaiku", recreate: false, bridgeToolbar: true)
     }
+
+    /// Id of the main window.
+    static let mainID = "main"
 
     func showOnboarding(accessibilityOnly: Bool = false) {
         let view = OnboardingView(accessibilityOnly: accessibilityOnly, finish: { [weak self] in self?.close("onboarding") })
@@ -149,7 +148,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         window.delegate = self
         window.identifier = NSUserInterfaceItemIdentifier(id)
         if let size { window.setContentSize(size) }
-        window.center()
+        if window.frameAutosaveName.isEmpty || !window.setFrameUsingName(window.frameAutosaveName) { window.center() }
         windows[id] = window
         updateDockPresence()
         NSApp.activate(ignoringOtherApps: true)
@@ -182,10 +181,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
         updateDockPresence()
     }
 
-    /// Windows that put Kaiku in the Dock and the app switcher while open, so they are easy to find again.
-    private static let dockWindows: Set<String> = ["settings", "library"]
+    /// The window that puts Kaiku in the Dock and the app switcher while open, so it is easy to find again.
+    private static let dockWindows: Set<String> = [mainID]
 
-    /// A Dock icon while one of `dockWindows` is open (when enabled), else menu bar only.
+    /// A Dock icon while the main window is open (when enabled), else menu bar only.
     func updateDockPresence() {
         let show = AppSettings.showInDock && windows.keys.contains { Self.dockWindows.contains($0) }
         let policy: NSApplication.ActivationPolicy = show ? .regular : .accessory

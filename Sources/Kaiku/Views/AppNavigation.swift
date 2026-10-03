@@ -15,11 +15,16 @@ struct SettingsTarget: Equatable {
     }
 }
 
-/// Which pane the settings show, and the row a pane should scroll to when it appears.
+/// What the main window shows: the calls or the chat, or Settings with its pane and the row
+/// a pane should scroll to when it appears.
 @MainActor
 final class AppNavigation: ObservableObject {
     static let shared = AppNavigation()
 
+    /// Settings replace the calls in the sidebar and the detail column.
+    @Published var showingSettings = false
+    /// The calls or the chat, shown when Settings aren't.
+    @Published var mode = LibraryDetailMode.call
     @Published var pane: SettingsPane = .general
     /// The row waiting for its pane to scroll to it.
     @Published var request: SettingsTarget?
@@ -32,6 +37,12 @@ final class AppNavigation: ObservableObject {
         let pane = pane ?? self.pane
         self.pane = pane
         request = anchor.map { SettingsTarget(pane, $0) }
+    }
+
+    /// Back to the calls, as they were left.
+    func closeSettings() {
+        showingSettings = false
+        request = nil
     }
 
     /// True when a pane should open the disclosure or expandable row holding one of `anchors`.
