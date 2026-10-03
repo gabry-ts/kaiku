@@ -33,7 +33,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5.0</string>
+	<string>1.6.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -46,28 +46,28 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>12</string>
+	<string>13</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.2</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Kaiku records system audio (the other people on the call) so it can be transcribed.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Kaiku reads the event happening now to name your recording and suggest speaker names.</string>
-	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Kaiku adds the action items of a call to the Reminders list you choose, when you send them.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kaiku records your microphone during calls so they can be transcribed.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Kaiku adds the action items of a call to the Reminders list you choose, when you send them.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Kaiku shows what is being said during a call with the speech recognizer on this Mac.</string>
 	<key>SUFeedURL</key>
