@@ -129,7 +129,11 @@ struct LibraryView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 1) {
                     MainSidebarButton(title: "Calls", symbol: "phone.fill", selected: mode == .call) { mode = .call }
-                    MainSidebarButton(title: "Chat", symbol: "bubble.left.and.text.bubble.right.fill", selected: mode == .chat) { mode = .chat }
+                    MainSidebarButton(title: "Chat", symbol: "bubble.left.and.text.bubble.right.fill", selected: mode == .chat) {
+                        // A new chat each time, unless one is still answering; saved chats stay in the history.
+                        if !state.chat.isAnswering { state.chat.newChat() }
+                        mode = .chat
+                    }
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -1002,6 +1006,11 @@ private struct RecordingDetail: View {
             TextSizeControl(size: $textSize)
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            Button { request(.chat([item.folder])) } label: {
+                Label("Chat About This Call", systemImage: "bubble.left.and.text.bubble.right")
+            }
+            .help("Chat about this call")
+            .disabled(!item.folder.hasTranscript)
             Button { copy(item.folder) } label: { Label("Copy Transcript", systemImage: "doc.on.doc") }
                 .help("Copy transcript")
                 .disabled(!item.folder.hasTranscript)
