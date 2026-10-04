@@ -136,7 +136,9 @@ struct LibraryView: View {
                 smartSearchBar
                 if !allTags.isEmpty { filterBar(allTags, selection: $tagFilter) }
                 if !allSources.isEmpty { filterBar(allSources, selection: $sourceFilter, symbol: "dot.radiowaves.left.and.right") }
+                Divider()
             }
+            .background(.bar)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
