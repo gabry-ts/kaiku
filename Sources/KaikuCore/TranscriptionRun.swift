@@ -1,0 +1,233 @@
+import Foundation
+
+/// Turns a recording folder into segments.json + transcript.md.
+public enum TranscriptionRun {
+    /// What a run reads from the app's settings.
+    public struct Config: Sendable {
+        /// Saved as the call's provider, e.g. "OpenAI".
+        public var providerDisplayName: String
+        /// The cloud model sent to, for the cost estimate; nil for providers on this device.
+        public var modelID: String?
+        public var trim: Bool
+        public var trimOptions: SilenceTrimmer.Options
+        public var meLabel: String
+        public var othersLabel: String
+        public var removeEcho: Bool
+        public var priceOverrides: [String: Double]
+
+        public init(providerDisplayName: String, modelID: String?, trim: Bool, trimOptions: SilenceTrimmer.Options,
+                    meLabel: String, othersLabel: String, removeEcho: Bool, priceOverrides: [String: Double]) {
+            self.providerDisplayName = providerDisplayName
+            self.modelID = modelID
+            self.trim = trim
+            self.trimOptions = trimOptions
+            self.meLabel = meLabel
+            self.othersLabel = othersLabel
+            self.removeEcho = removeEcho
+            self.priceOverrides = priceOverrides
+        }
+    }
+
+    /// Saved as the error of a call whose transcription was cancelled.
+    public static let cancelledMessage = "Transcription cancelled."
+
+    /// `makeProvider` is called once the audio is ready, so a missing key fails at the same point as always.
+    public static func run(folder: RecordingFolder, config: Config, makeProvider: () throws -> TranscriptionProvider,
+                           progress: @escaping @MainActor (String) -> Void = { _ in }) async throws {
+        guard var meta = folder.loadMeta() else {
+            throw ProviderError(message: "meta.json missing in \(folder.url.path)")
+        }
+        meta.status = .transcribing
+        meta.error = nil
+        try? folder.saveMeta(meta)
+
+        do {
+            try await transcribe(folder: folder, meta: &meta, config: config, makeProvider: makeProvider, progress: progress)
+        } catch {
+            // The canceller has already updated meta.json, and may have started a new run.
+            if Task.isCancelled { throw CancellationError() }
+            Log.transcription.error("Transcription failed: \(error.diagnosticDescription, privacy: .public)")
+            // Re-read, so edits made in the library while this job ran are kept.
+            let message = error.diagnosticDescription
+            folder.updateMeta {
+                $0.status = .error
+                $0.error = message
+            }
+            throw error
+        }
+    }
+
+    private static func transcribe(folder: RecordingFolder, meta: inout RecordingMeta, config: Config,
+                                   makeProvider: () throws -> TranscriptionProvider,
+                                   progress: @MainActor (String) -> Void) async throws {
+        let fm = FileManager.default
+        let hasMic = fm.fileExists(atPath: folder.micURL.path)
+        let hasSystem = fm.fileExists(atPath: folder.systemURL.path)
+        guard hasMic || hasSystem else { throw ProviderError(message: "No audio files in \(folder.url.path)") }
+
+        await progress("Preparing audio…")
+        // Mixed file for listening; not fatal if it fails.
+        if hasMic && hasSystem && !fm.fileExists(atPath: folder.mixedURL.path) {
+            try? await AudioTools.mix(mic: folder.micURL, system: folder.systemURL, output: folder.mixedURL)
+        }
+
+        try Task.checkCancellation()
+        let provider = try makeProvider()
+        Log.transcription.info("Transcribing \(folder.url.lastPathComponent, privacy: .public) with \(provider.name, privacy: .public)")
+        let language: String? = meta.language == "auto" ? nil : meta.language
+        var all: [Segment] = []
+        var detected: [String] = []
+        var sentSeconds = 0.0
+        let trim = config.trim
+        let options = config.trimOptions
+        let workDir = try AudioTools.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: workDir) }
+
+        let steps = (hasMic ? 1 : 0) + (hasSystem ? 1 : 0)
+        func track(_ url: URL, cache: URL, diarize: Bool) async throws -> TrackCache {
+            try await transcribeTrack(url, cache: cache, provider: provider, language: language, diarize: diarize,
+                                      trim: trim, options: options, dir: workDir)
+        }
+        if hasMic {
+            await progress(steps > 1 ? "Transcribing your microphone (1 of 2)…" : "Transcribing your microphone…")
+            let r = try await track(folder.micURL, cache: folder.micPartialURL, diarize: false)
+            sentSeconds += r.seconds
+            let me = config.meLabel
+            all += r.segments.map { var s = $0; s.speaker = me; return s }
+            if let l = r.detectedLanguage { detected.append(l) }
+            try Task.checkCancellation()
+        }
+        let systemDuration = await Task.detached { AudioFiles.duration(folder.systemURL) }.value
+        if hasSystem, (systemDuration ?? 0) > 0.5 {
+            await progress(steps > 1 ? "Transcribing call audio (2 of 2)…" : "Transcribing call audio…")
+            let diarize = provider.supportsDiarization
+            let r = try await track(folder.systemURL, cache: folder.systemPartialURL, diarize: diarize)
+            sentSeconds += r.seconds
+            if diarize && r.segments.contains(where: { $0.speaker != nil }) {
+                all += TranscriptFormatter.normalizeSpeakers(r.segments)
+            } else {
+                let others = config.othersLabel
+                all += r.segments.map { var s = $0; s.speaker = others; return s }
+            }
+            if let l = r.detectedLanguage { detected.append(l) }
+        }
+
+        try Task.checkCancellation()
+        await progress("Writing transcript…")
+        let uniqueDetected = detected.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        meta.status = .done
+        meta.error = nil
+        meta.provider = config.providerDisplayName
+        meta.model = provider.name
+        meta.detectedLanguage = uniqueDetected.isEmpty ? nil : uniqueDetected.joined(separator: ", ")
+        let modelID = config.modelID
+        meta.modelID = modelID
+        meta.transcribedSeconds = sentSeconds
+        if let modelID {
+            meta.estimatedCostUSD = CostEstimator.pricePerHour(model: modelID, overrides: config.priceOverrides)
+                .map { CostEstimator.estimate(seconds: sentSeconds, pricePerHour: $0) }
+        } else {
+            meta.estimatedCostUSD = 0
+        }
+
+        // Drop the other people's voices picked up by the mic from the speakers.
+        if config.removeEcho, let routes = meta.outputRoutes, routes.contains(where: { !$0.isHeadphones }) {
+            all = EchoFilter.markEchoes(all, meLabel: config.meLabel, routes: routes)
+            let n = all.filter { $0.droppedAsEcho == true }.count
+            if n > 0 { Log.transcription.info("Hid \(n) echoed microphone segments") }
+        }
+        // Keep edits made in the library while this job ran: only the transcription
+        // fields are taken from this run.
+        if var latest = folder.loadMeta() {
+            latest.status = meta.status
+            latest.error = meta.error
+            latest.provider = meta.provider
+            latest.model = meta.model
+            latest.detectedLanguage = meta.detectedLanguage
+            latest.modelID = meta.modelID
+            latest.transcribedSeconds = meta.transcribedSeconds
+            latest.estimatedCostUSD = meta.estimatedCostUSD
+            meta = latest
+        }
+        autoNameSpeaker(&meta, segments: all, meLabel: config.meLabel)
+        try folder.saveSegments(all)
+        try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: all)
+        try? folder.saveMeta(meta)
+        folder.removePartials()
+    }
+
+    /// Names the only other speaker after the only other attendee of the calendar event.
+    public static func autoNameSpeaker(_ meta: inout RecordingMeta, segments: [Segment], meLabel: String) {
+        guard let found = SpeakerAutoName.assignment(event: meta.calendarEvent, speakers: TranscriptWriter.speakers(in: segments),
+                                                     meLabel: meLabel, existing: meta.speakerNames) else { return }
+        meta.speakerNames = (meta.speakerNames ?? [:]).merging([found.speaker: found.name]) { _, new in new }
+    }
+
+    /// Transcribes one track. The result is saved to `cache` so that, if a later step fails,
+    /// trying again with the same settings reuses it instead of paying for it again.
+    private static func transcribeTrack(_ url: URL, cache: URL, provider: TranscriptionProvider, language: String?,
+                                        diarize: Bool, trim: Bool, options: SilenceTrimmer.Options, dir: URL) async throws -> TrackCache {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let key = TrackCache.Key(provider: provider.name, language: language, trim: trim ? options : nil,
+                                 audioBytes: (attributes?[.size] as? NSNumber)?.int64Value ?? 0,
+                                 audioModified: (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
+        if let saved = TrackCache.reusable(try? Data(contentsOf: cache), for: key) {
+            Log.transcription.info("Reusing the saved result for \(url.lastPathComponent, privacy: .public)")
+            return saved
+        }
+        let input = await prepare(url, trim: trim, options: options, dir: dir)
+        try Task.checkCancellation()
+        guard !input.skip else { return TrackCache(key: key, segments: [], detectedLanguage: nil, seconds: 0) }
+        // Chunked providers save each finished chunk, so a retry only sends what failed.
+        let chunkCache = ChunkCache(url: cache.deletingPathExtension().appendingPathExtension("chunks.json"), key: key)
+        let r = try await ChunkCache.$current.withValue(chunkCache) {
+            try await provider.transcribe(fileURL: input.url, language: language, diarize: diarize)
+        }
+        let result = TrackCache(key: key, segments: input.remap(r.segments), detectedLanguage: r.detectedLanguage, seconds: input.seconds)
+        try? JSONEncoder().encode(result).write(to: cache, options: .atomic)
+        return result
+    }
+
+    /// The file actually sent to the provider, and how to map its times back.
+    public struct Input {
+        public let url: URL
+        public let map: TimeMap?
+        public let seconds: Double
+        /// The track is only silence, so there is nothing to send.
+        public var skip = false
+        public func remap(_ segments: [Segment]) -> [Segment] { map?.remap(segments) ?? segments }
+    }
+
+    /// With trimming on, cuts long silences into a temporary file for the provider only.
+    /// The original audio is never modified. Falls back to the original on any problem
+    /// or when there is little to cut.
+    public static func prepare(_ url: URL, trim: Bool, options: SilenceTrimmer.Options, dir: URL) async -> Input {
+        let work = Task.detached(priority: .userInitiated) { () -> Input in
+            let original = AudioFiles.duration(url) ?? 0
+            guard trim else { return Input(url: url, map: nil, seconds: original) }
+            do {
+                let (peaks, duration) = try AudioFiles.peaks(url, window: 0.05)
+                let silences = SilenceTrimmer.silences(peaks: peaks, window: 0.05, options: options)
+                let map: TimeMap
+                switch SilenceTrimmer.plan(duration: duration, silences: silences, padding: options.padding) {
+                case .skip:
+                    Log.transcription.info("Skipped \(url.lastPathComponent, privacy: .public): only silence")
+                    return Input(url: url, map: nil, seconds: 0, skip: true)
+                case .original:
+                    return Input(url: url, map: nil, seconds: duration)
+                case .trimmed(let m):
+                    map = m
+                }
+                let out = dir.appendingPathComponent("trimmed-" + url.deletingPathExtension().lastPathComponent + ".m4a")
+                try AudioFiles.writeRanges(url, keep: map.keep, output: out)
+                Log.transcription.info("Trimmed \(url.lastPathComponent, privacy: .public): \(Int(duration)) s -> \(Int(map.trimmedDuration)) s")
+                return Input(url: out, map: map, seconds: map.trimmedDuration)
+            } catch {
+                Log.transcription.error("Silence trimming skipped: \(error.diagnosticDescription, privacy: .public)")
+                return Input(url: url, map: nil, seconds: original)
+            }
+        }
+        // Cancelling the job stops the trimming too; the caller checks for cancellation next.
+        return await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+    }
+}
