@@ -1,0 +1,66 @@
+name: Kaiku
+options:
+  bundleIdPrefix: com.gabrielepartiti.kaiku
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: X3G5QJ3P5A
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  Kaiku:
+    path: ..
+targets:
+  KaikuiOS:
+    type: application
+    platform: iOS
+    sources:
+      - Kaiku
+      - Shared
+    dependencies:
+      - package: Kaiku
+        product: KaikuCore
+      - framework: vendor/whisper.xcframework
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: Kaiku
+        PRODUCT_BUNDLE_IDENTIFIER: com.gabrielepartiti.kaiku.ios
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Kaiku/Info.plist
+      properties:
+        CFBundleDisplayName: Kaiku
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - audio
+        NSMicrophoneUsageDescription: Kaiku records meetings with the microphone.
+        NSSpeechRecognitionUsageDescription: Kaiku transcribes recordings with the speech recognizer on this iPhone.
+        NSLocalNetworkUsageDescription: Kaiku connects to transcription and AI servers on your local network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.gabrielepartiti.kaiku.ios.transcribe.*
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Kaiku/Kaiku.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.gabrielepartiti.kaiku.ios
+schemes:
+  Kaiku:
+    build:
+      targets:
+        KaikuiOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "Kaiku",
     platforms: [.macOS("14.2"), .iOS("26.0")],
+    products: [
+        .library(name: "KaikuCore", targets: ["KaikuCore"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
         .package(url: "https://github.com/gabry-ts/partiti-ui", from: "0.3.0"),
