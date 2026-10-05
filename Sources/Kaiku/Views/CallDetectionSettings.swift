@@ -362,6 +362,8 @@ private struct DetectionSection: View {
                     SettingsRow("Stop after") {
                         Picker("Stop after", selection: $autoStop) {
                             Text("Never").tag(0)
+                            Text("Right away").tag(1)
+                            Text("10 seconds").tag(10)
                             Text("30 seconds").tag(30)
                             Text("1 minute").tag(60)
                             Text("2 minutes").tag(120)

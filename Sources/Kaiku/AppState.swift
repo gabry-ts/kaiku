@@ -742,9 +742,10 @@ final class AppState: ObservableObject {
     }
 
     func meetingEnded(app: String, behavior: CallEndBehavior) {
-        guard isRecording, behavior.notifies else { return }
-        Notifier.shared.postCallEnded(app: app, asks: behavior == .ask,
-                                      autoStopSeconds: behavior.autoStopSeconds(delay: AppSettings.detectAutoStopSeconds))
+        let seconds = behavior.autoStopSeconds(delay: AppSettings.detectAutoStopSeconds)
+        // Right away: "Recording stopped" follows within a check, so no "Call ended" before it.
+        guard isRecording, behavior.notifies, seconds == 0 || seconds >= 10 else { return }
+        Notifier.shared.postCallEnded(app: app, asks: behavior == .ask, autoStopSeconds: seconds)
     }
 
     func meetingAutoStop() {
