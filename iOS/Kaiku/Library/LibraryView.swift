@@ -4,6 +4,7 @@ import KaikuCore
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var store
     @Environment(PhoneJobs.self) private var jobs
+    private var importer = PhoneImporter.shared
     @State private var query = ""
     @State private var pendingDelete: RecordingFolder?
 
@@ -11,6 +12,9 @@ struct LibraryView: View {
         NavigationStack {
             let calls = store.calls(matching: query)
             List {
+                if let status = importer.status {
+                    Section { HStack { ProgressView(); Text(status).padding(.leading, 8) } }
+                }
                 ForEach(calls, id: \.folder.id) { entry in
                     NavigationLink(value: entry.folder) { CallRow(meta: entry.meta, working: jobs.status(for: entry.folder)) }
                         .swipeActions {
@@ -28,6 +32,7 @@ struct LibraryView: View {
             .navigationTitle("Library")
             .navigationDestination(for: RecordingFolder.self) { CallDetailView(folder: $0) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { ImportButton() }
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
                         ChatView(title: "Ask your calls", calls: store.calls.filter { $0.folder.hasTranscript })
@@ -38,6 +43,11 @@ struct LibraryView: View {
             }
             .searchable(text: $query, prompt: "Search calls and transcripts")
             .refreshable { store.reload() }
+            .alert("Import problems", isPresented: Binding(get: { !importer.problems.isEmpty }, set: { if !$0 { importer.problems = [] } })) {
+                Button("OK") { importer.problems = [] }
+            } message: {
+                Text(importer.problems.joined(separator: "\n"))
+            }
             .confirmationDialog("Delete this call?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
                     if let folder = pendingDelete { store.delete(folder) }

@@ -5,6 +5,7 @@ struct KaikuApp: App {
     @State private var recorder = MeetingRecorder()
     @State private var store = LibraryStore()
     @State private var jobs = PhoneJobs.shared
+    @Environment(\.scenePhase) private var scenePhase
     private let launch = Date()
 
     init() {
@@ -19,6 +20,9 @@ struct KaikuApp: App {
                 .environment(jobs)
                 .tint(Color("AccentColor"))
                 .transaction { $0.animation = nil }
+                .onChange(of: scenePhase) {
+                    if scenePhase == .active { ImportInbox.drain() }
+                }
                 .task {
                     recorder.onFinished = { folder in jobs.enqueue(folder) }
                     jobs.onChange = { store.reload() }
@@ -29,6 +33,7 @@ struct KaikuApp: App {
                         PhoneJobs.markInterrupted(base: PhoneSettings.baseFolder)
                     }.value
                     store.reload()
+                    ImportInbox.drain()
                 }
         }
     }
