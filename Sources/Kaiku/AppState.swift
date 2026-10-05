@@ -978,16 +978,7 @@ final class AppState: ObservableObject {
     }
 
     func makeFolder(date: Date, title: String) throws -> RecordingFolder {
-        let base = AppSettings.baseFolder
-        let name = Naming.folderName(date: date, title: title)
-        var url = base.appendingPathComponent(name, isDirectory: true)
-        var n = 2
-        while FileManager.default.fileExists(atPath: url.path) {
-            url = base.appendingPathComponent("\(name)-\(n)", isDirectory: true)
-            n += 1
-        }
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return RecordingFolder(url: url)
+        try RecordingFolder.create(base: AppSettings.baseFolder, date: date, title: title)
     }
 
     /// Tells once per recording when audio can't be written (e.g. the disk is full).

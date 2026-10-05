@@ -193,21 +193,12 @@ enum KeyTester {
 
     static func test(_ service: AccountService) async -> (ok: Bool, message: String) {
         let key = service.key ?? ""
+        if let check = keyCheck(service) {
+            if key.isEmpty { return (false, "Add a key first.") }
+            return await KeyCheck.test(check, key: key, name: service.displayName)
+        }
         var request: URLRequest
         switch service {
-        case .openAI:
-            request = get("https://api.openai.com/v1/models", bearer: key)
-        case .groq:
-            request = get("https://api.groq.com/openai/v1/models", bearer: key)
-        case .openRouter:
-            request = get("https://openrouter.ai/api/v1/key", bearer: key)
-        case .anthropic:
-            request = get("https://api.anthropic.com/v1/models", bearer: nil)
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        case .elevenLabs:
-            request = get("https://api.elevenlabs.io/v1/user", bearer: nil)
-            request.setValue(key, forHTTPHeaderField: "xi-api-key")
         case .linear:
             request = URLRequest(url: ActionItems.linearEndpoint, timeoutInterval: 15)
             request.httpMethod = "POST"
@@ -221,7 +212,7 @@ enum KeyTester {
             guard let url = SummaryProviderKind.custom.probeURL else { return (false, "Add the server address first.") }
             request = URLRequest(url: url, timeoutInterval: 5)
             if !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
-        case .alibaba, .claudeCode, .codex, .opencode:
+        default:
             return (false, "Nothing to test.")
         }
         if service.keyAccount != nil, service != .custom, key.isEmpty { return (false, "Add a key first.") }
@@ -245,10 +236,16 @@ enum KeyTester {
         }
     }
 
-    private static func get(_ url: String, bearer: String?) -> URLRequest {
-        var request = URLRequest(url: URL(string: url)!, timeoutInterval: 15)
-        if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
-        return request
+    /// The services whose key is checked by KaikuCore.
+    private static func keyCheck(_ service: AccountService) -> KeyCheck.Service? {
+        switch service {
+        case .openAI: return .openAI
+        case .groq: return .groq
+        case .openRouter: return .openRouter
+        case .anthropic: return .anthropic
+        case .elevenLabs: return .elevenLabs
+        default: return nil
+        }
     }
 
     /// The organization name in Linear's answer to the viewer query; nil when it reports errors.

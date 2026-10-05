@@ -202,6 +202,19 @@ public struct RecordingFolder: Identifiable, Hashable, Sendable {
         return d
     }()
 
+    /// Makes a new folder named after the call under `base`, with a number added when the name is taken.
+    public static func create(base: URL, date: Date, title: String) throws -> RecordingFolder {
+        let name = Naming.folderName(date: date, title: title)
+        var url = base.appendingPathComponent(name, isDirectory: true)
+        var n = 2
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = base.appendingPathComponent("\(name)-\(n)", isDirectory: true)
+            n += 1
+        }
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return RecordingFolder(url: url)
+    }
+
     /// All recording folders under the base folder that contain a meta.json.
     public static func scan(base: URL) -> [RecordingFolder] {
         let items = (try? FileManager.default.contentsOfDirectory(

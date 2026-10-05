@@ -11,20 +11,11 @@ enum SummaryJob {
         if let problem = kind.problem {
             throw ProviderError(message: "\(problem) Check Settings > AI > Summaries.")
         }
-        let meta = folder.loadMeta()
         let model = AppSettings.summaryModel(for: kind)
-        let dayFormat = DateFormatter()
-        dayFormat.dateFormat = "yyyy-MM-dd"
-        let day = dayFormat.string(from: meta?.date ?? Date())
-        let prompt = SummaryAPI.renderPrompt(template: AppSettings.summaryPrompt, title: meta?.title ?? "", transcript: transcript)
-            + ActionItems.promptSuffix(callDate: day)
-
-        let answer = try await complete(kind: kind, model: model, prompt: prompt)
-        // The action items come as a json block after the summary; without a valid one there are none.
-        let (text, items) = ActionItems.split(answer)
-        try (text + "\n").write(to: folder.summaryURL, atomically: true, encoding: .utf8)
-        try? folder.saveActionItems(ActionItems.merge(items, keepingSentFrom: folder.loadActionItems()))
-        folder.updateMeta { $0.summaryModel = "\(kind.displayName) (\(model))" }
+        try await CallSummary.write(folder: folder, transcript: transcript, template: AppSettings.summaryPrompt,
+                                    modelLabel: "\(kind.displayName) (\(model))") { prompt in
+            try await complete(kind: kind, model: model, prompt: prompt)
+        }
     }
 
     /// Sends one prompt to the provider and returns the text of its answer.
@@ -38,22 +29,20 @@ enum SummaryJob {
         if kind.requiresModel, model.trimmingCharacters(in: .whitespaces).isEmpty {
             throw ProviderError(message: "\(kind.displayName) needs a model.")
         }
+        return try await LLMEndpoint(kind).complete(model: model, prompt: prompt, maxTokens: maxTokens, timeout: timeout)
+    }
+}
+
+extension LLMEndpoint {
+    /// The HTTP API behind a summary provider; throws for command-line tools and a server without an address.
+    init(_ kind: SummaryProviderKind) throws {
         let key = kind.apiKey ?? ""
         switch kind {
         case .anthropic:
-            let data = try await HTTP.postJSON(
-                URL(string: "https://api.anthropic.com/v1/messages")!,
-                body: try SummaryAPI.anthropicBody(model: model, prompt: prompt, maxTokens: maxTokens),
-                headers: ["x-api-key": key, "anthropic-version": "2023-06-01"], timeout: timeout)
-            return try SummaryAPI.parseAnthropic(data)
+            self.init(name: kind.displayName, style: .anthropic, apiKey: key)
         case .openAI, .groq, .openRouter, .ollama, .custom:
             guard let base = kind.chatCompletionsBase else { throw ProviderError(message: "No \(kind.displayName) server address yet.") }
-            let data = try await HTTP.postJSON(
-                URL(string: base + "/chat/completions")!,
-                body: try SummaryAPI.chatCompletionsBody(model: model, prompt: prompt),
-                // Local servers usually take no key.
-                headers: key.isEmpty ? [:] : ["Authorization": "Bearer \(key)"], timeout: timeout)
-            return try SummaryAPI.parseChatCompletions(data)
+            self.init(name: kind.displayName, style: .chatCompletions(base: base), apiKey: key, streamFallback: kind == .openAI)
         case .claudeCode, .codex, .opencode:
             throw ProviderError(message: "\(kind.displayName) runs as a command-line tool.")
         }
