@@ -3,10 +3,7 @@ import KaikuCore
 import PartitiUI
 import Security
 
-enum ProviderKind: String, CaseIterable, Identifiable, Codable {
-    case whisperCpp, apple, elevenLabs, openAI, groq, alibaba
-    var id: String { rawValue }
-
+extension ProviderKind {
     var displayName: String {
         switch self {
         case .whisperCpp: return "whisper.cpp (on this Mac)"
@@ -17,19 +14,6 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         case .alibaba: return "Alibaba Cloud"
         }
     }
-
-    var defaultModel: String {
-        switch self {
-        case .whisperCpp, .apple: return ""
-        case .elevenLabs: return "scribe_v2"
-        case .openAI: return "gpt-4o-mini-transcribe"
-        case .groq: return "whisper-large-v3-turbo"
-        case .alibaba: return "qwen3-asr-flash-filetrans"
-        }
-    }
-
-    var needsAPIKey: Bool { isCloud }
-    var isCloud: Bool { self != .whisperCpp && self != .apple }
 
     /// The providers that can run on this version of macOS.
     static var available: [ProviderKind] {
@@ -44,128 +28,21 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Where the optional summary is generated.
-enum SummaryProviderKind: String, CaseIterable, Identifiable {
-    case openAI, anthropic, groq, openRouter, claudeCode, codex, opencode, ollama, custom
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .openAI: return "OpenAI"
-        case .anthropic: return "Anthropic"
-        case .groq: return "Groq"
-        case .openRouter: return "OpenRouter"
-        case .claudeCode: return "Claude Code"
-        case .codex: return "Codex"
-        case .opencode: return "OpenCode"
-        case .ollama: return "Ollama"
-        case .custom: return "Custom (OpenAI-compatible)"
-        }
-    }
-
-    /// Runs on a server the user controls, usually on this Mac: Ollama or an OpenAI-compatible one.
-    var isLocal: Bool { self == .ollama || self == .custom }
-
+extension SummaryProviderKind {
     /// Address of the local server as typed in Settings, empty when unset.
     var baseURL: String {
         guard isLocal else { return "" }
         return AppSettings.defaults.string(forKey: Keys.baseURL(self)) ?? ""
     }
 
-    /// Hint for the address field.
-    var baseURLPlaceholder: String { self == .ollama ? LocalLLM.ollamaDefaultBase : "http://localhost:1234/v1" }
-
     /// Base of the OpenAI-style `/chat/completions` endpoint, nil for Anthropic, CLIs and a custom server without an address.
-    var chatCompletionsBase: String? {
-        switch self {
-        case .openAI: return "https://api.openai.com/v1"
-        case .groq: return "https://api.groq.com/openai/v1"
-        case .openRouter: return "https://openrouter.ai/api/v1"
-        case .ollama: return LocalLLM.ollamaChatBase(baseURL)
-        case .custom: return LocalLLM.customChatBase(baseURL)
-        case .anthropic, .claudeCode, .codex, .opencode: return nil
-        }
-    }
+    var chatCompletionsBase: String? { chatCompletionsBase(baseURL: baseURL) }
 
     /// A quick GET that answers whenever the local server is running.
-    var probeURL: URL? {
-        switch self {
-        case .ollama: return LocalLLM.ollamaTagsURL(baseURL)
-        case .custom: return LocalLLM.customModelsURL(baseURL)
-        default: return nil
-        }
-    }
-
-    /// The command-line tool behind it, nil for HTTP APIs.
-    var cli: CLITool? {
-        switch self {
-        case .claudeCode: return .claude
-        case .codex: return .codex
-        case .opencode: return .opencode
-        default: return nil
-        }
-    }
-
-    /// Empty when there is no sensible default to offer.
-    var defaultModel: String {
-        switch self {
-        case .openAI: return "gpt-5-mini"
-        case .anthropic: return "claude-sonnet-5"
-        case .groq: return "openai/gpt-oss-120b"
-        case .openRouter, .claudeCode, .codex, .opencode, .ollama, .custom: return ""
-        }
-    }
-
-    /// True when an empty model can't be sent.
-    var requiresModel: Bool { self == .openRouter || isLocal }
-
-    /// Shown in the model field when it's empty.
-    var modelPlaceholder: String {
-        if !defaultModel.isEmpty { return defaultModel }
-        return cli == nil ? "Required" : "CLI default"
-    }
-
-    /// What an empty model means and what to type, for providers without a default.
-    var modelHint: String? {
-        switch self {
-        case .openRouter: return "Required, as provider/model."
-        case .claudeCode: return "Empty uses the CLI default."
-        case .codex: return "Empty uses ~/.codex/config.toml."
-        case .opencode: return "provider/model; empty uses the CLI default."
-        case .ollama: return "Required, as listed by ollama list."
-        case .custom: return "Required, as the server names it."
-        default: return nil
-        }
-    }
+    var probeURL: URL? { probeURL(baseURL: baseURL) }
 
     /// True when the model menu has names to offer.
     var listsModels: Bool { self == .openRouter || self == .claudeCode || self == .opencode || self == .ollama }
-
-    /// Keychain account of the API key. OpenAI and Groq share the transcription keys.
-    var keyAccount: String {
-        switch self {
-        case .openAI: return ProviderKind.openAI.rawValue
-        case .anthropic: return "anthropic"
-        case .groq: return ProviderKind.groq.rawValue
-        case .openRouter: return "openrouter"
-        case .claudeCode, .codex, .opencode, .ollama, .custom: return rawValue
-        }
-    }
-
-    /// Tokens of transcript a chat sends at most, kept well under the model's context.
-    var chatContextTokens: Int {
-        switch self {
-        case .openAI: return 120_000
-        case .anthropic: return 150_000
-        case .groq, .openRouter: return 100_000
-        // Local models usually run with a smaller context.
-        case .ollama, .custom: return 32_000
-        case .claudeCode, .codex, .opencode: return 0
-        }
-    }
-
-    /// True when the key is entered with the summary settings, not shared with transcription.
-    var hasOwnKey: Bool { self == .anthropic || self == .openRouter || self == .custom }
 
     var keyURL: URL? {
         switch self {
@@ -666,107 +543,7 @@ enum AppSettings {
     }
 }
 
-/// Minimal Keychain wrapper for API keys (generic passwords).
-enum Keychain {
-    private static let service = "com.gabrielepartiti.kaiku"
-    /// Service name used before the app was renamed.
-    static let legacyService = "com.gabrielepartiti.mcrofone"
-
-    /// When set, used instead of the real Keychain (snapshot rendering).
-    static var mock: [String: String]?
-
-    /// Keychain failures other than "not found", by account, shown instead of "missing key".
-    private(set) static var errors: [String: String] = [:]
-
-    private static func describe(_ status: OSStatus) -> String {
-        (SecCopyErrorMessageString(status, nil) as String?) ?? "OSStatus \(status)"
-    }
-
-    static func get(_ account: String) -> String? {
-        if let mock { return mock[account] }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecSuccess || status == errSecItemNotFound { errors[account] = nil }
-        guard status == errSecSuccess, let data = item as? Data else {
-            if status != errSecSuccess && status != errSecItemNotFound {
-                // e.g. a locked keychain: not the same as a key never entered.
-                errors[account] = "Couldn't read \(account) from the Keychain: \(describe(status))"
-                Log.app.error("Keychain read failed for \(account, privacy: .public): \(describe(status), privacy: .public)")
-            }
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Saves `value` (an empty one deletes the item). Updates in place, so a failure never
-    /// loses the key saved before. Returns false when the Keychain refused.
-    @discardableResult
-    static func set(_ value: String, for account: String) -> Bool {
-        if mock != nil { mock?[account] = value; return true }
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        var status: OSStatus
-        if value.isEmpty {
-            status = SecItemDelete(base as CFDictionary)
-            if status == errSecItemNotFound { status = errSecSuccess }
-        } else {
-            let data = Data(value.utf8)
-            status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-            if status == errSecItemNotFound {
-                var add = base
-                add[kSecValueData as String] = data
-                status = SecItemAdd(add as CFDictionary, nil)
-            }
-        }
-        guard status == errSecSuccess else {
-            errors[account] = "Couldn't save \(account) in the Keychain: \(describe(status))"
-            Log.app.error("Keychain write failed for \(account, privacy: .public): \(describe(status), privacy: .public)")
-            return false
-        }
-        errors[account] = nil
-        return true
-    }
-
-    /// Copies every generic password of `from` that `service` does not have yet, keeping
-    /// the originals. Returns the number of items copied.
-    static func copyItems(from legacy: String) -> Int {
-        let list: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: legacy,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(list as CFDictionary, &result) == errSecSuccess,
-              let items = result as? [[String: Any]] else { return 0 }
-        var copied = 0
-        for account in items.compactMap({ $0[kSecAttrAccount as String] as? String }) where get(account) == nil {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: legacy,
-                kSecAttrAccount as String: account,
-                kSecReturnData as String: true,
-                kSecMatchLimit as String: kSecMatchLimitOne,
-            ]
-            var item: CFTypeRef?
-            guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-                  let data = item as? Data, let value = String(data: data, encoding: .utf8), !value.isEmpty else { continue }
-            set(value, for: account)
-            copied += 1
-        }
-        return copied
-    }
-
+extension Keychain {
     static func apiKey(for p: ProviderKind) -> String? {
         guard let v = get(p.rawValue)?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty else { return nil }
         return v

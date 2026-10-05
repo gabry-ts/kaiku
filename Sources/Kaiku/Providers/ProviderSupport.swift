@@ -104,27 +104,9 @@ enum ProviderTester {
 
 // MARK: - whisper.cpp models
 
-struct WhisperModel: Identifiable, Hashable {
-    let file: String
-    let name: String
-    let size: String
-    let note: String
-    var id: String { file }
-
-    var url: URL { URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(file)")! }
+extension WhisperModel {
     var localURL: URL { WhisperModels.directory.appendingPathComponent(file) }
     var isInstalled: Bool { FileManager.default.fileExists(atPath: localURL.path) }
-
-    static let catalog: [WhisperModel] = [
-        WhisperModel(file: "ggml-tiny.bin", name: "Tiny", size: "75 MB", note: "Fastest, rough quality"),
-        WhisperModel(file: "ggml-base.bin", name: "Base", size: "142 MB", note: "Fast, basic quality"),
-        WhisperModel(file: "ggml-small.bin", name: "Small", size: "466 MB", note: "Good balance"),
-        WhisperModel(file: "ggml-medium.bin", name: "Medium", size: "1.5 GB", note: "Accurate, slower"),
-        WhisperModel(file: "ggml-large-v3-turbo-q5_0.bin", name: "Large v3 Turbo (compact)", size: "547 MB", note: "Great quality, fast"),
-        WhisperModel(file: "ggml-large-v3-turbo.bin", name: "Large v3 Turbo", size: "1.6 GB", note: "Best quality"),
-    ]
-
-    static let recommended = catalog[4]
 }
 
 /// Downloads ggml models with progress into ~/Library/Application Support/Kaiku/models.
