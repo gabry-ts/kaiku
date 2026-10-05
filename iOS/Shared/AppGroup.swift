@@ -23,7 +23,12 @@ enum AppGroup {
     /// Darwin notification names, for waking the app from an extension.
     enum Notification {
         static let importReady = "\(id).import-ready"
-        static let broadcastStopped = "\(id).broadcast-stopped"
+        static let broadcastStarted = "com.gabrielepartiti.kaiku.ios.broadcast.started"
+        static let broadcastFinished = "com.gabrielepartiti.kaiku.ios.broadcast.finished"
+    }
+
+    static func post(_ name: String) {
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(name as CFString), nil, nil, true)
     }
 
     private static func directory(_ name: String) -> URL {

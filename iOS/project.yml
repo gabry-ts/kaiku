@@ -27,6 +27,7 @@ targets:
         embed: true
       - target: Widgets
       - target: Share
+      - target: Broadcast
     settings:
       base:
         PRODUCT_NAME: Kaiku
@@ -102,6 +103,30 @@ targets:
             NSExtensionActivationRule: 'SUBQUERY (extensionItems, $item, SUBQUERY ($item.attachments, $a, ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio" || ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" || ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.apple.m4a-audio").@count > 0 AND $item.attachments.@count <= 20).@count > 0'
     entitlements:
       path: Share/Share.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.gabrielepartiti.kaiku.ios
+  Broadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Broadcast
+      - Shared/AppGroup.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gabrielepartiti.kaiku.ios.broadcast
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Kaiku
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    entitlements:
+      path: Broadcast/Broadcast.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.gabrielepartiti.kaiku.ios

@@ -14,6 +14,7 @@ struct KaikuApp: App {
         RecordingIntentBridge.handler = recorder
         _recorder = State(initialValue: recorder)
         PhoneJobs.registerBackgroundTask()
+        ImportInbox.observeBroadcasts()
     }
 
     var body: some Scene {

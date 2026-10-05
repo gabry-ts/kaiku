@@ -42,6 +42,8 @@ struct RecordView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                BroadcastPicker()
+                    .padding(.bottom)
             }
             .frame(maxWidth: .infinity)
             .navigationTitle("Record")
