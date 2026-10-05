@@ -1,19 +1,8 @@
 import AVFoundation
 import AudioToolbox
 import CoreAudio
+import KaikuCore
 import os
-
-struct AudioCaptureError: LocalizedError {
-    let message: String
-    init(_ message: String, _ status: OSStatus? = nil) {
-        self.message = status.map { "\(message) (OSStatus \($0)\(fourCC(Int($0))))" } ?? message
-    }
-    /// Wraps an underlying error, keeping its domain and code.
-    init(_ message: String, underlying: Error) {
-        self.message = "\(message): \(underlying.diagnosticDescription)"
-    }
-    var errorDescription: String? { message }
-}
 
 /// Captures all system audio output with a Core Audio process tap (macOS 14.2+)
 /// routed through a private aggregate device, and hands the buffers to a TrackWriter.
@@ -257,19 +246,5 @@ final class SystemAudioTap {
         }
         // Release the writer on the IO queue so no write is in flight.
         queue.sync { self.writer?.close(); self.writer = nil }
-    }
-}
-
-enum AudioFileSettings {
-    /// AAC settings. No fixed bit rate on purpose: valid AAC bit rates depend on the
-    /// sample rate (e.g. 64 kbps is rejected at 16 kHz, which Bluetooth headsets use),
-    /// so the encoder picks one from the quality setting.
-    static func aac(sampleRate: Double, channels: AVAudioChannelCount) -> [String: Any] {
-        [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: min(Int(channels), 2),
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-        ]
     }
 }

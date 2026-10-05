@@ -1,4 +1,5 @@
 import AVFoundation
+import KaikuCore
 
 /// Records one specific input device with AVCaptureSession into a crash-safe CAF.
 /// Only that device is opened: the system default input (e.g. a Bluetooth headset,

@@ -1,5 +1,6 @@
 import CoreAudio
 import Foundation
+import KaikuCore
 
 /// A Core Audio device, as needed for picking the microphone and for diagnostics.
 struct AudioDevice: Identifiable, Hashable {
