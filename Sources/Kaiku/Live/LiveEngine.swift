@@ -36,23 +36,6 @@ protocol LiveEngine: AnyObject, Sendable {
     func stop() async
 }
 
-struct LiveEngineError: LocalizedError {
-    let message: String
-    init(_ message: String) { self.message = message }
-    var errorDescription: String? { message }
-}
-
-/// Whether an engine can run for a language, shown in Settings.
-enum LiveReadiness: Equatable {
-    case ready
-    /// A model has to be downloaded first; the text says which.
-    case needsDownload(String)
-    /// Downloading the model, 0...1.
-    case downloading(Double)
-    /// The engine can't be used, with the reason.
-    case unavailable(String)
-}
-
 /// The live engines this version ships. The settings picker lists `available`.
 enum LiveEngineKind: String, CaseIterable, Identifiable {
     /// The speech recognizer built into macOS, on device.

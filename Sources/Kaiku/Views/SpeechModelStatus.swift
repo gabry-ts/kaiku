@@ -1,3 +1,4 @@
+import KaikuCore
 import PartitiUI
 import SwiftUI
 

@@ -1,4 +1,5 @@
 import AVFoundation
+import KaikuCore
 
 /// Turns the recorded audio of one track into 16-bit mono PCM at a fixed rate, the form
 /// whisper and the streaming APIs take.
