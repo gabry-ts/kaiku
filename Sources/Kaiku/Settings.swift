@@ -205,26 +205,6 @@ enum TrimSilenceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Alibaba Cloud Model Studio region. API keys are issued per region.
-enum AlibabaRegion: String, CaseIterable, Identifiable {
-    case singapore, beijing
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .singapore: return "Singapore (international)"
-        case .beijing: return "Beijing (China)"
-        }
-    }
-
-    var host: String {
-        switch self {
-        case .singapore: return "dashscope-intl.aliyuncs.com"
-        case .beijing: return "dashscope.aliyuncs.com"
-        }
-    }
-}
-
 /// The text sizes the library offers for reading transcripts and summaries, in points.
 enum ReadingSize {
     static let steps: [Double] = [15, 17, 19.5, 22.5, 26]

@@ -1,5 +1,118 @@
 import Foundation
-import KaikuCore
+
+/// OpenAI `/audio/transcriptions` and compatible APIs (Groq).
+///
+/// Response format is picked from the model name:
+/// - `*diarize*` models: `diarized_json` (speaker labels + timestamps)
+/// - `whisper*` models: `verbose_json` (segment and word timestamps + language)
+/// - anything else (e.g. `gpt-4o-transcribe`): `json` (text only, no timestamps),
+///   so audio is sent in short chunks to keep the transcript roughly time-aligned.
+public struct OpenAICompatibleProvider: TranscriptionProvider {
+    public let label: String
+    public let baseURL: URL
+    public let apiKey: String
+    public let model: String
+
+    public init(label: String, baseURL: URL, apiKey: String, model: String) {
+        self.label = label
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.model = model
+    }
+
+    public var name: String { "\(label) (\(model))" }
+
+    private var isDiarizeModel: Bool { model.lowercased().contains("diarize") }
+    private var isWhisperModel: Bool { model.lowercased().hasPrefix("whisper") }
+    public var supportsDiarization: Bool { isDiarizeModel }
+
+    private var responseFormat: String {
+        isDiarizeModel ? "diarized_json" : (isWhisperModel ? "verbose_json" : "json")
+    }
+
+    /// Chunk length in seconds. Upload limit is 25 MB; at 32 kbps mono AAC 10 min is ~2.4 MB.
+    private var chunkSeconds: Int { (isDiarizeModel || isWhisperModel) ? 600 : 60 }
+
+    public func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
+        let dir = try AudioTools.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let chunks = try await AudioTools.chunks(fileURL, seconds: chunkSeconds, dir: dir)
+        var segments: [Segment] = []
+        var detected: String?
+        let cache = ChunkCache.current
+        for (index, chunk) in chunks.enumerated() {
+            if let saved = cache?.result(index: index, offset: chunk.offset) {
+                segments += saved.segments
+                detected = detected ?? saved.detectedLanguage
+                continue
+            }
+            var form = MultipartForm()
+            form.field("model", model)
+            form.field("response_format", responseFormat)
+            if isDiarizeModel { form.field("chunking_strategy", "auto") }
+            if responseFormat == "verbose_json" {
+                // Word times for the playback highlight; segments must be asked for too.
+                form.field("timestamp_granularities[]", "word")
+                form.field("timestamp_granularities[]", "segment")
+            }
+            if let language { form.field("language", language) }
+            try form.file("file", url: chunk.url, mime: "audio/mp4")
+
+            let data = try await HTTP.postMultipart(
+                baseURL.appendingPathComponent("audio/transcriptions"),
+                form: form, headers: ["Authorization": "Bearer \(apiKey)"])
+            var result = try ResponseParsers.openAI(data, offset: chunk.offset, chunkDuration: chunk.duration)
+            if isDiarizeModel {
+                // Speaker ids are only consistent within one request.
+                result.segments = result.segments.map { s in
+                    var c = s
+                    if let sp = s.speaker { c.speaker = "\(index)-\(sp)" }
+                    return c
+                }
+            }
+            if !diarize { result.segments = result.segments.map { var c = $0; c.speaker = nil; return c } }
+            cache?.save(result, index: index, offset: chunk.offset)
+            segments += result.segments
+            detected = detected ?? result.detectedLanguage
+        }
+        return TranscriptionResult(segments: segments, detectedLanguage: detected)
+    }
+}
+
+/// ElevenLabs Scribe: POST https://api.elevenlabs.io/v1/speech-to-text
+public struct ElevenLabsProvider: TranscriptionProvider {
+    public let apiKey: String
+    public let model: String
+
+    public init(apiKey: String, model: String) {
+        self.apiKey = apiKey
+        self.model = model
+    }
+
+    public var name: String { "ElevenLabs (\(model))" }
+    public var supportsDiarization: Bool { true }
+
+    public func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
+        let dir = try AudioTools.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let audio = dir.appendingPathComponent("audio.m4a")
+        try await AudioTools.compress(fileURL, output: audio)
+
+        var form = MultipartForm()
+        form.field("model_id", model)
+        form.field("diarize", diarize ? "true" : "false")
+        form.field("timestamps_granularity", "word")
+        form.field("tag_audio_events", "false")
+        if let language { form.field("language_code", language) }
+        try form.file("file", url: audio, mime: "audio/mp4")
+
+        let data = try await HTTP.postMultipart(
+            URL(string: "https://api.elevenlabs.io/v1/speech-to-text")!,
+            form: form, headers: ["xi-api-key": apiKey])
+        return try ResponseParsers.elevenLabs(data, diarized: diarize)
+    }
+}
 
 /// Alibaba Cloud Model Studio (DashScope). The flow is picked from the model name:
 /// - `qwen3-asr-flash*`: OpenAI-compatible `chat/completions`, text only and at most
@@ -7,15 +120,21 @@ import KaikuCore
 /// - every other model (`*-filetrans`, `fun-asr*`, `paraformer-*`): the recording is uploaded
 ///   to DashScope's temporary storage and transcribed by an asynchronous task, with sentence
 ///   timestamps.
-struct AlibabaProvider: TranscriptionProvider {
-    let region: AlibabaRegion
-    let apiKey: String
-    let model: String
+public struct AlibabaProvider: TranscriptionProvider {
+    public let region: AlibabaRegion
+    public let apiKey: String
+    public let model: String
 
-    var name: String { "Alibaba Cloud (\(model))" }
+    public init(region: AlibabaRegion, apiKey: String, model: String) {
+        self.region = region
+        self.apiKey = apiKey
+        self.model = model
+    }
+
+    public var name: String { "Alibaba Cloud (\(model))" }
 
     /// Models that take short base64 parts instead of an uploaded file.
-    static func isChunked(_ model: String) -> Bool {
+    public static func isChunked(_ model: String) -> Bool {
         let m = model.lowercased()
         return m.hasPrefix("qwen3-asr-flash") && !m.contains("filetrans")
     }
@@ -24,7 +143,7 @@ struct AlibabaProvider: TranscriptionProvider {
     /// take `file_urls` and `language_hints`, and can tell speakers apart.
     private var isQwen3File: Bool { model.lowercased().hasPrefix("qwen3-asr") }
 
-    var supportsDiarization: Bool { !Self.isChunked(model) && !isQwen3File }
+    public var supportsDiarization: Bool { !Self.isChunked(model) && !isQwen3File }
 
     /// Stays under the 5-minute limit of a single request.
     private static let chunkSeconds = 280
@@ -32,7 +151,7 @@ struct AlibabaProvider: TranscriptionProvider {
     private var api: URL { URL(string: "https://\(region.host)/api/v1")! }
     private var auth: [String: String] { ["Authorization": "Bearer \(apiKey)"] }
 
-    func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
+    public func transcribe(fileURL: URL, language: String?, diarize: Bool) async throws -> TranscriptionResult {
         let dir = try AudioTools.makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         if Self.isChunked(model) {
@@ -224,5 +343,25 @@ struct AlibabaProvider: TranscriptionProvider {
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
         do { return try JSONDecoder().decode(type, from: data) }
         catch { throw ParseError.invalid("Alibaba Cloud JSON: \(error)") }
+    }
+}
+
+/// Alibaba Cloud Model Studio region. API keys are issued per region.
+public enum AlibabaRegion: String, CaseIterable, Identifiable {
+    case singapore, beijing
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .singapore: return "Singapore (international)"
+        case .beijing: return "Beijing (China)"
+        }
+    }
+
+    public var host: String {
+        switch self {
+        case .singapore: return "dashscope-intl.aliyuncs.com"
+        case .beijing: return "dashscope.aliyuncs.com"
+        }
     }
 }

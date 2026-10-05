@@ -59,20 +59,3 @@ enum SummaryJob {
         }
     }
 }
-
-extension HTTP {
-    static func postJSON(_ url: URL, body: Data, headers: [String: String], timeout: TimeInterval = 300) async throws -> Data {
-        var req = URLRequest(url: url, timeoutInterval: timeout)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        req.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw ProviderError(message: "No HTTP response") }
-        guard (200..<300).contains(http.statusCode) else {
-            let text = String(data: data.prefix(600), encoding: .utf8) ?? ""
-            throw ProviderError(message: "HTTP \(http.statusCode) from \(url.host ?? ""): \(text)")
-        }
-        return data
-    }
-}
