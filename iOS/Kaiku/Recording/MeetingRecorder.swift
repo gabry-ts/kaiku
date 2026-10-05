@@ -2,6 +2,7 @@ import AVFoundation
 import KaikuCore
 import Observation
 import UIKit
+import WidgetKit
 import os
 
 /// Records the microphone into a call folder, with pause, resume and bookmarks.
@@ -11,11 +12,15 @@ import os
 final class MeetingRecorder: RecordingIntentHandler {
     enum State { case idle, recording, paused }
 
-    private(set) var state: State = .idle
+    private(set) var state: State = .idle {
+        didSet { if state != oldValue { publishState() } }
+    }
     private(set) var bookmarks: [Bookmark] = []
     /// True while the recording is being converted and saved after Stop.
     private(set) var isFinishing = false
     private(set) var error: String?
+    var errorMessage: String? { error }
+    var isActive: Bool { state != .idle }
     private(set) var folder: RecordingFolder?
 
     /// Called with the folder once its audio is saved.
@@ -30,6 +35,16 @@ final class MeetingRecorder: RecordingIntentHandler {
 
     /// Seconds of audio recorded so far; paused time is not counted.
     var elapsed: Double { writer?.seconds ?? 0 }
+
+    init() {
+        // A recording the app lost in a crash must not leave the toggle on.
+        AppGroup.defaults.set(false, forKey: AppGroup.isRecordingKey)
+    }
+
+    private func publishState() {
+        AppGroup.defaults.set(state != .idle, forKey: AppGroup.isRecordingKey)
+        ControlCenter.shared.reloadAllControls()
+    }
 
     // MARK: Start, pause, stop
 

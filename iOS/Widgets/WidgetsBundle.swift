@@ -5,5 +5,6 @@ import WidgetKit
 struct KaikuWidgets: WidgetBundle {
     var body: some Widget {
         RecordingLiveActivity()
+        RecordingControl()
     }
 }

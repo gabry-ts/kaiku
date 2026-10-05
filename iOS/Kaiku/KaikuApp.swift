@@ -2,13 +2,17 @@ import SwiftUI
 
 @main
 struct KaikuApp: App {
-    @State private var recorder = MeetingRecorder()
+    @State private var recorder: MeetingRecorder
     @State private var store = LibraryStore()
     @State private var jobs = PhoneJobs.shared
     @Environment(\.scenePhase) private var scenePhase
     private let launch = Date()
 
     init() {
+        // Intents can launch the app in the background, before any scene appears.
+        let recorder = MeetingRecorder()
+        RecordingIntentBridge.handler = recorder
+        _recorder = State(initialValue: recorder)
         PhoneJobs.registerBackgroundTask()
     }
 
@@ -24,7 +28,6 @@ struct KaikuApp: App {
                     if scenePhase == .active { ImportInbox.drain() }
                 }
                 .task {
-                    RecordingIntentBridge.handler = recorder
                     recorder.onFinished = { folder in jobs.enqueue(folder) }
                     jobs.onChange = { store.reload() }
                     // Saves the audio of a recording the app left open when it quit.

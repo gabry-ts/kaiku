@@ -15,6 +15,9 @@ enum AppGroup {
     /// Screen recordings written by the broadcast extension.
     static var broadcasts: URL { directory("Broadcasts") }
 
+    /// Shared flag read by the Control Center toggle.
+    static let isRecordingKey = "isRecording"
+
     static var defaults: UserDefaults { UserDefaults(suiteName: id) ?? .standard }
 
     /// Darwin notification names, for waking the app from an extension.
