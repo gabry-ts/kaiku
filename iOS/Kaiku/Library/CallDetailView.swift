@@ -12,6 +12,8 @@ struct CallDetailView: View {
     @State private var draft = ""
     @State private var sharing = false
     @State private var confirmDelete = false
+    @State private var summarizing = false
+    @State private var summaryError: String?
 
     private enum Edit: Identifiable {
         case title, tags
@@ -40,14 +42,24 @@ struct CallDetailView: View {
                                 .disabled(folder.audioURLs.isEmpty)
                         }
                     }
-                    if let summary = folder.summary {
-                        Section("Summary") {
-                            Text(Self.markdown(summary)).textSelection(.enabled)
-                        }
-                    }
                     if folder.hasTranscript {
+                        Section("Summary") {
+                            if let summary = folder.summary {
+                                Text(Self.markdown(summary)).textSelection(.enabled)
+                            }
+                            if let message = summaryError ?? jobs.summaryErrors[folder.key] {
+                                Text(message).font(.footnote).foregroundStyle(.red)
+                            }
+                            Button(summarizing ? "Writing summary…" : (folder.hasSummary ? "Write summary again" : "Write summary")) {
+                                summarize()
+                            }
+                            .disabled(summarizing || jobs.isActive(folder))
+                        }
                         Section {
                             NavigationLink("Transcript") { TranscriptView(folder: folder, meta: meta, player: player) }
+                            NavigationLink("Ask about this call") {
+                                ChatView(title: meta.title, calls: [CallEntry(folder: folder, meta: meta)])
+                            }
                         }
                     }
                     if let bookmarks = meta.bookmarks, !bookmarks.isEmpty {
@@ -108,6 +120,20 @@ struct CallDetailView: View {
     private func load() {
         meta = folder.loadMeta()
         if player == nil { player = PlayerModel(folder: folder) }
+    }
+
+    private func summarize() {
+        summarizing = true
+        summaryError = nil
+        Task {
+            do {
+                try await PhoneSummary.run(folder: folder)
+            } catch {
+                summaryError = error.localizedDescription
+            }
+            summarizing = false
+            load()
+        }
     }
 
     private func save() {

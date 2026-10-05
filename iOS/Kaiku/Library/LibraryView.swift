@@ -27,6 +27,15 @@ struct LibraryView: View {
             }
             .navigationTitle("Library")
             .navigationDestination(for: RecordingFolder.self) { CallDetailView(folder: $0) }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        ChatView(title: "Ask your calls", calls: store.calls.filter { $0.folder.hasTranscript })
+                    } label: { Image(systemName: "bubble.left.and.text.bubble.right") }
+                    .disabled(!store.calls.contains { $0.folder.hasTranscript })
+                    .accessibilityLabel("Ask about your calls")
+                }
+            }
             .searchable(text: $query, prompt: "Search calls and transcripts")
             .refreshable { store.reload() }
             .confirmationDialog("Delete this call?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {

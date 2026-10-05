@@ -43,6 +43,7 @@ struct SettingsView: View {
                     Text("Speaker names")
                 }
                 Section {
+                    NavigationLink("AI summaries and chat") { AISettingsView() }
                     NavigationLink("Accounts") { AccountsView() }
                 }
             }

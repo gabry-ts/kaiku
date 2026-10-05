@@ -18,6 +18,8 @@ final class PhoneJobs {
     private(set) var current: RecordingFolder?
     private(set) var progress = ""
     private(set) var queue: [RecordingFolder] = []
+    /// Why the summary of a call failed, by folder key.
+    private(set) var summaryErrors: [String: String] = [:]
 
     /// Called whenever a call changed on disk.
     var onChange: (() -> Void)?
@@ -105,13 +107,19 @@ final class PhoneJobs {
                 self?.progress = text
                 self?.advance(0.25)
             }
+            if PhoneSettings.summaryEnabled {
+                progress = "Writing summary…"
+                try await PhoneSummary.run(folder: folder)
+                summaryErrors[folder.key] = nil
+            }
         } catch is CancellationError {
             folder.updateMeta {
                 $0.status = .error
                 $0.error = TranscriptionRun.cancelledMessage
             }
         } catch {
-            // The run has saved the error in meta.json.
+            // A failed transcription has its error in meta.json; a failed summary is kept here, and can be retried from the call.
+            if folder.loadMeta()?.status == .done { summaryErrors[folder.key] = error.localizedDescription }
         }
     }
 

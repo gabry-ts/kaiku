@@ -13,6 +13,14 @@ enum PhoneKeys {
     static let compatibleURL = "compatibleURL"
     static let compatibleModel = "compatibleModel"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
+    static let summaryEnabled = "summaryEnabled"
+    static let summaryProvider = "summaryProvider"
+    /// Provider of the chat; unset uses the summary provider.
+    static let chatProvider = "chatProvider"
+    static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
+    static func chatModel(_ p: SummaryProviderKind) -> String { "chatModel.\(p.rawValue)" }
+    /// Address of the Ollama or custom server.
+    static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
 }
 
 /// Settings read outside of views.
@@ -48,6 +56,24 @@ enum PhoneSettings {
     static var compatibleURL: String { defaults.string(forKey: PhoneKeys.compatibleURL) ?? "" }
     static var compatibleModel: String {
         (defaults.string(forKey: PhoneKeys.compatibleModel) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static var summaryEnabled: Bool { defaults.bool(forKey: PhoneKeys.summaryEnabled) }
+
+    static var summaryProvider: SummaryProviderKind {
+        SummaryProviderKind(rawValue: defaults.string(forKey: PhoneKeys.summaryProvider) ?? "") ?? .openAI
+    }
+
+    static func summaryModel(for p: SummaryProviderKind) -> String {
+        nonEmpty(defaults.string(forKey: PhoneKeys.summaryModel(p)), p.defaultModel)
+    }
+
+    static var chatProvider: SummaryProviderKind {
+        SummaryProviderKind(rawValue: defaults.string(forKey: PhoneKeys.chatProvider) ?? "") ?? summaryProvider
+    }
+
+    static func chatModel(for p: SummaryProviderKind) -> String {
+        nonEmpty(defaults.string(forKey: PhoneKeys.chatModel(p)), p.defaultModel)
     }
 
     static var alibabaRegion: AlibabaRegion {
