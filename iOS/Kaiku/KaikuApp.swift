@@ -24,6 +24,7 @@ struct KaikuApp: App {
                     if scenePhase == .active { ImportInbox.drain() }
                 }
                 .task {
+                    RecordingIntentBridge.handler = recorder
                     recorder.onFinished = { folder in jobs.enqueue(folder) }
                     jobs.onChange = { store.reload() }
                     // Saves the audio of a recording the app left open when it quit.

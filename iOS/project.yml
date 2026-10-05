@@ -25,6 +25,7 @@ targets:
         product: KaikuCore
       - framework: vendor/whisper.xcframework
         embed: true
+      - target: Widgets
     settings:
       base:
         PRODUCT_NAME: Kaiku
@@ -50,8 +51,31 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         ITSAppUsesNonExemptEncryption: false
+        NSSupportsLiveActivities: true
     entitlements:
       path: Kaiku/Kaiku.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.gabrielepartiti.kaiku.ios
+  Widgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widgets
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gabrielepartiti.kaiku.ios.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Kaiku
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/Widgets.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.gabrielepartiti.kaiku.ios

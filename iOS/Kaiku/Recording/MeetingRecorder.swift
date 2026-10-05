@@ -8,7 +8,7 @@ import os
 /// The audio goes to system.caf while recording (readable after a crash) and is converted to system.m4a on stop.
 @MainActor
 @Observable
-final class MeetingRecorder {
+final class MeetingRecorder: RecordingIntentHandler {
     enum State { case idle, recording, paused }
 
     private(set) var state: State = .idle
@@ -26,6 +26,7 @@ final class MeetingRecorder {
     private var meta: RecordingMeta?
     private var observers: [Task<Void, Never>] = []
     private var pausedByInterruption = false
+    private let activity = RecordingActivityController()
 
     /// Seconds of audio recorded so far; paused time is not counted.
     var elapsed: Double { writer?.seconds ?? 0 }
@@ -68,6 +69,7 @@ final class MeetingRecorder {
         bookmarks.append(Bookmark(time: elapsed))
         meta?.bookmarks = bookmarks
         saveMeta()
+        activity.setBookmarks(bookmarks.count)
     }
 
     func stop() async {
@@ -119,6 +121,7 @@ final class MeetingRecorder {
 
         try startEngine()
         state = .recording
+        activity.start(title: title, at: date)
         UIApplication.shared.isIdleTimerDisabled = true
         observe()
     }
@@ -135,6 +138,7 @@ final class MeetingRecorder {
     private func pauseRecording(at seconds: Double) {
         writer?.setPaused(true)
         state = .paused
+        activity.pause()
         meta?.status = .paused
         meta?.pauses = (meta?.pauses ?? []) + [PauseInterval(start: Date(), offset: seconds)]
         saveMeta()
@@ -147,6 +151,7 @@ final class MeetingRecorder {
         }
         writer?.setPaused(false)
         state = .recording
+        activity.resume()
         meta?.status = .recording
         if var pauses = meta?.pauses, let last = pauses.last, last.end == nil {
             pauses[pauses.count - 1].end = Date()
@@ -163,6 +168,7 @@ final class MeetingRecorder {
         writer?.close()
         writer = nil
         state = .idle
+        activity.end()
         pausedByInterruption = false
         UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
