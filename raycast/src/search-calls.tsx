@@ -154,7 +154,13 @@ export default function Command() {
         />
       ))}
       {data?.truncated ? (
-        <List.Section title="Showing the latest 100 calls. Refine your search to see others." />
+        <List.Section
+          title={
+            text.trim()
+              ? "Not every match is shown. Refine your search to narrow it down."
+              : "Showing the latest 100 calls. Search to find older ones."
+          }
+        />
       ) : null}
     </List>
   );
