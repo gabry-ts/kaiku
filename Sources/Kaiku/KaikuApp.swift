@@ -78,8 +78,8 @@ struct KaikuApp: App {
                         .keyboardShortcut("o", modifiers: .command)
                 }
                 // Cmd+Q closes the key window instead of quitting, so the app stays in the menu
-                // bar. Quit stays in the panel footer; the system, Sparkle and Apple Events
-                // still terminate through NSApp.terminate.
+                // bar. Quit stays in the panel footer; the system and Sparkle still terminate
+                // through NSApp.terminate (see applicationShouldTerminate for Apple Events).
                 CommandGroup(replacing: .appTermination) {
                     Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                         .keyboardShortcut("q", modifiers: .command)
@@ -142,6 +142,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let folder = SpotlightIndexer.folder(for: userActivity) else { return false }
         MainActor.assumeIsolated { AppState.shared.openInLibrary(folder) }
         return true
+    }
+
+    /// Quit from the app switcher or the Dock closes the window like ⌘Q, so the app stays in
+    /// the menu bar. Logout, restart and shutdown carry a quit reason and still quit, and so
+    /// do Quit in the panel and Sparkle, which call NSApp.terminate without an Apple Event.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventClass == kCoreEventClass, event.eventID == kAEQuitApplication,
+              event.attributeDescriptor(forKeyword: kAEQuitReason) == nil else { return .terminateNow }
+        MainActor.assumeIsolated { WindowManager.shared.close(WindowManager.mainID) }
+        return .terminateCancel
     }
 
     func applicationWillTerminate(_ notification: Notification) {
