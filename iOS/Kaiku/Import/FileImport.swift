@@ -23,10 +23,11 @@ final class PhoneImporter {
     /// Queues the files; the ones that are not audio or video are reported. `consume` removes each file from where it
     /// was handed over (the share inbox) once it has been handled.
     func importFiles(_ urls: [URL], consume: Bool = false) {
-        let (supported, unsupported) = AudioImport.split(urls)
+        // The inbox is drained every time the app opens; files already being handled are skipped.
+        let (supported, unsupported) = AudioImport.split(urls.filter { !consumed.contains($0) })
         for url in unsupported {
             problems.append("\"\(url.lastPathComponent)\": only audio and video files can be imported.")
-            if consume { try? FileManager.default.removeItem(at: url) }
+            if consume { ImportInbox.remove(url) }
         }
         queue += supported
         if consume { consumed.formUnion(supported) }
@@ -48,7 +49,7 @@ final class PhoneImporter {
             } catch {
                 problems.append("\"\(url.lastPathComponent)\": \(error.localizedDescription)")
             }
-            if consumed.remove(url) != nil { try? FileManager.default.removeItem(at: url) }
+            if consumed.remove(url) != nil { ImportInbox.remove(url) }
         }
         status = nil
         total = 0

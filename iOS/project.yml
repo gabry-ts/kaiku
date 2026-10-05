@@ -26,6 +26,7 @@ targets:
       - framework: vendor/whisper.xcframework
         embed: true
       - target: Widgets
+      - target: Share
     settings:
       base:
         PRODUCT_NAME: Kaiku
@@ -76,6 +77,31 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Widgets/Widgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.gabrielepartiti.kaiku.ios
+  Share:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Share
+      - Shared/AppGroup.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gabrielepartiti.kaiku.ios.share
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Add to Kaiku
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: 'SUBQUERY (extensionItems, $item, SUBQUERY ($item.attachments, $a, ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio" || ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" || ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.apple.m4a-audio").@count > 0 AND $item.attachments.@count <= 20).@count > 0'
+    entitlements:
+      path: Share/Share.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.gabrielepartiti.kaiku.ios
