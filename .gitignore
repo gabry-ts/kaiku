@@ -8,3 +8,6 @@ DerivedData/
 .DS_Store
 vendor/
 snapshots/
+iOS/Kaiku.xcodeproj/
+iOS/vendor/
+iOS/build/
