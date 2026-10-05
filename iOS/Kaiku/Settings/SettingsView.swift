@@ -19,6 +19,9 @@ struct SettingsView: View {
                     if choice == .apple {
                         NavigationLink("Speech model") { SpeechModelView() }
                     }
+                    if choice == .whisper {
+                        NavigationLink("Whisper models") { WhisperModelsView() }
+                    }
                     if case .cloud(let kind) = choice {
                         ModelField(kind: kind)
                     }

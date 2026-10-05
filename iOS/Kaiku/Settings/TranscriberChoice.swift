@@ -4,15 +4,17 @@ import KaikuCore
 /// The speech-to-text engine chosen in Settings.
 enum TranscriberChoice: Hashable, Identifiable {
     case apple
+    case whisper
     case cloud(ProviderKind)
 
-    static let all: [TranscriberChoice] = [.apple] + [ProviderKind.openAI, .groq, .elevenLabs, .alibaba].map { .cloud($0) }
+    static let all: [TranscriberChoice] = [.apple, .whisper] + [ProviderKind.openAI, .groq, .elevenLabs, .alibaba].map { .cloud($0) }
 
     var id: String { rawValue }
 
     var rawValue: String {
         switch self {
         case .apple: return ProviderKind.apple.rawValue
+        case .whisper: return ProviderKind.whisperCpp.rawValue
         case .cloud(let kind): return kind.rawValue
         }
     }
@@ -21,14 +23,15 @@ enum TranscriberChoice: Hashable, Identifiable {
         guard let kind = ProviderKind(rawValue: rawValue) else { return nil }
         switch kind {
         case .apple: self = .apple
+        case .whisperCpp: self = .whisper
         case .elevenLabs, .openAI, .groq, .alibaba: self = .cloud(kind)
-        case .whisperCpp: return nil
         }
     }
 
     var kind: ProviderKind {
         switch self {
         case .apple: return .apple
+        case .whisper: return .whisperCpp
         case .cloud(let kind): return kind
         }
     }
@@ -61,6 +64,11 @@ enum TranscriberChoice: Hashable, Identifiable {
         switch self {
         case .apple:
             return AppleSpeechProvider()
+        case .whisper:
+            guard let model = WhisperDownloader.activeModel else {
+                throw ProviderError(message: "No whisper model is downloaded. Get one in Settings > Transcription > Whisper models.")
+            }
+            return WhisperLibProvider(modelURL: model.localURL)
         case .cloud(let kind):
             switch kind {
             case .elevenLabs:

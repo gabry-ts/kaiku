@@ -8,6 +8,8 @@ enum PhoneKeys {
     static let meLabel = "meLabel"
     static let othersLabel = "othersLabel"
     static let alibabaRegion = "alibabaRegion"
+    /// File name of the whisper model in use.
+    static let whisperModel = "whisperModel"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
 }
 
