@@ -13,12 +13,14 @@ public enum KaikuAgents {
     /// Posted by the server after it changes a call, so the open library reloads.
     public static let libraryChangedNotification = "com.gabrielepartiti.kaiku.libraryChanged"
 
+#if os(macOS)
     /// The recordings folder saved in the app's preferences, ~/Documents/Kaiku when unset.
     public static func baseFolder(savedPath: String?, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
         let path = (savedPath ?? "").trimmingCharacters(in: .whitespaces)
         return path.isEmpty ? home.appendingPathComponent("Documents/Kaiku", isDirectory: true)
             : URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
+#endif
 }
 
 /// Work only the app can do, asked for by the MCP server with a `kaiku://` URL.
