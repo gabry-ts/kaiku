@@ -16,7 +16,7 @@ struct RootView: View {
         TabView {
             Tab("Record", systemImage: "mic.fill") { Text("Record") }
             Tab("Library", systemImage: "books.vertical") { Text("Library") }
-            Tab("Settings", systemImage: "gearshape") { Text("Settings") }
+            Tab("Settings", systemImage: "gearshape") { SettingsView() }
         }
     }
 }
