@@ -3,6 +3,7 @@ import KaikuCore
 
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var store
+    @Environment(PhoneJobs.self) private var jobs
     @State private var query = ""
     @State private var pendingDelete: RecordingFolder?
 
@@ -11,7 +12,7 @@ struct LibraryView: View {
             let calls = store.calls(matching: query)
             List {
                 ForEach(calls, id: \.folder.id) { entry in
-                    NavigationLink(value: entry.folder) { CallRow(meta: entry.meta) }
+                    NavigationLink(value: entry.folder) { CallRow(meta: entry.meta, working: jobs.status(for: entry.folder)) }
                         .swipeActions {
                             Button("Delete", role: .destructive) { pendingDelete = entry.folder }
                         }
@@ -44,6 +45,8 @@ struct LibraryView: View {
 
 struct CallRow: View {
     let meta: RecordingMeta
+    /// What is being done to the call right now, when something is.
+    var working: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -51,7 +54,7 @@ struct CallRow: View {
             HStack(spacing: 6) {
                 Text(meta.date.formatted(date: .abbreviated, time: .shortened))
                 if meta.durationSeconds > 0 { Text("· " + duration(meta.durationSeconds)) }
-                if let state = statusText { Text("· " + state).foregroundStyle(meta.status == .error ? Color.red : Color.accentColor) }
+                if let state = working ?? statusText { Text("· " + state).foregroundStyle(working == nil && meta.status == .error ? Color.red : Color.accentColor) }
             }
             .font(.footnote)
             .foregroundStyle(.secondary)

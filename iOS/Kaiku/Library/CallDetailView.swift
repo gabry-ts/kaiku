@@ -4,6 +4,7 @@ import KaikuCore
 struct CallDetailView: View {
     let folder: RecordingFolder
     @Environment(LibraryStore.self) private var store
+    @Environment(PhoneJobs.self) private var jobs
     @Environment(\.dismiss) private var dismiss
     @State private var meta: RecordingMeta?
     @State private var player: PlayerModel?
@@ -27,10 +28,16 @@ struct CallDetailView: View {
                         if let source = meta.source { LabeledContent("Source", value: source) }
                         LabeledContent("Tags", value: (meta.tags ?? []).joined(separator: ", ").nilIfEmpty ?? "None")
                         if meta.status != .done {
-                            LabeledContent("Status", value: statusText(meta))
+                            LabeledContent("Status", value: jobs.status(for: folder) ?? statusText(meta))
                         }
-                        if let error = meta.error {
+                        if let error = meta.error, !jobs.isActive(folder) {
                             Text(error).font(.footnote).foregroundStyle(.red)
+                        }
+                        if jobs.isActive(folder) {
+                            Button("Cancel transcription", role: .destructive) { jobs.cancel(folder) }
+                        } else if meta.status == .error || meta.status == .recovered || meta.status == .done {
+                            Button(meta.status == .done ? "Transcribe again" : "Transcribe") { jobs.enqueue(folder) }
+                                .disabled(folder.audioURLs.isEmpty)
                         }
                     }
                     if let summary = folder.summary {
@@ -93,6 +100,8 @@ struct CallDetailView: View {
         }
         .sheet(isPresented: $sharing) { if let meta { ExportSheet(folder: folder, meta: meta) } }
         .onAppear { load() }
+        .onChange(of: jobs.current?.key) { load() }
+        .onChange(of: jobs.queue.count) { load() }
         .onDisappear { player?.stop() }
     }
 
