@@ -25,6 +25,9 @@ struct SettingsView: View {
                     if case .cloud(let kind) = choice {
                         ModelField(kind: kind)
                     }
+                    if choice == .compatible {
+                        CompatibleServerFields()
+                    }
                     TextField("Language", text: $language, prompt: Text("auto"))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -67,6 +70,50 @@ struct ModelField: View {
                 Text("Default").tag("")
                 ForEach(kind.modelPresets, id: \.self) { Text($0).tag($0) }
             }
+        }
+    }
+}
+
+/// Address, model and optional key of an OpenAI-compatible transcription server.
+struct CompatibleServerFields: View {
+    @AppStorage(PhoneKeys.compatibleURL) private var url = ""
+    @AppStorage(PhoneKeys.compatibleModel) private var model = ""
+    @State private var checking = false
+    @State private var result: String?
+
+    var body: some View {
+        TextField("Server address", text: $url, prompt: Text("http://192.168.1.10:8080/v1"))
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        TextField("Model", text: $model, prompt: Text("whisper-1"))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        KeyRow(title: "API key (optional)", account: TranscriberChoice.compatibleKeyAccount, service: nil)
+        Button("Check server") { check() }
+            .disabled(checking || LocalLLM.customChatBase(url) == nil)
+        if let result {
+            Text(result).font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Asks for the server's model list: any answer means it is reachable.
+    private func check() {
+        guard let probe = LocalLLM.customModelsURL(url) else { return }
+        checking = true
+        result = nil
+        Task {
+            do {
+                var request = URLRequest(url: probe, timeoutInterval: 8)
+                let key = (Keychain.get(TranscriberChoice.compatibleKeyAccount) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+                let (_, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                result = "The server answered (HTTP \(status))."
+            } catch {
+                result = "Could not reach the server: \(error.localizedDescription)"
+            }
+            checking = false
         }
     }
 }

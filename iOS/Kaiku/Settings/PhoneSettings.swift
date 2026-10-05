@@ -10,6 +10,8 @@ enum PhoneKeys {
     static let alibabaRegion = "alibabaRegion"
     /// File name of the whisper model in use.
     static let whisperModel = "whisperModel"
+    static let compatibleURL = "compatibleURL"
+    static let compatibleModel = "compatibleModel"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
 }
 
@@ -40,6 +42,12 @@ enum PhoneSettings {
 
     static func model(for p: ProviderKind) -> String {
         nonEmpty(defaults.string(forKey: PhoneKeys.model(p)), p.defaultModel)
+    }
+
+    /// Address of the OpenAI-compatible transcription server, as typed.
+    static var compatibleURL: String { defaults.string(forKey: PhoneKeys.compatibleURL) ?? "" }
+    static var compatibleModel: String {
+        (defaults.string(forKey: PhoneKeys.compatibleModel) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static var alibabaRegion: AlibabaRegion {

@@ -61,7 +61,7 @@ public struct OpenAICompatibleProvider: TranscriptionProvider {
 
             let data = try await HTTP.postMultipart(
                 baseURL.appendingPathComponent("audio/transcriptions"),
-                form: form, headers: ["Authorization": "Bearer \(apiKey)"])
+                form: form, headers: apiKey.isEmpty ? [:] : ["Authorization": "Bearer \(apiKey)"])
             var result = try ResponseParsers.openAI(data, offset: chunk.offset, chunkDuration: chunk.duration)
             if isDiarizeModel {
                 // Speaker ids are only consistent within one request.
