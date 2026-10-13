@@ -2,12 +2,12 @@ import PartitiUI
 import SwiftUI
 import KaikuCore
 
-/// Shown when recording starts: call title (prefilled), per-call language, mic in use.
+/// Shown once a recording has started: call title (prefilled), per-call language, mic in use.
+/// Saving edits the recording in progress; closing keeps the prefilled values.
 struct TitlePromptView: View {
     @EnvironmentObject var state: AppState
     let onDone: () -> Void
     var event: CalendarEventInfo?
-    var call: DetectedCall?
 
     @State private var title: String
     @State private var language = AppSettings.language
@@ -15,10 +15,9 @@ struct TitlePromptView: View {
     @State private var tags: [String] = []
     @State private var knownTags: [String] = []
 
-    init(onDone: @escaping () -> Void, initialTitle: String? = nil, event: CalendarEventInfo? = nil, call: DetectedCall? = nil) {
+    init(onDone: @escaping () -> Void, initialTitle: String? = nil, event: CalendarEventInfo? = nil) {
         self.onDone = onDone
         self.event = event
-        self.call = call
         _title = State(initialValue: initialTitle ?? Naming.defaultTitle(date: Date()))
     }
     @FocusState private var focused: Bool
@@ -34,7 +33,7 @@ struct TitlePromptView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(AppAccent.kaiku.color)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("New Recording").font(.headline)
+                    Text("Recording").font(.headline)
                     Text("Name the call so you can find it later.").font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -47,11 +46,11 @@ struct TitlePromptView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(focused ? AppAccent.kaiku.color.opacity(0.7) : Color.secondary.opacity(0.25), lineWidth: focused ? 2 : 1))
                 .focused($focused)
-                .onSubmit(start)
+                .onSubmit(save)
                 .accessibilityLabel("Call title")
 
             TagField(tags: $tags, known: knownTags, lastUsed: state.lastTags, placeholder: "Add a tag, e.g. a project",
-                     onSubmitEmpty: start)
+                     onSubmitEmpty: save)
                 .font(.callout)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -105,14 +104,12 @@ struct TitlePromptView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel, action: onDone)
+                Button("Skip", role: .cancel, action: onDone)
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(SecondaryButtonStyle())
-                Button(action: start) {
-                    Label("Start Recording", systemImage: "record.circle")
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(PrimaryButtonStyle(height: PUI.Control.regular, fullWidth: false))
             }
             .controlSize(.large)
         }
@@ -125,14 +122,9 @@ struct TitlePromptView: View {
         }
     }
 
-    private func start() {
-        let t = title
-        let l = language
-        let e = useEvent ? event : nil
-        let tg = tags
-        let c = call
+    private func save() {
+        state.updateCurrentRecording(title: title, language: language, event: useEvent ? event : nil, tags: tags)
         onDone()
-        Task { await state.startRecording(title: t, language: l, event: e, tags: tg, call: c) }
     }
 
     private func eventSummary(_ e: CalendarEventInfo) -> String {

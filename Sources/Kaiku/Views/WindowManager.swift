@@ -14,8 +14,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// The open window with this id, if any.
     func window(_ id: String) -> NSWindow? { windows[id] }
 
-    func showTitlePrompt(title: String, event: CalendarEventInfo?, call: DetectedCall? = nil) {
-        let view = TitlePromptView(onDone: { [weak self] in self?.close("title") }, initialTitle: title, event: event, call: call)
+    func showTitlePrompt(title: String, event: CalendarEventInfo?) {
+        let view = TitlePromptView(onDone: { [weak self] in self?.close("title") }, initialTitle: title, event: event)
             .environmentObject(AppState.shared)
             .defaultAppStorage(AppSettings.defaults)
         let panel = KeyPanel(contentRect: .zero,

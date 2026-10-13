@@ -133,7 +133,33 @@ final class AppState: ObservableObject {
         let date = Date()
         let title = call.map { CallTitle.choose(eventTitle: event?.title, windowTitle: $0.windowTitle, source: $0.source, date: date) }
             ?? event?.title ?? Naming.defaultTitle(date: date)
-        WindowManager.shared.showTitlePrompt(title: title, event: event, call: call)
+        // Records right away; the prompt then edits the recording, so nothing is lost while naming it.
+        Task {
+            await startRecording(title: title, language: AppSettings.language, event: event, call: call)
+            guard isRecording else { return }
+            WindowManager.shared.showTitlePrompt(title: title, event: event)
+        }
+    }
+
+    /// Applies the title prompt to the recording in progress. The language is used by the
+    /// transcription at the end; a live session keeps the one it started with.
+    func updateCurrentRecording(title rawTitle: String, language rawLanguage: String,
+                                event: CalendarEventInfo?, tags rawTags: [String]) {
+        guard case .recording(let current, let start) = phase, let folder = currentFolder else { return }
+        let trimmed = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmed.isEmpty ? current : trimmed
+        let language = AppSettings.normalizedLanguage(rawLanguage)
+        let tags = Tags.normalize(rawTags)
+        folder.updateMeta {
+            $0.title = title
+            $0.language = language
+            $0.calendarEvent = event
+            $0.tags = tags.nilIfEmpty
+        }
+        if !tags.isEmpty { AppSettings.defaults.set(tags, forKey: Keys.lastTags) }
+        currentEvent = event
+        phase = .recording(title: title, start: start)
+        libraryVersion += 1
     }
 
     func toggleRecording() {
