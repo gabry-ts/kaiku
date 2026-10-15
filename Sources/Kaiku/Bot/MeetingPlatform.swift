@@ -100,6 +100,12 @@ struct MeetingPlatform {
         return false
     }
 
+    /// The start of the page text, for the log.
+    func snippet(_ devTools: CDPClient) async -> String {
+        let text = try? await devTools.evaluate(Self.call("() => pageText().replace(/\\s+/g, ' ').slice(0, 240)")) as? String
+        return text ?? "unreadable"
+    }
+
     func leave(_ devTools: CDPClient) async {
         let script = "() => { const b = button(/^(leave call|leave meeting|leave|hang up|end)$/i); if (b) b.click(); return !!b }"
         _ = try? await devTools.evaluate(Self.call(script))
@@ -137,8 +143,7 @@ struct MeetingPlatform {
     private static let meetStep = """
     ({ name, camera }) => {
       const text = pageText();
-      if (/you left the meeting|you've been removed|you have been removed|the call has ended|meeting has ended|return to home screen|you can't join this video call|denied your request|no one responded to your request/i.test(text))
-        return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|can't join|denied|responded/i.test(l)) };
+      // In the call while its Leave button is there, whatever the chat says.
       if (buttonMatching(/leave call/i)) {
         // The number on the People button counts everyone; the tiles only who fits on screen.
         // Named through aria-labelledby, with the number as its text.
@@ -149,6 +154,8 @@ struct MeetingPlatform {
         const ids = new Set([...document.querySelectorAll('[data-participant-id]')].map(e => e.getAttribute('data-participant-id')));
         return { phase: 'inCall', participants: count > 0 ? count : (ids.size || null) };
       }
+      if (button(/^rejoin$/i) || /you left the meeting|you left the call|you've left the call|you've been removed|you have been removed|removed you from the meeting|the call has ended|call ended|meeting has ended|meeting ended|return to home screen|you can't join this video call|denied your request|no one responded to your request/i.test(text))
+        return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|can't join|denied|responded|rejoin/i.test(l)) };
       if (/asking to be let in|please wait until a meeting host|someone will let you in soon/i.test(text)) return { phase: 'lobby' };
       const ok = button(/^(got it|dismiss|accept all|continue without microphone and camera)$/i);
       if (ok) { ok.click(); return { phase: 'joining' }; }
@@ -169,8 +176,6 @@ struct MeetingPlatform {
     private static let teamsStep = """
     ({ name, camera }) => {
       const text = pageText();
-      if (/you left the meeting|you've been removed|you were removed|the meeting has ended|meeting ended|denied your request|nobody let you in|sorry, but you were denied access/i.test(text))
-        return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|denied|let you in/i.test(l)) };
       const hangup = document.querySelector('#hangup-button, [data-tid="hangup-main-btn"], [data-tid="call-hangup"]') || button(/^(leave|hang up)$/i);
       if (hangup) {
         // The join screen toggles aren't always found: settle the mic and camera in the call.
@@ -179,10 +184,13 @@ struct MeetingPlatform {
         const video = document.querySelector('#video-button');
         if (video && (camera ? /turn camera on/i : /turn camera off/i).test(video.getAttribute('aria-label') || '')) video.click();
         const roster = document.querySelector('[data-tid="roster-button"], #roster-button');
-        const count = roster ? parseInt((roster.innerText.match(/\\d+/) || [])[0], 10) : NaN;
+        const count = roster ? parseInt(((roster.innerText + ' ' + (roster.getAttribute('aria-label') || '')).match(/\\d+/) || [])[0], 10) : NaN;
         const tiles = document.querySelectorAll('[data-tid="video-tile"], [data-cid="calling-participant-stream"]').length;
-        return { phase: 'inCall', participants: Number.isFinite(count) ? count : (tiles || null) };
+        // The People button shows a number only when others are there.
+        return { phase: 'inCall', participants: Number.isFinite(count) ? count : (roster ? 1 : (tiles || null)) };
       }
+      if (button(/^rejoin$/i) || /you left the meeting|you've left|you have left the meeting|you've been removed|you were removed|meeting has ended|meeting ended|call ended|the organizer has ended|denied your request|nobody let you in|sorry, but you were denied access/i.test(text))
+        return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|denied|let you in|rejoin/i.test(l)) };
       if (/someone in the meeting should let you in soon|we've let people in the meeting know you're waiting|waiting for someone to let you in|when the meeting starts, we'll let people know/i.test(text))
         return { phase: 'lobby' };
       const browser = button(/continue on this browser|join on the web instead|use the web app instead/i);

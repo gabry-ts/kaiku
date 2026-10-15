@@ -106,6 +106,9 @@ final class BotSession: ObservableObject, Identifiable {
         // Why the bot left, kept in the log; `unexpected` also tells you.
         var leftBecause = "stopped from the menu"
         var unexpected = false
+        var lastPhase: MeetingPageState.Phase?
+        // Since when the call screen is gone, after having been in the call.
+        var outOfCallSince: Date?
         loop: while !stopRequested && !Task.isCancelled {
             guard chrome.isRunning else {
                 leftBecause = "Google Chrome closed (\(chrome.exitDescription))"
@@ -135,6 +138,22 @@ final class BotSession: ObservableObject, Identifiable {
                     stepFailures = 0
                 }
             }
+            // What the page said at every change, so an unknown end screen can be taught later.
+            if let seen = state?.phase, seen != lastPhase {
+                lastPhase = seen
+                let text = await platform.snippet(chrome.devTools)
+                Log.app.notice("Meeting bot page is \(seen.rawValue, privacy: .public): \(text, privacy: .public)")
+            }
+            if callStart != nil && state?.phase != .inCall && state?.phase != .ended {
+                // Back from the call to a screen not known as an end: give it a minute.
+                let since = outOfCallSince ?? Date()
+                outOfCallSince = since
+                if Date().timeIntervalSince(since) > 60 {
+                    leftBecause = "the call screen was gone for a minute"
+                    unexpected = true
+                    break loop
+                }
+            }
             switch state?.phase {
             case .joining?, nil:
                 if callStart == nil && Date().timeIntervalSince(joinStart) > Double(AppSettings.botLobbyMinutes) * 60 {
@@ -142,12 +161,13 @@ final class BotSession: ObservableObject, Identifiable {
                     break loop
                 }
             case .lobby?:
-                phase = .lobby
-                if Date().timeIntervalSince(joinStart) > Double(AppSettings.botLobbyMinutes) * 60 {
+                if callStart == nil { phase = .lobby }
+                if callStart == nil && Date().timeIntervalSince(joinStart) > Double(AppSettings.botLobbyMinutes) * 60 {
                     failure = "Nobody let the bot in after \(AppSettings.botLobbyMinutes) minutes."
                     break loop
                 }
             case .inCall?:
+                outOfCallSince = nil
                 let now = Date()
                 if callStart == nil {
                     callStart = now
