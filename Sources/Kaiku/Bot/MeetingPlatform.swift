@@ -133,7 +133,10 @@ struct MeetingPlatform {
         return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|can't join|denied|responded/i.test(l)) };
       if (buttonMatching(/leave call/i)) {
         // The number on the People button counts everyone; the tiles only who fits on screen.
-        const people = buttonMatching(/show everyone|^people|participants/i);
+        // Named through aria-labelledby, with the number as its text.
+        const named = e => e.getAttribute('aria-label')
+          || (e.getAttribute('aria-labelledby') || '').split(' ').map(id => (document.getElementById(id) || {}).textContent || '').join(' ');
+        const people = qa('button, [role=button]').find(e => visible(e) && /show everyone|^people|participants/i.test(named(e).trim()));
         const count = people ? parseInt(((people.innerText || '').match(/\\d+/) || [])[0], 10) : NaN;
         const ids = new Set([...document.querySelectorAll('[data-participant-id]')].map(e => e.getAttribute('data-participant-id')));
         return { phase: 'inCall', participants: count > 0 ? count : (ids.size || null) };
