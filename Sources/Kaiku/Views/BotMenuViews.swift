@@ -35,6 +35,8 @@ private struct BotSendCard: View {
     let close: () -> Void
     @ObservedObject private var bots = BotManager.shared
     @State private var link = ""
+    @State private var message = ""
+    @AppStorage(Keys.botChatMessage) private var defaultMessage = ""
     @State private var meetings: [CalendarService.Meeting] = []
     @Environment(\.colorScheme) private var scheme
 
@@ -77,11 +79,16 @@ private struct BotSendCard: View {
                     if !link.isEmpty && parsed == nil {
                         Text("Not a Meet, Teams, Webex or FaceTime link").font(PUI.Font.caption).foregroundStyle(ink.orange)
                     }
+                    // Blank keeps the message from Settings.
+                    TextField("Chat message", text: $message,
+                              prompt: Text(defaultMessage.isEmpty ? "Chat message (none)" : defaultMessage))
+                        .labelsHidden().textFieldStyle(.roundedBorder)
+                        .help("Posted in the meeting chat when the bot joins. Leave it empty to use the one in Settings.")
                     if !meetings.isEmpty {
                         Text("Today").font(PUI.Font.caption).foregroundStyle(ink.secondary)
                         ForEach(meetings) { meeting in
                             MeetingRow(meeting: meeting, sent: bots.isSent(meeting.link)) {
-                                bots.send(meeting.link, title: meeting.title, start: meeting.start)
+                                bots.send(meeting.link, title: meeting.title, start: meeting.start, message: message)
                                 close()
                             }
                         }
@@ -99,7 +106,7 @@ private struct BotSendCard: View {
 
     private func sendLink() {
         guard let parsed else { return }
-        bots.send(parsed)
+        bots.send(parsed, message: message)
         close()
     }
 }

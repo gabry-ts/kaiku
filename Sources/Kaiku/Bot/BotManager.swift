@@ -8,12 +8,13 @@ final class BotManager: ObservableObject {
 
     @Published private(set) var sessions: [BotSession] = []
 
-    /// Sends the bot to `link` now, or at `start` when that is more than a minute away.
-    func send(_ link: MeetingLink, title: String? = nil, start: Date? = nil) {
+    /// Sends the bot to `link` now, or at `start` when that is more than a minute away,
+    /// with `message` in the chat instead of the one in Settings when given.
+    func send(_ link: MeetingLink, title: String? = nil, start: Date? = nil, message: String? = nil) {
         let name = title
             ?? CalendarService.shared.todayMeetings().first { $0.link.url == link.url }?.title
             ?? "\(link.platform.name) call"
-        let session = BotSession(link: link, title: name, start: start)
+        let session = BotSession(link: link, title: name, start: start, message: message)
         session.onProcessesChanged = { [weak self] in self?.processesChanged() }
         session.onFinished = { [weak self, weak session] in
             guard let self, let session else { return }

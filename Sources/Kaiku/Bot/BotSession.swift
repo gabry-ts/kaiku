@@ -21,6 +21,8 @@ final class BotSession: ObservableObject, Identifiable {
     let id = UUID()
     let link: MeetingLink
     let title: String
+    /// Posted in the meeting chat on joining; empty for none.
+    let chatMessage: String
     @Published private(set) var phase: Phase
     @Published private(set) var listening = false
 
@@ -36,9 +38,12 @@ final class BotSession: ObservableObject, Identifiable {
     private var task: Task<Void, Never>?
     private var stopRequested = false
 
-    init(link: MeetingLink, title: String, start: Date?) {
+    /// - Parameter message: this trip's chat message; nil or blank uses the one in Settings.
+    init(link: MeetingLink, title: String, start: Date?, message: String? = nil) {
         self.link = link
         self.title = title
+        let custom = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        chatMessage = custom.isEmpty ? AppSettings.botChatMessage : custom
         phase = start.map { $0.timeIntervalSinceNow > 60 ? .scheduled($0) : .joining } ?? .joining
     }
 
@@ -96,7 +101,7 @@ final class BotSession: ObservableObject, Identifiable {
         var callStart: Date?
         var lastWithOthers: Date?
         var failure: String?
-        var chatTries = AppSettings.botChatMessage.isEmpty || !platform.hasChat ? 3 : 0
+        var chatTries = chatMessage.isEmpty || !platform.hasChat ? 3 : 0
         var stepFailures = 0
         // Why the bot left, kept in the log; `unexpected` also tells you.
         var leftBecause = "stopped from the menu"
@@ -156,7 +161,7 @@ final class BotSession: ObservableObject, Identifiable {
                 // A few seconds in, once the call screen has settled; a few tries at most.
                 if chatTries < 3, let start = callStart, now.timeIntervalSince(start) > 5 {
                     chatTries += 1
-                    if await platform.sendChat(chrome.devTools, AppSettings.botChatMessage) { chatTries = 3 }
+                    if await platform.sendChat(chrome.devTools, chatMessage) { chatTries = 3 }
                 }
                 if let people = state?.participants {
                     if people > 1 { lastWithOthers = now }
