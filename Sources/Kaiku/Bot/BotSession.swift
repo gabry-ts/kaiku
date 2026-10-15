@@ -97,14 +97,24 @@ final class BotSession: ObservableObject, Identifiable {
         var lastWithOthers: Date?
         var failure: String?
         var chatTries = AppSettings.botChatMessage.isEmpty || !platform.hasChat ? 3 : 0
+        var stepFailures = 0
         loop: while !stopRequested && !Task.isCancelled {
             guard chrome.isRunning else { failure = callStart == nil ? "Google Chrome closed" : nil; break }
             let state: MeetingPageState?
             do {
                 state = try await platform.step(chrome.devTools, name: AppSettings.botName, camera: photo != nil)
+                stepFailures = 0
             } catch {
                 Log.app.error("Meeting bot page step failed: \(error.diagnosticDescription, privacy: .public)")
                 state = nil
+                stepFailures += 1
+                // The connection to the page dropped: connect to it again.
+                if stepFailures >= 2 && chrome.isRunning {
+                    do { try await chrome.reconnect() } catch {
+                        Log.app.error("Meeting bot reconnect failed: \(error.diagnosticDescription, privacy: .public)")
+                    }
+                    stepFailures = 0
+                }
             }
             switch state?.phase {
             case .joining?, nil:

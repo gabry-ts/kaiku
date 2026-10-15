@@ -8,8 +8,10 @@ final class CDPClient: @unchecked Sendable {
     private var nextID = 0
     private var pending: [Int: CheckedContinuation<[String: Any], Error>] = [:]
 
-    /// Connects to the first page target of the browser listening on `port`.
+    /// Connects to the first page target of the browser listening on `port`, dropping any
+    /// previous connection.
     func connect(port: Int) async throws {
+        if socket != nil { close() }
         let list = URL(string: "http://127.0.0.1:\(port)/json/list")!
         for _ in 0..<40 {
             if let (data, _) = try? await URLSession.shared.data(from: list),

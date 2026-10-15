@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 final class ChromeLauncher {
     private let process = Process()
     private let profile: URL
+    private var port = 0
     let devTools: CDPClient
 
     var pid: pid_t { process.processIdentifier }
@@ -64,8 +65,8 @@ final class ChromeLauncher {
         try launcher.process.run()
         Log.app.info("Meeting bot Chrome started (pid \(launcher.pid))")
         do {
-            let port = try await launcher.devToolsPort()
-            try await launcher.devTools.connect(port: port)
+            launcher.port = try await launcher.devToolsPort()
+            try await launcher.devTools.connect(port: launcher.port)
         } catch {
             launcher.quit()
             throw error
@@ -83,6 +84,11 @@ final class ChromeLauncher {
             try await Task.sleep(nanoseconds: 250_000_000)
         }
         throw AudioCaptureError("Google Chrome did not start")
+    }
+
+    /// Connects again to the meeting page, e.g. after the site replaced the tab.
+    func reconnect() async throws {
+        try await devTools.connect(port: port)
     }
 
     func quit() {
