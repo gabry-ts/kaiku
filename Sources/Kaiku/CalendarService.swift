@@ -1,7 +1,8 @@
 import EventKit
 import KaikuCore
 
-/// Reads the calendar event happening now, to prefill the call title and store attendees.
+/// Reads the calendar event happening now, to prefill the call title and store attendees,
+/// and today's meetings with a join link for the meeting bot.
 @MainActor
 final class CalendarService {
     static let shared = CalendarService()
@@ -48,6 +49,34 @@ final class CalendarService {
                 ownEmail: Self.ownEmail(in: e))
         }
         return CalendarEventInfo.best(events, now: now)
+    }
+
+    /// A meeting of today the bot can join.
+    struct Meeting: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let start: Date
+        let end: Date
+        let link: MeetingLink
+    }
+
+    /// Today's meetings with a Meet or Teams link that haven't ended, from the chosen calendars.
+    func todayMeetings(now: Date = Date()) -> [Meeting] {
+        guard AppSettings.calendarEnabled, state == .granted else { return [] }
+        let chosen = Set(AppSettings.calendarIDs)
+        let calendars = store.calendars(for: .event).filter { chosen.isEmpty || chosen.contains($0.calendarIdentifier) }
+        guard !calendars.isEmpty, let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))
+        else { return [] }
+        let predicate = store.predicateForEvents(withStart: now.addingTimeInterval(-12 * 3600), end: endOfDay, calendars: calendars)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay && $0.endDate > now }
+            .compactMap { e in
+                let text = [e.url?.absoluteString, e.location, e.notes].compactMap { $0 }.joined(separator: "\n")
+                guard let link = MeetingLink.find(in: text) else { return nil }
+                return Meeting(id: (e.calendarItemExternalIdentifier ?? e.eventIdentifier ?? UUID().uuidString) + "\(e.startDate.timeIntervalSince1970)",
+                               title: e.title ?? link.platform.name, start: e.startDate, end: e.endDate, link: link)
+            }
+            .sorted { $0.start < $1.start }
     }
 
     private static func email(of participant: EKParticipant) -> String? {
