@@ -16,7 +16,7 @@ struct BotSettings: View {
     @State private var photoError: String?
 
     var body: some View {
-        KaikuPane(pane: .meetingBot, subtitle: "Joins Google Meet and Microsoft Teams calls for you and records them.") {
+        KaikuPane(pane: .meetingBot, subtitle: "Joins Google Meet, Microsoft Teams, Webex and FaceTime link calls for you and records them.") {
             SettingsGroup("Google Chrome", footer: "The bot runs in a hidden Chrome window on this Mac, which must stay awake during the call.") {
                 if ChromeLauncher.isInstalled {
                     GroupRow { StatusDot(kind: .ok, text: "Google Chrome is installed") }

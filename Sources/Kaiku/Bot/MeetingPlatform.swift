@@ -19,7 +19,7 @@ struct MeetingPageState {
     var detail: String?
 }
 
-/// Drives the Google Meet and Microsoft Teams web pages through DevTools. The pages are
+/// Drives the Google Meet, Microsoft Teams, Webex and FaceTime web pages through DevTools. The pages are
 /// opened in English, and the scripts look for buttons by their English labels.
 struct MeetingPlatform {
     let platform: MeetingLink.Platform
@@ -40,19 +40,37 @@ struct MeetingPlatform {
     /// the camera on or off, and asks to join. Safe to call again and again.
     func step(_ devTools: CDPClient, name: String, camera: Bool) async throws -> MeetingPageState {
         let args = try String(decoding: JSONSerialization.data(withJSONObject: ["name": name, "camera": camera]), as: UTF8.self)
-        let value = try await devTools.evaluate(Self.call(platform == .meet ? Self.meetStep : Self.teamsStep, args)) as? [String: Any] ?? [:]
-        // The name field wants real typing on both sites.
-        if value["typeName"] as? Bool == true {
+        let value = try await devTools.evaluate(Self.call(stepScript, args)) as? [String: Any] ?? [:]
+        // Name fields want real typing on every site.
+        if let text = value["type"] as? String {
+            try await devTools.insertText(text)
+        } else if value["typeName"] as? Bool == true {
             try await devTools.insertText(name)
         }
         let phase = MeetingPageState.Phase(rawValue: value["phase"] as? String ?? "") ?? .joining
         return MeetingPageState(phase: phase, participants: value["participants"] as? Int, detail: value["detail"] as? String)
     }
 
-    /// Posts a message in the meeting chat. Best effort.
+    private var stepScript: String {
+        switch platform {
+        case .meet: return Self.meetStep
+        case .teams: return Self.teamsStep
+        case .webex: return Self.webexStep
+        case .faceTime: return Self.faceTimeStep
+        }
+    }
+
+    /// Posts a message in the meeting chat. Best effort; FaceTime has no chat.
     func sendChat(_ devTools: CDPClient, _ message: String) async {
+        let open: String
+        switch platform {
+        case .meet: open = Self.meetOpenChat
+        case .teams: open = Self.teamsOpenChat
+        case .webex: open = Self.webexOpenChat
+        case .faceTime: return
+        }
         do {
-            guard try await devTools.evaluate(Self.call(platform == .meet ? Self.meetOpenChat : Self.teamsOpenChat)) as? Bool == true else {
+            guard try await devTools.evaluate(Self.call(open)) as? Bool == true else {
                 Log.app.error("Meeting bot: chat box not found")
                 return
             }
@@ -65,7 +83,7 @@ struct MeetingPlatform {
     }
 
     func leave(_ devTools: CDPClient) async {
-        let script = "() => { const b = button(/^(leave call|leave|hang up)$/i); if (b) b.click(); return !!b }"
+        let script = "() => { const b = button(/^(leave call|leave meeting|leave|hang up|end)$/i); if (b) b.click(); return !!b }"
         _ = try? await devTools.evaluate(Self.call(script))
     }
 
@@ -76,17 +94,23 @@ struct MeetingPlatform {
         "(async () => {\n\(helpers)\nreturn await (\(fn))(\(args));\n})()"
     }
 
-    /// Find visible buttons by label or text. `__k` keeps state between calls.
+    /// Find visible buttons by label or text, in the page and its same-site frames (Webex
+    /// runs in one). `__k` keeps state between calls.
     private static let helpers = """
     window.__k = window.__k || {};
+    const docs = () => [document, ...[...document.querySelectorAll('iframe')]
+      .map(f => { try { return f.contentDocument } catch (e) { return null } }).filter(Boolean)];
+    const q = sel => docs().map(d => d.querySelector(sel)).find(Boolean);
+    const qa = sel => docs().flatMap(d => [...d.querySelectorAll(sel)]);
     const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
     const label = e => [e.getAttribute('aria-label'), e.getAttribute('data-tooltip'), e.getAttribute('title'), e.innerText]
       .filter(Boolean).join(' ').trim();
-    const button = re => [...document.querySelectorAll('button, [role=button]')]
+    const button = re => qa('button, [role=button], a')
       .find(e => visible(e) && !e.disabled && re.test(label(e).split('\\n')[0].trim()));
-    const buttonMatching = re => [...document.querySelectorAll('button, [role=button]')]
+    const buttonMatching = re => qa('button, [role=button]')
       .find(e => visible(e) && !e.disabled && re.test(label(e)));
-    const pageText = () => document.body ? document.body.innerText : '';
+    const pageText = () => docs().map(d => d.body ? d.body.innerText : '').join('\\n');
+    const field = re => qa('input').find(e => visible(e) && re.test((e.getAttribute('aria-label') || '') + ' ' + (e.placeholder || '') + ' ' + (e.name || '')));
     """
 
     private static let meetStep = """
@@ -148,6 +172,74 @@ struct MeetingPlatform {
         if (join && !join.disabled) { window.__k.joined = true; join.click(); }
       }
       return { phase: 'joining' };
+    }
+    """
+
+    private static let webexStep = """
+    ({ name, camera }) => {
+      const text = pageText();
+      if (/the meeting has ended|meeting has ended|you've left the meeting|you have left the meeting|you've been removed|you were removed|the host has removed you|denied your request|the host has locked/i.test(text))
+        return { phase: 'ended', detail: text.split('\\n').find(l => /ended|left|removed|denied|locked/i.test(l)) };
+      if (buttonMatching(/leave meeting|^leave$/i)) {
+        const people = buttonMatching(/participants/i);
+        const count = people ? parseInt((label(people).match(/\\d+/) || [])[0], 10) : NaN;
+        return { phase: 'inCall', participants: Number.isFinite(count) ? count : null };
+      }
+      if (/the host will let you in soon|waiting for the host|you're in the lobby|you are in the lobby|the meeting hasn't started|the meeting has not started/i.test(text)) return { phase: 'lobby' };
+      const browser = button(/join from (your |this )?browser|join from browser|use the web app/i);
+      if (browser) { browser.click(); return { phase: 'joining' }; }
+      const ok = button(/^(accept|accept all|got it|ok|dismiss)$/i);
+      if (ok) { ok.click(); return { phase: 'joining' }; }
+      const nameField = field(/name/i);
+      if (nameField && !nameField.value) { nameField.focus(); return { phase: 'joining', typeName: true }; }
+      // Webex asks guests for an email; a reserved address keeps yours private.
+      const mail = field(/mail/i);
+      if (mail && !mail.value) { mail.focus(); return { phase: 'joining', type: 'notetaker@example.com' }; }
+      const next = button(/^(next|continue)$/i);
+      if (next) { next.click(); return { phase: 'joining' }; }
+      const mic = buttonMatching(/^mute\\b|mute audio|mute microphone/i);
+      if (mic && !/unmute/i.test(label(mic))) mic.click();
+      const cam = buttonMatching(camera ? /start video|turn on video/i : /stop video|turn off video/i);
+      if (cam) cam.click();
+      if (!window.__k.joined) {
+        const join = button(/^(join meeting|join now|join)$/i);
+        if (join) { window.__k.joined = true; join.click(); }
+      }
+      return { phase: 'joining' };
+    }
+    """
+
+    private static let faceTimeStep = """
+    ({ name, camera }) => {
+      const text = pageText();
+      if (/you left the call|call ended|the call has ended|your request to join was declined|you were removed|link is no longer valid/i.test(text))
+        return { phase: 'ended', detail: text.split('\\n').find(l => /left|ended|declined|removed|no longer/i.test(l)) };
+      if (/waiting to be let in|waiting for someone to let you in|waiting to join|asking to join/i.test(text)) return { phase: 'lobby' };
+      if (buttonMatching(/^leave$|leave call|end call/i)) return { phase: 'inCall', participants: null };
+      const nameField = field(/name/i);
+      if (nameField && !nameField.value) { nameField.focus(); return { phase: 'joining', typeName: true }; }
+      const next = button(/^(continue|next)$/i);
+      if (next) { next.click(); return { phase: 'joining' }; }
+      const mic = buttonMatching(/^mute$|turn microphone off|microphone off/i);
+      if (mic) mic.click();
+      const cam = buttonMatching(camera ? /turn camera on|camera on/i : /turn camera off|camera off/i);
+      if (cam) cam.click();
+      if (!window.__k.joined) {
+        const join = button(/^(join|join call|join now)$/i);
+        if (join) { window.__k.joined = true; join.click(); }
+      }
+      return { phase: 'joining' };
+    }
+    """
+
+    private static let webexOpenChat = """
+    async () => {
+      const find = () => q('textarea[aria-label*="message" i], textarea[placeholder*="message" i], div[role="textbox"][contenteditable="true"]');
+      if (!find()) { const b = buttonMatching(/^chat|open chat|show chat/i); if (b) b.click(); }
+      for (let i = 0; i < 20 && !find(); i++) await new Promise(r => setTimeout(r, 150));
+      const box = find();
+      if (box) box.focus();
+      return !!box;
     }
     """
 

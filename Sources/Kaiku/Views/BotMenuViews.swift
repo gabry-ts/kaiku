@@ -67,7 +67,7 @@ private struct BotSendCard: View {
                     }
                 } else {
                     HStack(spacing: PUI.Space.s) {
-                        TextField("Meet or Teams link", text: $link, prompt: Text("Paste a Meet or Teams link"))
+                        TextField("Meeting link", text: $link, prompt: Text("Paste a Meet, Teams, Webex or FaceTime link"))
                             .labelsHidden().textFieldStyle(.roundedBorder)
                             .onSubmit(sendLink)
                         Button("Join", action: sendLink)
@@ -75,7 +75,7 @@ private struct BotSendCard: View {
                             .disabled(parsed == nil)
                     }
                     if !link.isEmpty && parsed == nil {
-                        Text("Not a Google Meet or Microsoft Teams link").font(PUI.Font.caption).foregroundStyle(ink.orange)
+                        Text("Not a Meet, Teams, Webex or FaceTime link").font(PUI.Font.caption).foregroundStyle(ink.orange)
                     }
                     if !meetings.isEmpty {
                         Text("Today").font(PUI.Font.caption).foregroundStyle(ink.secondary)
