@@ -33,6 +33,7 @@ struct MenuPanel: View {
                 switch section {
                 case .record:
                     recordSection
+                    BotSection()
                     // A failed transcription shows even with the status section switched off.
                     if !sections.contains(.status) { errorCard }
                 case .live:
@@ -211,7 +212,7 @@ struct MenuPanel: View {
 }
 
 /// A headline and a one-line caption, for the status cards of the panel.
-private struct StatusText: View {
+struct StatusText: View {
     let title: String
     let detail: String
     @Environment(\.colorScheme) private var scheme
