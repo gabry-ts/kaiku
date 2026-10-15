@@ -19,6 +19,21 @@ final class MeetingLinkTests: XCTestCase {
         XCTAssertEqual(MeetingLink("https://teams.live.com/meet/9876543210")?.platform, .teams)
     }
 
+    func testWebexLinks() {
+        XCTAssertEqual(MeetingLink("https://acme.webex.com/meet/jane.doe")?.platform, .webex)
+        XCTAssertEqual(MeetingLink("https://acme.webex.com/acme/j.php?MTID=m1234abcd")?.platform, .webex)
+        XCTAssertEqual(MeetingLink("https://acme.my.webex.com/join/jdoe")?.platform, .webex)
+        XCTAssertNil(MeetingLink("https://www.webex.com/"))
+        XCTAssertNil(MeetingLink("https://www.webex.com/pricing"))
+    }
+
+    func testFaceTimeLinks() {
+        let link = "https://facetime.apple.com/join#v=1&p=AbCdEf123&k=XyZ987"
+        XCTAssertEqual(MeetingLink(link)?.platform, .faceTime)
+        XCTAssertEqual(MeetingLink(link)?.url.absoluteString, link)
+        XCTAssertNil(MeetingLink("https://facetime.apple.com/"))
+    }
+
     func testLinksInsideText() {
         let notes = "Join here: https://meet.google.com/abc-defg-hij.\nOr dial in."
         XCTAssertEqual(MeetingLink.find(in: notes)?.url.absoluteString, "https://meet.google.com/abc-defg-hij")
