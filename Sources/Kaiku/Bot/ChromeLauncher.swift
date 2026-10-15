@@ -6,6 +6,9 @@ import UniformTypeIdentifiers
 /// Starts Google Chrome headless for the meeting bot: a throwaway profile, the bot's picture
 /// as the camera, a silent microphone, English pages (the join scripts read English labels)
 /// and a regular user agent. Opens the meeting and connects to it over DevTools.
+///
+/// Nobody watches the bot's screen, so it asks for as little video as it can: a small
+/// window (the sites send smaller streams to small tiles) and incoming video switched off.
 final class ChromeLauncher {
     private let process = Process()
     private let profile: URL
@@ -54,7 +57,7 @@ final class ChromeLauncher {
             "--use-fake-device-for-media-stream",
             "--use-file-for-fake-audio-capture=\(silence.path)",
             "--lang=en-US",
-            "--window-size=1280,720",
+            "--window-size=640,360",
             "--user-agent=\(userAgent(app: app))",
         ]
         if let photo, let frames = cameraFrames(photo) {
@@ -62,7 +65,8 @@ final class ChromeLauncher {
             try frames.write(to: camera)
             args.append("--use-file-for-fake-video-capture=\(camera.path)")
         }
-        args.append(url.absoluteString)
+        // Opened blank first, so the video switch is in place before the meeting loads.
+        args.append("about:blank")
 
         let launcher = ChromeLauncher(profile: profile, devTools: CDPClient())
         launcher.process.executableURL = executable
@@ -74,6 +78,10 @@ final class ChromeLauncher {
         do {
             launcher.port = try await launcher.devToolsPort()
             try await launcher.devTools.connect(port: launcher.port)
+            // Scripts for new documents only run with the Page domain on.
+            try await launcher.devTools.send("Page.enable")
+            try await launcher.devTools.send("Page.addScriptToEvaluateOnNewDocument", ["source": noIncomingVideo])
+            try await launcher.devTools.send("Page.navigate", ["url": url.absoluteString])
         } catch {
             launcher.quit()
             throw error
@@ -108,6 +116,22 @@ final class ChromeLauncher {
         let profile = profile
         DispatchQueue.global().asyncAfter(deadline: .now() + 4) { try? FileManager.default.removeItem(at: profile) }
     }
+
+    /// Turns off every video track received in a call, so Chrome doesn't draw it. Audio and
+    /// the bot's own camera are left alone.
+    private static let noIncomingVideo = """
+    (() => {
+      const P = window.RTCPeerConnection;
+      if (!P) return;
+      window.RTCPeerConnection = new Proxy(P, {
+        construct(target, args, newTarget) {
+          const pc = Reflect.construct(target, args, newTarget);
+          pc.addEventListener('track', e => { if (e.track.kind === 'video') e.track.enabled = false; });
+          return pc;
+        }
+      });
+    })();
+    """
 
     /// Chrome's own user agent without "Headless", which meeting sites turn away.
     private static func userAgent(app: URL) -> String {
