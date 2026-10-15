@@ -158,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppState.shared.finalizeOnQuit()
+            BotManager.shared.stopAll()
             MicMuter.shared.unmute()
         }
     }

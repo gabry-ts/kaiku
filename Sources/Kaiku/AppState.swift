@@ -549,7 +549,8 @@ final class AppState: ObservableObject {
 
     /// - Parameter live: the text heard while recording, saved as the transcript instead
     ///   of running the provider. If saving it fails, the provider runs as usual.
-    func transcribe(folder: RecordingFolder, provider: ProviderKind, live: LiveTranscript? = nil) {
+    /// - Parameter summarize: writes the summary or not whatever the AI settings say (meeting bot).
+    func transcribe(folder: RecordingFolder, provider: ProviderKind, live: LiveTranscript? = nil, summarize: Bool? = nil) {
         guard !busyFolders.contains(folder.key) else { return }
         let title = folder.loadMeta()?.title ?? folder.url.lastPathComponent
         busyFolders.insert(folder.key)
@@ -577,7 +578,7 @@ final class AppState: ObservableObject {
                 }
                 try Task.checkCancellation()
                 recoveredFolders.removeAll { $0.key == folder.key }
-                if AppSettings.summaryEnabled {
+                if summarize ?? AppSettings.summaryEnabled {
                     busyStage[folder.key] = "Writing summary…"
                     do { try await SummaryJob.run(folder: folder) } catch {
                         lastErrorDetail = error.localizedDescription

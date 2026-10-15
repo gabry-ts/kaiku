@@ -182,6 +182,13 @@ enum Keys {
     static let readingFullWidth = "readingFullWidth"
     /// Address of the Ollama or custom server.
     static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
+    static let botName = "botName"
+    static let botPhotoPath = "botPhotoPath"
+    static let botChatMessage = "botChatMessage"
+    static let botLeaveWhenAlone = "botLeaveWhenAlone"
+    static let botMaxMinutes = "botMaxMinutes"
+    static let botLobbyMinutes = "botLobbyMinutes"
+    static let botSummarize = "botSummarize"
     static func model(_ p: ProviderKind) -> String { "model.\(p.rawValue)" }
     static func summaryModel(_ p: SummaryProviderKind) -> String { "summaryModel.\(p.rawValue)" }
     static func liveSummaryModel(_ p: SummaryProviderKind) -> String { "liveSummaryModel.\(p.rawValue)" }
@@ -260,6 +267,13 @@ enum AppSettings {
             Keys.agentsAllowEdits: false,
             Keys.readingTextSize: ReadingSize.standard,
             Keys.readingFullWidth: false,
+            Keys.botName: "Kaiku Notetaker",
+            Keys.botPhotoPath: "",
+            Keys.botChatMessage: "Hi! I'm taking notes for this call with Kaiku.",
+            Keys.botLeaveWhenAlone: true,
+            Keys.botMaxMinutes: 180,
+            Keys.botLobbyMinutes: 10,
+            Keys.botSummarize: true,
         ])
         for p in SummaryProviderKind.allCases {
             defaults.register(defaults: [Keys.liveSummaryModel(p): p.defaultModel, Keys.liveAskModel(p): p.defaultModel,
@@ -392,6 +406,17 @@ enum AppSettings {
 
     static var removeEcho: Bool { defaults.bool(forKey: Keys.removeEcho) }
     static var summaryEnabled: Bool { defaults.bool(forKey: Keys.summaryEnabled) }
+    static var botName: String { nonEmpty(defaults.string(forKey: Keys.botName), "Kaiku Notetaker") }
+    /// The bot's picture, copied into Application Support when chosen.
+    static var botPhoto: URL? {
+        let path = defaults.string(forKey: Keys.botPhotoPath) ?? ""
+        return path.isEmpty || !FileManager.default.fileExists(atPath: path) ? nil : URL(fileURLWithPath: path)
+    }
+    static var botChatMessage: String { (defaults.string(forKey: Keys.botChatMessage) ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+    static var botLeaveWhenAlone: Bool { defaults.bool(forKey: Keys.botLeaveWhenAlone) }
+    static var botMaxMinutes: Int { max(defaults.integer(forKey: Keys.botMaxMinutes), 5) }
+    static var botLobbyMinutes: Int { max(defaults.integer(forKey: Keys.botLobbyMinutes), 1) }
+    static var botSummarize: Bool { defaults.bool(forKey: Keys.botSummarize) }
     static var summaryProvider: SummaryProviderKind {
         SummaryProviderKind(rawValue: defaults.string(forKey: Keys.summaryProvider) ?? "") ?? .openAI
     }
