@@ -182,6 +182,10 @@ enum Keys {
     static let readingFullWidth = "readingFullWidth"
     /// Address of the Ollama or custom server.
     static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
+    static let discardShortEnabled = "discardShortEnabled"
+    static let discardShortSeconds = "discardShortSeconds"
+    /// "total" or "speech".
+    static let discardShortMode = "discardShortMode"
     static let botName = "botName"
     static let botPhotoPath = "botPhotoPath"
     static let botChatMessage = "botChatMessage"
@@ -267,6 +271,9 @@ enum AppSettings {
             Keys.agentsAllowEdits: false,
             Keys.readingTextSize: ReadingSize.standard,
             Keys.readingFullWidth: false,
+            Keys.discardShortEnabled: true,
+            Keys.discardShortSeconds: 30,
+            Keys.discardShortMode: "total",
             Keys.botName: "Kaiku Notetaker",
             Keys.botPhotoPath: "",
             Keys.botChatMessage: "Hi! I'm taking notes for this call with Kaiku.",
@@ -406,6 +413,9 @@ enum AppSettings {
 
     static var removeEcho: Bool { defaults.bool(forKey: Keys.removeEcho) }
     static var summaryEnabled: Bool { defaults.bool(forKey: Keys.summaryEnabled) }
+    static var discardShortEnabled: Bool { defaults.bool(forKey: Keys.discardShortEnabled) }
+    static var discardShortSeconds: Int { max(defaults.integer(forKey: Keys.discardShortSeconds), 1) }
+    static var discardShortCountsSpeech: Bool { defaults.string(forKey: Keys.discardShortMode) == "speech" }
     static var botName: String { nonEmpty(defaults.string(forKey: Keys.botName), "Kaiku Notetaker") }
     /// The bot's picture, copied into Application Support when chosen.
     static var botPhoto: URL? {

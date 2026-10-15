@@ -57,6 +57,7 @@ final class CallImporter: ObservableObject {
             status = AudioImport.progress(current: current, total: total)
             do {
                 let folder = try await importFile(url)
+                if await state.discardIfTooShort(folder) { continue }
                 if current == 1 { state.openInLibrary(folder) }
                 status = total > 1 ? "Transcribing \(current) of \(total)…" : nil
                 state.transcribe(folder: folder, provider: AppSettings.provider)

@@ -353,6 +353,7 @@ final class AppState: ObservableObject {
             switch result {
             case .success:
                 folder.updateMeta { $0.durationSeconds = duration }
+                if await discardIfTooShort(folder) { return }
                 // The live text is only kept when asked for and when none of it is missing.
                 let keep = AppSettings.liveAfterCall == .transcript && heard.complete && !heard.transcript.finals.isEmpty
                 transcribe(folder: folder, provider: AppSettings.provider, live: keep ? heard.transcript : nil)
@@ -365,6 +366,32 @@ final class AppState: ObservableObject {
                 fail("Could not save \"\(title)\". \(error.diagnosticDescription)", folderPath: folder.url.path)
             }
         }
+    }
+
+    /// Moves a call that just ended to the Trash when it is shorter than the setting, before
+    /// anything is spent transcribing it. True when it was moved.
+    func discardIfTooShort(_ folder: RecordingFolder) async -> Bool {
+        guard AppSettings.discardShortEnabled else { return false }
+        let urls = folder.audioURLs
+        let speech = AppSettings.discardShortCountsSpeech
+        let options = AppSettings.trimOptions
+        let seconds = await Task.detached { () -> Double in
+            speech ? SpeechTime.measure(urls, options: options) : urls.compactMap { AudioFiles.duration($0) }.max() ?? 0
+        }.value
+        guard seconds < Double(AppSettings.discardShortSeconds) else { return false }
+        let title = folder.loadMeta()?.title ?? folder.url.lastPathComponent
+        do {
+            try FileManager.default.trashItem(at: folder.url, resultingItemURL: nil)
+        } catch {
+            Log.app.error("Could not move a short recording to the Trash: \(error.diagnosticDescription, privacy: .public)")
+            return false
+        }
+        let amount = speech ? "had \(Int(seconds.rounded())) s of speech" : "lasted \(Int(seconds.rounded())) s"
+        Log.app.notice("Moved \"\(title, privacy: .public)\" to the Trash: it \(amount, privacy: .public)")
+        Notifier.shared.post(.recordingStopped, title: "Recording too short",
+                             body: "\"\(title)\" \(amount), so it was moved to the Trash.", folderPath: nil)
+        reloadLibrary()
+        return true
     }
 
     /// Called on quit: closes the crash-safe files so nothing is lost. The call is

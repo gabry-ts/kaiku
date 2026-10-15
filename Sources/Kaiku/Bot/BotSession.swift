@@ -242,6 +242,7 @@ final class BotSession: ObservableObject, Identifiable {
         case .success(let seconds?) where seconds > 0:
             folder.updateMeta { $0.durationSeconds = duration }
             phase = .finished
+            if await AppState.shared.discardIfTooShort(folder) { break }
             AppState.shared.transcribe(folder: folder, provider: AppSettings.provider, summarize: AppSettings.botSummarize ? true : nil)
         case .success:
             let message = "The meeting bot recorded no audio."
