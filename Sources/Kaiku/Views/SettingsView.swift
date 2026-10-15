@@ -3,7 +3,7 @@ import SwiftUI
 import KaikuCore
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, menuBar, recording, callDetection, transcription, dictation, ai, accounts, integrations, notifications, permissions, about
+    case general, menuBar, recording, callDetection, meetingBot, transcription, dictation, ai, accounts, integrations, notifications, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .menuBar: return "Menu Bar & Shortcuts"
         case .recording: return "Recording"
         case .callDetection: return "Call Detection"
+        case .meetingBot: return "Meeting Bot"
         case .transcription: return "Transcription"
         case .dictation: return "Dictation"
         case .ai: return "AI"
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .menuBar: return "menubar.rectangle"
         case .recording: return "mic.fill"
         case .callDetection: return "phone.and.waveform.fill"
+        case .meetingBot: return "person.wave.2.fill"
         case .transcription: return "text.quote"
         case .dictation: return "waveform.and.mic"
         case .ai: return "sparkles"
@@ -46,6 +48,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .menuBar: return .orange
         case .recording: return AppAccent.kaiku.color
         case .callDetection: return .teal
+        case .meetingBot: return .mint
         case .transcription: return .blue
         case .dictation: return .pink
         case .ai: return .indigo
@@ -74,7 +77,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var section: Section {
         switch self {
         case .general, .menuBar: return .main
-        case .recording, .callDetection, .transcription, .dictation: return .capture
+        case .recording, .callDetection, .meetingBot, .transcription, .dictation: return .capture
         case .ai, .accounts, .integrations: return .intelligence
         case .notifications, .permissions, .about: return .system
         }

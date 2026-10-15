@@ -4,7 +4,7 @@ import KaikuCore
 /// the data (single sources, whisper models, calendars) aren't listed: their group is, with
 /// the words people use for them.
 enum SettingsIndex {
-    static let all: [SettingsSearchEntry] = general + menuBar + recording + callDetection + transcription
+    static let all: [SettingsSearchEntry] = general + menuBar + recording + callDetection + meetingBot + transcription
         + dictation + ai + accounts + integrations + notifications + permissions + about
 
     /// The pane and row an entry leads to.
@@ -173,6 +173,17 @@ enum SettingsIndex {
         e(.permissions, "calendar", "Permissions", "Calendar access", ["permission", "privacy"]),
         e(.permissions, "accessibility", "Permissions", "Accessibility", ["permission", "privacy", "browser", "window title", "dictation", "paste"]),
         e(.permissions, "reminders", "Permissions", "Reminders access", ["permission", "privacy"]),
+    ]
+
+    private static let meetingBot = [
+        e(.meetingBot, "chrome", "Google Chrome", "Google Chrome for the meeting bot", ["chrome", "browser", "bot"]),
+        e(.meetingBot, "appearance", "Appearance", "Name", ["bot", "name", "notetaker"]),
+        e(.meetingBot, "appearance", "Appearance", "Picture", ["bot", "photo", "avatar", "camera", "picture"]),
+        e(.meetingBot, "appearance", "Appearance", "Message in the chat", ["bot", "chat", "consent", "message"]),
+        e(.meetingBot, "inCall", "In the Call", "Leave when everyone else has left", ["bot", "alone", "leave"]),
+        e(.meetingBot, "inCall", "In the Call", "Give up waiting in the lobby after", ["bot", "lobby", "waiting room", "timeout"]),
+        e(.meetingBot, "inCall", "In the Call", "Leave calls longer than", ["bot", "duration", "limit"]),
+        e(.meetingBot, "inCall", "In the Call", "Summarize the call afterwards", ["bot", "summary"]),
     ]
 
     private static let about = [

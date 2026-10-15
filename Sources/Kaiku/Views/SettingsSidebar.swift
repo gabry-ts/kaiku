@@ -319,6 +319,7 @@ struct SettingsDetailView: View {
             case .menuBar: MenuBarSettings()
             case .recording: RecordingSettings()
             case .callDetection: CallDetectionSettings()
+            case .meetingBot: BotSettings()
             case .transcription: TranscriptionSettings()
             case .dictation: DictationSettings()
             case .ai: AISettings()
