@@ -85,12 +85,24 @@ struct BotSettings: View {
         }
     }
 
-    /// Copies the picture into Application Support, so moving the original doesn't lose it.
+    /// A sheet on the Settings window: a free-standing panel gets lost behind other apps'
+    /// windows once focus moves, as Kaiku lives in the menu bar.
     private func choosePhoto() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.prompt = "Use Picture"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let window = NSApp.keyWindow else {
+            if panel.runModal() == .OK, let url = panel.url { usePhoto(url) }
+            return
+        }
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            usePhoto(url)
+        }
+    }
+
+    /// Copies the picture into Application Support, so moving the original doesn't lose it.
+    private func usePhoto(_ url: URL) {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kaiku", isDirectory: true)
         let dest = folder.appendingPathComponent("bot-picture." + (url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()))
