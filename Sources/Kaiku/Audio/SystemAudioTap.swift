@@ -12,6 +12,9 @@ import os
 /// on the new output while the recording goes on. The writer fills the gap with silence
 /// and converts the new format, so the system track stays aligned with the mic.
 /// Default devices and sample rates are never changed.
+///
+/// The meeting bot uses it on its own Chrome processes only, muted on the speakers unless
+/// you listen in. Every other tap leaves those processes out.
 final class SystemAudioTap {
     struct Route {
         let name: String
@@ -35,6 +38,20 @@ final class SystemAudioTap {
     private var defaultListener: AudioObjectPropertyListenerBlock?
     private var aliveListener: (device: AudioObjectID, block: AudioObjectPropertyListenerBlock)?
     private(set) var rebuildCount = 0
+    /// The processes to tap instead of all output (the meeting bot's Chrome), read at every build.
+    private let processes: (() -> [AudioObjectID])?
+    private var muted: Bool
+    private var tapDescription: CATapDescription?
+    private var excludeObserver: NSObjectProtocol?
+
+    /// Audio processes of the meeting bot, left out of every tap but its own.
+    static let botProcesses = OSAllocatedUnfairLock<[AudioObjectID]>(initialState: [])
+    static let botProcessesChanged = Notification.Name("kaiku.botProcessesChanged")
+
+    init(processes: (() -> [AudioObjectID])? = nil, muted: Bool = false) {
+        self.processes = processes
+        self.muted = muted
+    }
 
     /// Peak level since the last read, 0...1.
     func readLevel() -> Float {
@@ -53,6 +70,11 @@ final class SystemAudioTap {
             running = true
             installListeners()
         }
+        if processes == nil {
+            // The bot joined or left: leave its processes out again.
+            excludeObserver = NotificationCenter.default.addObserver(
+                forName: Self.botProcessesChanged, object: nil, queue: nil) { [weak self] _ in self?.refresh() }
+        }
         reportRoute(initial: true)
     }
 
@@ -61,13 +83,80 @@ final class SystemAudioTap {
         control.sync { rebuild() }
     }
 
+    /// Rebuilds the tap soon, e.g. when the processes to tap or leave out changed.
+    func refresh() {
+        control.async { [weak self] in self?.rebuild() }
+    }
+
+    /// Plays the tapped processes on the speakers too, or mutes them again, without
+    /// stopping the capture.
+    func setMuted(_ value: Bool) {
+        control.async { [weak self] in
+            guard let self, self.muted != value else { return }
+            self.muted = value
+            guard self.tapID != kAudioObjectUnknown, let desc = self.tapDescription else { return }
+            desc.muteBehavior = value ? .mutedWhenTapped : .unmuted
+            var addr = AudioObjectPropertyAddress(
+                mSelector: kAudioTapPropertyDescription,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            var ref = desc
+            let status = withUnsafeMutablePointer(to: &ref) {
+                AudioObjectSetPropertyData(self.tapID, &addr, 0, nil, UInt32(MemoryLayout<CATapDescription>.size), $0)
+            }
+            if status != noErr {
+                Log.audio.error("Changing the tap mute failed (\(status)), rebuilding it")
+                self.rebuild()
+            }
+        }
+    }
+
+    /// The Core Audio process objects of `pid` and its descendants (Chrome plays audio
+    /// from a helper process).
+    static func audioProcesses(descendantsOf pid: pid_t) -> [AudioObjectID] {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.filter { id in
+            var processPID: pid_t = 0
+            var pidSize = UInt32(MemoryLayout<pid_t>.size)
+            var pidAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyPID,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            guard AudioObjectGetPropertyData(id, &pidAddr, 0, nil, &pidSize, &processPID) == noErr else { return false }
+            var current = processPID
+            // Walk up the parents, a few levels at most.
+            for _ in 0..<6 {
+                if current == pid { return true }
+                guard current > 1, let parent = parentPID(of: current) else { return false }
+                current = parent
+            }
+            return false
+        }
+    }
+
+    private static func parentPID(of pid: pid_t) -> pid_t? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        return info.kp_eproc.e_ppid
+    }
+
     private func build() throws {
-        // 1. Global stereo tap of every process, audio keeps playing normally.
-        let desc = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+        // 1. Global stereo tap of every process but the bot's, audio keeps playing normally.
+        //    The bot's tap takes only its processes, muted unless you listen in.
+        let desc = processes.map { CATapDescription(stereoMixdownOfProcesses: $0()) }
+            ?? CATapDescription(stereoGlobalTapButExcludeProcesses: Self.botProcesses.withLock { $0 })
         desc.uuid = UUID()
-        desc.name = "Kaiku system audio"
-        desc.muteBehavior = .unmuted
+        desc.name = processes == nil ? "Kaiku system audio" : "Kaiku meeting bot"
+        desc.muteBehavior = muted ? .mutedWhenTapped : .unmuted
         desc.isPrivate = true
+        tapDescription = desc
 
         var tap = AudioObjectID(kAudioObjectUnknown)
         var status = AudioHardwareCreateProcessTap(desc, &tap)
@@ -136,6 +225,7 @@ final class SystemAudioTap {
         procID = nil
         aggregateID = AudioObjectID(kAudioObjectUnknown)
         tapID = AudioObjectID(kAudioObjectUnknown)
+        tapDescription = nil
         // Let any in-flight IO block finish.
         queue.sync {}
     }
@@ -237,6 +327,8 @@ final class SystemAudioTap {
     }
 
     func stop() {
+        if let excludeObserver { NotificationCenter.default.removeObserver(excludeObserver) }
+        excludeObserver = nil
         control.sync {
             running = false
             pendingRebuild?.cancel()
