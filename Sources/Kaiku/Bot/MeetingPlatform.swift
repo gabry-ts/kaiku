@@ -132,8 +132,11 @@ struct MeetingPlatform {
       if (/you left the meeting|you've been removed|you have been removed|the call has ended|meeting has ended|return to home screen|you can't join this video call|denied your request|no one responded to your request/i.test(text))
         return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|can't join|denied|responded/i.test(l)) };
       if (buttonMatching(/leave call/i)) {
+        // The number on the People button counts everyone; the tiles only who fits on screen.
+        const people = buttonMatching(/show everyone|^people|participants/i);
+        const count = people ? parseInt(((people.innerText || '').match(/\\d+/) || [])[0], 10) : NaN;
         const ids = new Set([...document.querySelectorAll('[data-participant-id]')].map(e => e.getAttribute('data-participant-id')));
-        return { phase: 'inCall', participants: ids.size || null };
+        return { phase: 'inCall', participants: count > 0 ? count : (ids.size || null) };
       }
       if (/asking to be let in|please wait until a meeting host|someone will let you in soon/i.test(text)) return { phase: 'lobby' };
       const ok = button(/^(got it|dismiss|accept all|continue without microphone and camera)$/i);
