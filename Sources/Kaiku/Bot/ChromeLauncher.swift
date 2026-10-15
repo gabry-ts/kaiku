@@ -7,8 +7,8 @@ import UniformTypeIdentifiers
 /// as the camera, a silent microphone, English pages (the join scripts read English labels)
 /// and a regular user agent. Opens the meeting and connects to it over DevTools.
 ///
-/// Nobody watches the bot's screen, so it asks for as little video as it can: a small
-/// window (the sites send smaller streams to small tiles) and incoming video switched off.
+/// Nobody watches the bot's screen, so incoming video is switched off. The window stays
+/// desktop sized: in a small one Meet tucks the chat button away.
 final class ChromeLauncher {
     private let process = Process()
     private let profile: URL
@@ -57,7 +57,7 @@ final class ChromeLauncher {
             "--use-fake-device-for-media-stream",
             "--use-file-for-fake-audio-capture=\(silence.path)",
             "--lang=en-US",
-            "--window-size=640,360",
+            "--window-size=1280,900",
             "--user-agent=\(userAgent(app: app))",
         ]
         if let photo, let frames = cameraFrames(photo) {
