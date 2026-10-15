@@ -78,6 +78,12 @@ struct MeetingPlatform {
             }
             try await devTools.insertText(message)
             try await Task.sleep(nanoseconds: 300_000_000)
+            // An empty box now means the typing went elsewhere, not that it was sent.
+            let typed = try await devTools.evaluate(Self.call(Self.chatBoxText)) as? String ?? ""
+            guard !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                Log.app.error("Meeting bot: the chat box didn't take the message")
+                return false
+            }
             // The send button where there is one: Enter doesn't send in every editor.
             if try await devTools.evaluate(Self.call(Self.clickSend)) as? Bool != true {
                 try await devTools.pressEnter()
@@ -122,7 +128,9 @@ struct MeetingPlatform {
     const buttonMatching = re => qa('button, [role=button]')
       .find(e => visible(e) && !e.disabled && re.test(label(e)));
     const pageText = () => docs().map(d => d.body ? d.body.innerText : '').join('\\n');
-    const chatBox = () => q('textarea[aria-label*="message" i], textarea[placeholder*="message" i], textarea[aria-label*="chat" i], [data-tid="ckeditor"], div[role="textbox"][contenteditable="true"]');
+    // Closed chat panels stay in the page, slid off screen.
+    const onScreen = e => { if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth; };
+    const chatBox = () => qa('textarea[aria-label*="message" i], textarea[placeholder*="message" i], textarea[aria-label*="chat" i], [data-tid="ckeditor"], div[role="textbox"][contenteditable="true"]').find(onScreen);
     const field = re => qa('input').find(e => visible(e) && re.test((e.getAttribute('aria-label') || '') + ' ' + (e.placeholder || '') + ' ' + (e.name || '')));
     """
 
@@ -165,6 +173,11 @@ struct MeetingPlatform {
         return { phase: 'ended', detail: text.split('\\n').find(l => /left|removed|ended|denied|let you in/i.test(l)) };
       const hangup = document.querySelector('#hangup-button, [data-tid="hangup-main-btn"], [data-tid="call-hangup"]') || button(/^(leave|hang up)$/i);
       if (hangup) {
+        // The join screen toggles aren't always found: settle the mic and camera in the call.
+        const mic = document.querySelector('#mic-button');
+        if (mic && /^mute/i.test(mic.getAttribute('aria-label') || '')) mic.click();
+        const video = document.querySelector('#video-button');
+        if (video && (camera ? /turn camera on/i : /turn camera off/i).test(video.getAttribute('aria-label') || '')) video.click();
         const roster = document.querySelector('[data-tid="roster-button"], #roster-button');
         const count = roster ? parseInt((roster.innerText.match(/\\d+/) || [])[0], 10) : NaN;
         const tiles = document.querySelectorAll('[data-tid="video-tile"], [data-cid="calling-participant-stream"]').length;
@@ -253,10 +266,9 @@ struct MeetingPlatform {
 
     private static let webexOpenChat = """
     async () => {
-      const find = () => q('textarea[aria-label*="message" i], textarea[placeholder*="message" i], div[role="textbox"][contenteditable="true"]');
-      if (!find()) { const b = buttonMatching(/^chat|open chat|show chat/i); if (b) b.click(); }
-      for (let i = 0; i < 20 && !find(); i++) await new Promise(r => setTimeout(r, 150));
-      const box = find();
+      if (!chatBox()) { const b = buttonMatching(/^chat|open chat|show chat/i); if (b) b.click(); }
+      for (let i = 0; i < 20 && !chatBox(); i++) await new Promise(r => setTimeout(r, 150));
+      const box = chatBox();
       if (box) box.focus();
       return !!box;
     }
@@ -292,10 +304,9 @@ struct MeetingPlatform {
 
     private static let meetOpenChat = """
     async () => {
-      const find = () => document.querySelector('textarea[aria-label*="message" i], textarea[aria-label*="chat" i]');
-      if (!find()) { const b = buttonMatching(/chat with everyone|open chat|chat/i); if (b) b.click(); }
-      for (let i = 0; i < 20 && !find(); i++) await new Promise(r => setTimeout(r, 150));
-      const box = find();
+      if (!chatBox()) { const b = buttonMatching(/chat with everyone|open chat|chat/i); if (b) b.click(); }
+      for (let i = 0; i < 20 && !chatBox(); i++) await new Promise(r => setTimeout(r, 150));
+      const box = chatBox();
       if (box) box.focus();
       return !!box;
     }
@@ -303,10 +314,9 @@ struct MeetingPlatform {
 
     private static let teamsOpenChat = """
     async () => {
-      const find = () => document.querySelector('[data-tid="ckeditor"], div[role="textbox"][contenteditable="true"]');
-      if (!find()) { const b = document.querySelector('#chat-button, [data-tid="chat-button"]') || buttonMatching(/^chat/i); if (b) b.click(); }
-      for (let i = 0; i < 20 && !find(); i++) await new Promise(r => setTimeout(r, 150));
-      const box = find();
+      if (!chatBox()) { const b = document.querySelector('#chat-button, [data-tid="chat-button"]') || buttonMatching(/^chat/i); if (b) b.click(); }
+      for (let i = 0; i < 20 && !chatBox(); i++) await new Promise(r => setTimeout(r, 150));
+      const box = chatBox();
       if (box) box.focus();
       return !!box;
     }
