@@ -96,6 +96,7 @@ final class BotSession: ObservableObject, Identifiable {
         var callStart: Date?
         var lastWithOthers: Date?
         var failure: String?
+        var chatTries = AppSettings.botChatMessage.isEmpty || !platform.hasChat ? 3 : 0
         loop: while !stopRequested && !Task.isCancelled {
             guard chrome.isRunning else { failure = callStart == nil ? "Google Chrome closed" : nil; break }
             let state: MeetingPageState?
@@ -126,10 +127,13 @@ final class BotSession: ObservableObject, Identifiable {
                         failure = "The call could not be saved: \(error.diagnosticDescription)"
                         break loop
                     }
-                    let message = AppSettings.botChatMessage
-                    if !message.isEmpty { await platform.sendChat(chrome.devTools, message) }
                 }
                 updateAudio(pid: chrome.pid)
+                // A few seconds in, once the call screen has settled; a few tries at most.
+                if chatTries < 3, let start = callStart, now.timeIntervalSince(start) > 5 {
+                    chatTries += 1
+                    if await platform.sendChat(chrome.devTools, AppSettings.botChatMessage) { chatTries = 3 }
+                }
                 if let people = state?.participants {
                     if people > 1 { lastWithOthers = now }
                     if AppSettings.botLeaveWhenAlone, let last = lastWithOthers, now.timeIntervalSince(last) > 120 {

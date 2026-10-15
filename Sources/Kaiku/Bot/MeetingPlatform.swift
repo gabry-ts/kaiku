@@ -60,26 +60,38 @@ struct MeetingPlatform {
         }
     }
 
-    /// Posts a message in the meeting chat. Best effort; FaceTime has no chat.
-    func sendChat(_ devTools: CDPClient, _ message: String) async {
+    var hasChat: Bool { platform != .faceTime }
+
+    /// Posts a message in the meeting chat. True once the box emptied, i.e. it was sent.
+    func sendChat(_ devTools: CDPClient, _ message: String) async -> Bool {
         let open: String
         switch platform {
         case .meet: open = Self.meetOpenChat
         case .teams: open = Self.teamsOpenChat
         case .webex: open = Self.webexOpenChat
-        case .faceTime: return
+        case .faceTime: return false
         }
         do {
             guard try await devTools.evaluate(Self.call(open)) as? Bool == true else {
                 Log.app.error("Meeting bot: chat box not found")
-                return
+                return false
             }
             try await devTools.insertText(message)
             try await Task.sleep(nanoseconds: 300_000_000)
-            try await devTools.pressEnter()
+            // The send button where there is one: Enter doesn't send in every editor.
+            if try await devTools.evaluate(Self.call(Self.clickSend)) as? Bool != true {
+                try await devTools.pressEnter()
+            }
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            let left = try await devTools.evaluate(Self.call(Self.chatBoxText)) as? String ?? ""
+            if left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+            // Emptied, so a retry doesn't type the message twice.
+            _ = try? await devTools.evaluate(Self.call(Self.clearChatBox))
+            Log.app.error("Meeting bot: chat message typed but not sent")
         } catch {
             Log.app.error("Meeting bot: chat message not sent: \(error.diagnosticDescription, privacy: .public)")
         }
+        return false
     }
 
     func leave(_ devTools: CDPClient) async {
@@ -110,6 +122,7 @@ struct MeetingPlatform {
     const buttonMatching = re => qa('button, [role=button]')
       .find(e => visible(e) && !e.disabled && re.test(label(e)));
     const pageText = () => docs().map(d => d.body ? d.body.innerText : '').join('\\n');
+    const chatBox = () => q('textarea[aria-label*="message" i], textarea[placeholder*="message" i], textarea[aria-label*="chat" i], [data-tid="ckeditor"], div[role="textbox"][contenteditable="true"]');
     const field = re => qa('input').find(e => visible(e) && re.test((e.getAttribute('aria-label') || '') + ' ' + (e.placeholder || '') + ' ' + (e.name || '')));
     """
 
@@ -240,6 +253,34 @@ struct MeetingPlatform {
       const box = find();
       if (box) box.focus();
       return !!box;
+    }
+    """
+
+    private static let clickSend = """
+    () => {
+      const b = q('[data-tid="newMessageCommands-send"]') || buttonMatching(/^send( a)? message|^send$/i);
+      if (b && !b.disabled && b.getAttribute('aria-disabled') !== 'true') { b.click(); return true; }
+      return false;
+    }
+    """
+
+    private static let chatBoxText = """
+    () => { const b = chatBox(); return b ? (b.tagName === 'TEXTAREA' ? b.value : b.innerText) : ''; }
+    """
+
+    private static let clearChatBox = """
+    () => {
+      const b = chatBox();
+      if (!b) return false;
+      b.focus();
+      if (b.tagName === 'TEXTAREA') {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(b, '');
+        b.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        b.ownerDocument.execCommand('selectAll');
+        b.ownerDocument.execCommand('delete');
+      }
+      return true;
     }
     """
 
