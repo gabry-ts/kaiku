@@ -421,6 +421,8 @@ struct RecordingSettings: View {
                 .settingsAnchor("mute")
             AutoStopSection()
                 .settingsAnchor("forgotten")
+            ShortRecordingsSection()
+                .settingsAnchor("short")
         }
         .onAppear { devices = AudioDevices.inputs() }
         .onDisappear { monitor.stop() }
@@ -512,6 +514,40 @@ struct AutoStopSection: View {
                 }
                 .labelsHidden()
                 .fixedSize()
+            }
+        }
+    }
+}
+
+/// Moves calls too short to matter to the Trash as soon as they stop, before transcription.
+struct ShortRecordingsSection: View {
+    @AppStorage(Keys.discardShortEnabled) private var enabled = true
+    @AppStorage(Keys.discardShortSeconds) private var seconds = 30
+    @AppStorage(Keys.discardShortMode) private var mode = "total"
+
+    var body: some View {
+        SettingsGroup("Short Recordings", footer: "Checked when a recording stops, before it is transcribed. Speech is any sound above the silence level, music and noise included.") {
+            SwitchRow("Move short recordings to the Trash", isOn: $enabled)
+            if enabled {
+                SettingsRow("Shorter than") {
+                    Picker("Shorter than", selection: $seconds) {
+                        Text("10 seconds").tag(10)
+                        Text("30 seconds").tag(30)
+                        Text("1 minute").tag(60)
+                        Text("2 minutes").tag(120)
+                        Text("5 minutes").tag(300)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                SettingsRow("Count") {
+                    Picker("Count", selection: $mode) {
+                        Text("Total length").tag("total")
+                        Text("Speech only").tag("speech")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
         }
     }

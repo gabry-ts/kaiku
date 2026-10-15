@@ -59,6 +59,8 @@ enum SettingsIndex {
         e(.recording, "mute", "Mute", "Volume while muted", ["mute", "teams", "volume"]),
         e(.recording, "forgotten", "Forgotten Recordings", "Stop after a silence of", ["silence", "auto stop", "forgot"]),
         e(.recording, "forgotten", "Forgotten Recordings", "Stop recordings longer than", ["length", "max", "hours", "auto stop"]),
+        e(.recording, "short", "Short Recordings", "Move short recordings to the Trash", ["short", "delete", "trash", "discard", "minimum"]),
+        e(.recording, "short", "Short Recordings", "Count total length or speech only", ["speech", "silence", "short", "minimum"]),
     ]
 
     private static let callDetection = [
