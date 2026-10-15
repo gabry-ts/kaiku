@@ -98,8 +98,22 @@ final class BotSession: ObservableObject, Identifiable {
         var failure: String?
         var chatTries = AppSettings.botChatMessage.isEmpty || !platform.hasChat ? 3 : 0
         var stepFailures = 0
+        // Why the bot left, kept in the log; `unexpected` also tells you.
+        var leftBecause = "stopped from the menu"
+        var unexpected = false
         loop: while !stopRequested && !Task.isCancelled {
-            guard chrome.isRunning else { failure = callStart == nil ? "Google Chrome closed" : nil; break }
+            guard chrome.isRunning else {
+                leftBecause = "Google Chrome closed (\(chrome.exitDescription))"
+                unexpected = true
+                failure = callStart == nil ? "Google Chrome closed" : nil
+                break
+            }
+            if chrome.devTools.pageCrashed {
+                leftBecause = "the meeting page crashed in Google Chrome"
+                unexpected = true
+                failure = callStart == nil ? "The meeting page crashed" : nil
+                break
+            }
             let state: MeetingPageState?
             do {
                 state = try await platform.step(chrome.devTools, name: AppSettings.botName, camera: photo != nil)
@@ -147,19 +161,26 @@ final class BotSession: ObservableObject, Identifiable {
                 if let people = state?.participants {
                     if people > 1 { lastWithOthers = now }
                     if AppSettings.botLeaveWhenAlone, let last = lastWithOthers, now.timeIntervalSince(last) > 120 {
-                        Log.app.info("Meeting bot leaving: alone in the call")
+                        leftBecause = "everyone else left (the page counted \(people))"
                         break loop
                     }
                 }
                 if let start = callStart, now.timeIntervalSince(start) > Double(AppSettings.botMaxMinutes) * 60 {
-                    Log.app.info("Meeting bot leaving: longest call reached")
+                    leftBecause = "the longest call setting was reached"
                     break loop
                 }
             case .ended?:
+                leftBecause = "\(link.platform.name) showed: \(state?.detail ?? "the call ended")"
+                unexpected = true
                 if callStart == nil { failure = state?.detail ?? "The bot could not join the meeting." }
                 break loop
             }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        if let failure { leftBecause = failure }
+        Log.app.notice("Meeting bot left \(self.link.platform.name, privacy: .public) after \(Int(callStart.map { Date().timeIntervalSince($0) } ?? 0))s: \(leftBecause, privacy: .public)")
+        if unexpected && callStart != nil {
+            Notifier.shared.post(.problem, title: "Meeting bot left the call", body: leftBecause, folderPath: folder?.url.path)
         }
         if callStart != nil {
             phase = .leaving

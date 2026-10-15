@@ -7,6 +7,10 @@ final class CDPClient: @unchecked Sendable {
     private let lock = NSLock()
     private var nextID = 0
     private var pending: [Int: CheckedContinuation<[String: Any], Error>] = [:]
+    private var crashed = false
+
+    /// The page's renderer crashed ("Aw, Snap!"): Chrome runs on, the page is gone.
+    var pageCrashed: Bool { lock.withLock { crashed } }
 
     /// Connects to the first page target of the browser listening on `port`, dropping any
     /// previous connection.
@@ -22,7 +26,10 @@ final class CDPClient: @unchecked Sendable {
                 socket.maximumMessageSize = 16 * 1024 * 1024
                 self.socket = socket
                 socket.resume()
+                lock.withLock { crashed = false }
                 receive()
+                // Reports a renderer crash as an event.
+                _ = try? await send("Inspector.enable")
                 return
             }
             try await Task.sleep(nanoseconds: 250_000_000)
@@ -77,6 +84,11 @@ final class CDPClient: @unchecked Sendable {
             switch result {
             case .success(let message):
                 if case .string(let text) = message,
+                   let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+                   json["method"] as? String == "Inspector.targetCrashed" {
+                    Log.app.error("Meeting bot: the meeting page crashed in Chrome")
+                    self.lock.withLock { self.crashed = true }
+                } else if case .string(let text) = message,
                    let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
                    let id = json["id"] as? Int {
                     if let error = json["error"] as? [String: Any] {

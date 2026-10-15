@@ -15,6 +15,13 @@ final class ChromeLauncher {
     var pid: pid_t { process.processIdentifier }
     var isRunning: Bool { process.isRunning }
 
+    /// How Chrome ended, for the log.
+    var exitDescription: String {
+        guard !process.isRunning else { return "still running" }
+        return process.terminationReason == .uncaughtSignal
+            ? "killed by signal \(process.terminationStatus)" : "exit code \(process.terminationStatus)"
+    }
+
     static var chromeURL: URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome")
     }
