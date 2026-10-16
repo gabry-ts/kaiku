@@ -26,6 +26,11 @@ final class BotManager: ObservableObject {
         session.begin()
     }
 
+    /// Snapshots only: lists trips without starting them.
+    func setPreview(_ sessions: [BotSession]) {
+        self.sessions = sessions
+    }
+
     func dismiss(_ session: BotSession) {
         guard !session.isActive else { return }
         sessions.removeAll { $0.id == session.id }

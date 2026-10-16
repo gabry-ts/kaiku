@@ -152,6 +152,15 @@ enum Snapshots {
         both("panel-idle", size: nil, chrome: false, panel)
         state.setPreview(phase: .recording(title: "Weekly sync with design team", start: Date()), mic: 0.62, system: 0.41)
         both("panel-recording", size: nil, chrome: false, panel)
+        // The meeting bot in another call while you record, and one trip scheduled.
+        let inCall = BotSession(link: MeetingLink("https://meet.google.com/abc-defg-hij")!, title: "Q4 planning with Nova", start: nil)
+        inCall.setPreview(phase: .inCall(since: Date().addingTimeInterval(-640)))
+        let later = BotSession(link: MeetingLink("https://teams.microsoft.com/meet/123456789?p=abc")!, title: "Board update",
+                               start: nil)
+        later.setPreview(phase: .scheduled(Calendar.current.date(bySettingHour: 16, minute: 0, second: 0, of: Date()) ?? Date()))
+        BotManager.shared.setPreview([inCall, later])
+        both("panel-bot", size: nil, chrome: false, panel)
+        BotManager.shared.setPreview([])
         if LiveTranscription.isSupported {
             state.live.setPreview(Fixtures.liveTranscript)
             both("panel-recording-live", size: nil, chrome: false, panel)

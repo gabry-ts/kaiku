@@ -286,6 +286,12 @@ final class BotSession: ObservableObject, Identifiable {
         Notifier.shared.post(.problem, title: "Meeting bot", body: message, folderPath: folder?.url.path)
     }
 
+    /// Snapshots only: shows the trip in a state, without running it.
+    func setPreview(phase: Phase, listening: Bool = false) {
+        self.phase = phase
+        self.listening = listening
+    }
+
     /// Quitting Kaiku: stop at once. The call is recovered at the next launch.
     func kill() {
         task?.cancel()
