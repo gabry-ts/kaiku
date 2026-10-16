@@ -4,7 +4,7 @@
 
 # Kaiku
 
-**Record and transcribe your calls on macOS. No bot joins the meeting, no subscription, your files stay yours.**
+**Record and transcribe your calls on macOS. No bot joins the meeting unless you send one, no subscription, your files stay yours.**
 
 <sub>*Kaiku* is Finnish for echo: what was said, played back when you need it.</sub>
 
@@ -23,6 +23,7 @@
 ## Features
 
 - Records mic and system audio on separate tracks, no virtual driver, and can start by itself for the apps you choose
+- Optional meeting bot for Google Meet, Teams, Webex and FaceTime links when you can't be there, running in Chrome on your Mac
 - Transcribes locally with whisper.cpp or the macOS 26 speech recognizer, or with ElevenLabs, OpenAI, Groq, Alibaba Cloud
 - "Me" vs "Others" split, speaker diarization, speaker names from the calendar invite
 - One window for calls, chat and settings, with search, tags, smart search and a player that highlights each word
@@ -30,7 +31,8 @@
 - AI summaries with action items for Reminders, Things and Linear, using a cloud provider, a CLI tool or Ollama
 - Import audio and video files, and system-wide dictation (off until you turn it on)
 - Export to Markdown, TXT, SRT, VTT and DOCX, plus a webhook
-- MCP server for Claude Code, Codex and Claude Desktop, Shortcuts, Spotlight and a Raycast extension
+- Recordings shorter than 30 seconds go to the Trash before they are transcribed
+- MCP server for Claude Code, Codex and Claude Desktop, which can also transcribe any file for agents, Shortcuts, Spotlight and a Raycast extension
 
 ## Install
 
