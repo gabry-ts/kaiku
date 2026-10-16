@@ -31,6 +31,7 @@ if CommandLine.arguments.contains("--version") {
 let tools = KaikuToolSet(
     library: CallLibrary(base: base),
     allowEdits: { savedPreference(KaikuAgents.allowEditsKey) as? Bool ?? false },
+    allowFiles: { savedPreference(KaikuAgents.allowFilesKey) as? Bool ?? false },
     openInApp: { request in
         // In the background, launching the app when it isn't running.
         let process = Process()

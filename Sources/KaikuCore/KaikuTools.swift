@@ -1,11 +1,17 @@
 import Foundation
 
-/// The tools Kaiku's MCP server offers: reading calls always, changing them only when
-/// the user allowed it in Settings.
+/// The tools Kaiku's MCP server offers: reading calls always, changing them and
+/// transcribing files only when the user allowed each in Settings.
 public struct KaikuToolSet: MCPToolSet {
     public var library: CallLibrary
     /// Read on every request, so the Settings switch applies without restarting the server.
     public var allowEdits: () -> Bool
+    /// The same for transcribing files with transcribe_file.
+    public var allowFiles: () -> Bool
+    /// Where the app writes file jobs, and how long transcribe_file waits for one.
+    public var jobsFolder: URL
+    public var fileWait: TimeInterval = 300
+    public var filePoll: TimeInterval = 2
     /// Asks the app for work it does itself (transcribing, summarizing).
     public var openInApp: (AgentRequest) throws -> Void
     /// Called after a call was changed on disk.
@@ -14,12 +20,14 @@ public struct KaikuToolSet: MCPToolSet {
     /// Embeds the query of semantic_search.
     public var embedder: TextEmbedder
 
-    public init(library: CallLibrary, allowEdits: @escaping () -> Bool,
+    public init(library: CallLibrary, allowEdits: @escaping () -> Bool, allowFiles: @escaping () -> Bool = { false },
                 openInApp: @escaping (AgentRequest) throws -> Void = { _ in }, changed: @escaping () -> Void = {},
-                embedder: TextEmbedder = NLSentenceEmbedder()) {
+                embedder: TextEmbedder = NLSentenceEmbedder(), jobsFolder: URL = KaikuAgents.jobsFolder) {
         self.embedder = embedder
         self.library = library
         self.allowEdits = allowEdits
+        self.allowFiles = allowFiles
+        self.jobsFolder = jobsFolder
         self.openInApp = openInApp
         self.changed = changed
     }
@@ -30,9 +38,10 @@ public struct KaikuToolSet: MCPToolSet {
 
     public static let readToolNames = ["list_calls", "get_call", "read_transcript", "read_summary", "search_transcripts", "semantic_search"]
     public static let editToolNames = ["rename_call", "set_tags", "rename_speaker", "transcribe_again", "summarize_again"]
+    public static let fileToolNames = ["transcribe_file", "get_transcription"]
 
     public func tools() -> [MCPTool] {
-        Self.readTools + (allowEdits() ? Self.editTools : [])
+        Self.readTools + (allowEdits() ? Self.editTools : []) + (allowFiles() ? Self.fileTools : [])
     }
 
     public func call(_ name: String, arguments: [String: JSONValue]) throws -> MCPToolResult {
@@ -40,6 +49,11 @@ public struct KaikuToolSet: MCPToolSet {
         if Self.editToolNames.contains(name) {
             guard allowEdits() else {
                 return .error("Changing calls is turned off. The user can allow it in Kaiku > Settings > Integrations > Agents (MCP) > Allow agents to edit calls.")
+            }
+        }
+        if Self.fileToolNames.contains(name) {
+            guard allowFiles() else {
+                return .error("Transcribing files is turned off. The user can allow it in Kaiku > Settings > Integrations > Agents (MCP) > Allow agents to transcribe files.")
             }
         }
         switch name {
@@ -54,6 +68,8 @@ public struct KaikuToolSet: MCPToolSet {
         case "rename_speaker": return try renameSpeaker(args)
         case "transcribe_again": return try transcribeAgain(args)
         case "summarize_again": return try summarizeAgain(args)
+        case "transcribe_file": return try transcribeFile(args)
+        case "get_transcription": return try getTranscription(args)
         default: throw MCPError.invalidParams("Unknown tool: \(name)")
         }
     }
@@ -363,6 +379,74 @@ public struct KaikuToolSet: MCPToolSet {
         }
     }
 
+    // MARK: Files
+
+    private func transcribeFile(_ args: MCPArguments) throws -> MCPToolResult {
+        let raw = (try args.requiredString("path") as NSString).expandingTildeInPath
+        guard raw.hasPrefix("/") else { throw MCPError.invalidParams("path must be an absolute path") }
+        let url = URL(fileURLWithPath: raw).standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return .error("There is no file at \(url.path).")
+        }
+        guard AudioImport.isSupported(url) else {
+            return .error("\(url.lastPathComponent) isn't an audio or video file Kaiku can read.")
+        }
+        let job = FileJob(path: url.path, save: args.values["save"]?.boolValue ?? false,
+                          language: try args.string("language"), summary: args.values["summary"]?.boolValue ?? false)
+        do {
+            try openInApp(.transcribeFile(job))
+        } catch {
+            return .error("Couldn't reach the Kaiku app: \(error.localizedDescription)")
+        }
+        let deadline = Date().addingTimeInterval(fileWait)
+        while Date() < deadline {
+            if let done = collect(job.id) { return done }
+            Thread.sleep(forTimeInterval: filePoll)
+        }
+        return MCPToolResult(text: "Kaiku is still transcribing \(url.lastPathComponent). Call get_transcription with job \"\(job.id)\" in a minute or two.")
+    }
+
+    private func getTranscription(_ args: MCPArguments) throws -> MCPToolResult {
+        let id = try args.requiredString("job")
+        guard FileJob.isValidID(id) else { throw MCPError.invalidParams("job must be the id transcribe_file gave") }
+        if let done = collect(id) { return done }
+        guard FileManager.default.fileExists(atPath: jobsFolder.appendingPathComponent(id).path) else {
+            return .error("No transcription with job \"\(id)\": it was already read, or never started.")
+        }
+        return MCPToolResult(text: "Kaiku is still transcribing job \"\(id)\". Try again in a minute.")
+    }
+
+    /// The finished job as text, then its folder removed; nil while the app still works on it.
+    private func collect(_ id: String) -> MCPToolResult? {
+        let job = jobsFolder.appendingPathComponent(id, isDirectory: true)
+        guard let data = try? Data(contentsOf: job.appendingPathComponent(FileJobResult.fileName)),
+              let result = try? JSONDecoder().decode(FileJobResult.self, from: data) else { return nil }
+        defer { try? FileManager.default.removeItem(at: job) }
+        if let error = result.error { return .error("Kaiku couldn't transcribe the file: \(error)") }
+        let folder = RecordingFolder(url: result.savedFolder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? job)
+        let meta = folder.loadMeta()
+        var lines: [String] = []
+        if let meta {
+            let code = meta.detectedLanguage ?? meta.language
+            let language = Locale(identifier: "en").localizedString(forLanguageCode: code) ?? code
+            let seconds = Int(meta.durationSeconds.rounded())
+            lines.append("Duration: \(seconds / 60)m \(seconds % 60)s. Language: \(language)." + (meta.provider.map { " Transcribed with \($0)." } ?? ""))
+        }
+        if result.savedFolder != nil {
+            lines.append("Saved in Kaiku as call \(CallLibrary.id(for: folder)) (\(folder.url.path)).")
+            changed()
+        }
+        let transcript = (try? String(contentsOf: folder.transcriptURL, encoding: .utf8)) ?? "(No transcript was written.)"
+        lines.append("\n" + transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+        if let summary = try? String(contentsOf: folder.summaryURL, encoding: .utf8) {
+            lines.append("\n## Summary\n\n" + summary.trimmingCharacters(in: .whitespacesAndNewlines))
+        } else if let error = result.summaryError {
+            lines.append("\nNo summary: \(error)")
+        }
+        return MCPToolResult(text: lines.joined(separator: "\n"))
+    }
+
     // MARK: Schemas
 
     private static let id: JSONValue = ["type": "string", "description": "Call id from list_calls (e.g. c3fa9b2), or the call folder path."]
@@ -417,6 +501,20 @@ public struct KaikuToolSet: MCPToolSet {
                     "query": ["type": "string", "description": "A question or topic, in natural language."],
                     "limit": ["type": "integer", "minimum": 1, "maximum": 100, "description": "Passages to return, 10 by default."],
                 ]), required: ["query"])),
+    ]
+
+    static let fileTools: [MCPTool] = [
+        MCPTool(name: "transcribe_file",
+                description: "Transcribe an audio or video file on this Mac with the Kaiku app, using the provider and settings chosen there. Returns the transcript with [HH:MM:SS] times and speakers, its length and language. Nothing is kept unless save is true. Waits up to 5 minutes; for longer files it returns a job id for get_transcription.",
+                inputSchema: schema([
+                    "path": ["type": "string", "description": "Absolute path of the file, e.g. /Users/me/Downloads/memo.m4a."],
+                    "save": ["type": "boolean", "description": "Keep it in Kaiku's library as an imported call. False by default."],
+                    "language": ["type": "string", "description": "Language code to transcribe in, e.g. it or en. Kaiku's setting when missing."],
+                    "summary": ["type": "boolean", "description": "Also write a summary with the AI provider chosen in Kaiku. False by default."],
+                ], required: ["path"])),
+        MCPTool(name: "get_transcription",
+                description: "The result of a transcribe_file that was still running, by its job id. A result can be read once.",
+                inputSchema: schema(["job": ["type": "string", "description": "The job id transcribe_file returned."]], required: ["job"])),
     ]
 
     static let editTools: [MCPTool] = [

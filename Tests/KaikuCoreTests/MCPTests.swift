@@ -325,6 +325,84 @@ final class KaikuToolsTests: XCTestCase {
 
     private var kickoffID: String { ChatPrompt.ref(forFolderName: "2026-09-20_1000_kickoff") }
 
+    /// File tools with a fake app that finishes every job at once, as `finish` says.
+    private func fileTools(allowed: Bool = true, finish: @escaping (FileJob, RecordingFolder) throws -> FileJobResult) -> KaikuToolSet {
+        let jobs = base.appendingPathComponent("jobs", isDirectory: true)
+        var set = KaikuToolSet(library: CallLibrary(base: base), allowEdits: { false }, allowFiles: { allowed },
+                               openInApp: { request in
+                                   guard case .transcribeFile(let job) = request else { return }
+                                   let folder = RecordingFolder(url: jobs.appendingPathComponent(job.id, isDirectory: true))
+                                   try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+                                   let result = try finish(job, folder)
+                                   try JSONEncoder().encode(result).write(to: folder.url.appendingPathComponent(FileJobResult.fileName))
+                               }, jobsFolder: jobs)
+        set.fileWait = 1
+        set.filePoll = 0.01
+        return set
+    }
+
+    private func audioFile() throws -> String {
+        let file = base.appendingPathComponent("memo.m4a")
+        try Data().write(to: file)
+        return file.path
+    }
+
+    func testFileToolsOnlyWhenAllowed() throws {
+        let off = fileTools(allowed: false) { _, _ in FileJobResult() }
+        XCTAssertFalse(off.tools().contains { $0.name == "transcribe_file" })
+        let path: [String: JSONValue] = ["path": .string(try audioFile())]
+        XCTAssertTrue(try off.call("transcribe_file", arguments: path).isError)
+        let on = fileTools { _, _ in FileJobResult() }
+        XCTAssertTrue(on.tools().contains { $0.name == "transcribe_file" })
+        XCTAssertTrue(on.tools().contains { $0.name == "get_transcription" })
+    }
+
+    func testTranscribeFileReturnsTheTranscriptAndCleansUp() throws {
+        var asked: FileJob?
+        let tools = fileTools { job, folder in
+            asked = job
+            let meta = RecordingMeta(title: "memo", date: Date(), durationSeconds: 75, language: "it", provider: "Groq", status: .done)
+            try folder.saveMeta(meta)
+            try TranscriptWriter.write(folder: folder, meta: meta, rawSegments: [Segment(start: 1, end: 2, speaker: "Speaker 1", text: "Ciao a tutti.")])
+            return FileJobResult()
+        }
+        let args: [String: JSONValue] = ["path": .string(try audioFile()), "language": .string("it"), "summary": .bool(true)]
+        let result = try tools.call("transcribe_file", arguments: args)
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertTrue(result.text.contains("Ciao a tutti."), result.text)
+        XCTAssertTrue(result.text.contains("1m 15s"), result.text)
+        XCTAssertTrue(result.text.contains("Italian"), result.text)
+        XCTAssertEqual(asked?.language, "it")
+        XCTAssertEqual(asked?.summary, true)
+        XCTAssertEqual(asked?.save, false)
+        // Read once: the job is gone afterwards.
+        XCTAssertTrue(try tools.call("get_transcription", arguments: ["job": .string(asked!.id)]).isError)
+    }
+
+    func testTranscribeFileErrors() throws {
+        let failing = fileTools { _, _ in FileJobResult(error: "The file has no audio.") }
+        let path: [String: JSONValue] = ["path": .string(try audioFile())]
+        let result = try failing.call("transcribe_file", arguments: path)
+        XCTAssertTrue(result.isError)
+        XCTAssertTrue(result.text.contains("no audio"), result.text)
+        XCTAssertTrue(try failing.call("transcribe_file", arguments: ["path": .string("/nowhere/memo.m4a")]).isError)
+        XCTAssertThrowsError(try failing.call("get_transcription", arguments: ["job": .string("../../etc")]))
+    }
+
+    func testTranscribeFileStillRunningGivesAJob() throws {
+        // An app that never finishes: the job folder exists, no result.
+        var set = fileTools { _, _ in FileJobResult() }
+        let jobs = set.jobsFolder
+        set.openInApp = { request in
+            guard case .transcribeFile(let job) = request else { return }
+            try FileManager.default.createDirectory(at: jobs.appendingPathComponent(job.id), withIntermediateDirectories: true)
+        }
+        let path: [String: JSONValue] = ["path": .string(try audioFile())]
+        let result = try set.call("transcribe_file", arguments: path)
+        XCTAssertFalse(result.isError)
+        XCTAssertTrue(result.text.contains("get_transcription"), result.text)
+    }
+
     func testListsCallsLatestFirstWithFilters() throws {
         let all = try json(tools.call("list_calls", arguments: [:]))
         XCTAssertEqual(all["total"], 2)
