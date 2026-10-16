@@ -60,10 +60,28 @@ public enum AppleSpeech {
     }
 
     /// True when the model is on this Mac. After a catalog update the system reports an older
-    /// model on disk as only supported, though the recognizer still runs with it.
+    /// model on disk as only supported, though the recognizer still runs with it. A model
+    /// found is also reserved, so the system keeps it.
     public static func isInstalled(_ locale: Locale) async -> Bool {
-        if await AssetInventory.status(forModules: [transcriber(locale)]) == .installed { return true }
-        return await SpeechTranscriber.installedLocales.contains { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
+        var installed = await AssetInventory.status(forModules: [transcriber(locale)]) == .installed
+        if !installed {
+            installed = await SpeechTranscriber.installedLocales.contains { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
+        }
+        if installed { await reserve(locale) }
+        return installed
+    }
+
+    /// Keeps the language's model on this Mac: the system may remove models no app has
+    /// reserved. An app holds only a few, so the oldest one is released to make room.
+    public static func reserve(_ locale: Locale) async {
+        let reserved = await AssetInventory.reservedLocales
+        guard !reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) else { return }
+        if reserved.count >= AssetInventory.maximumReservedLocales, let oldest = reserved.first {
+            _ = await AssetInventory.release(reservedLocale: oldest)
+        }
+        do { _ = try await AssetInventory.reserve(locale: locale) } catch {
+            Log.transcription.error("Could not reserve the \(locale.identifier, privacy: .public) speech model: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Only asks the system what is installed; nothing is downloaded.
@@ -95,6 +113,7 @@ public enum AppleSpeech {
         }
         defer { observation.invalidate() }
         try await request.downloadAndInstall()
+        await reserve(locale)
     }
 }
 
