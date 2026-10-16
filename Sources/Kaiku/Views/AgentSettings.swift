@@ -7,6 +7,7 @@ import SwiftUI
 /// through kaiku-mcp, the MCP server bundled with the app.
 struct AgentSettings: View {
     @AppStorage(Keys.agentsAllowEdits) private var allowEdits = false
+    @AppStorage(Keys.agentsAllowFiles) private var allowFiles = false
     @State private var results: [AgentClient: (ok: Bool, message: String)] = [:]
     @State private var installing: AgentClient?
     @State private var copied: String?
@@ -14,11 +15,12 @@ struct AgentSettings: View {
     private let path = AgentInstaller.serverPath
 
     @State private var confirmEdits = false
+    @State private var confirmFiles = false
     @State private var showManual = false
     @ObservedObject private var nav = AppNavigation.shared
 
     var body: some View {
-        SettingsGroup("Agents (MCP)", footer: "Agents read the calls on this Mac. Reading is always allowed; editing only with the switch on.") {
+        SettingsGroup("Agents (MCP)", footer: "Agents read the calls on this Mac. Reading is always allowed; editing and transcribing files only with their switch on.") {
             if let path {
                 clientRow(.claudeCode, path: path)
                 clientRow(.codex, path: path)
@@ -33,6 +35,10 @@ struct AgentSettings: View {
                 if on { confirmEdits = true } else { allowEdits = false }
             }))
             .settingsAnchor("agentsEdit")
+            SwitchRow("Allow agents to transcribe files", isOn: Binding(get: { allowFiles }, set: { on in
+                if on { confirmFiles = true } else { allowFiles = false }
+            }))
+            .settingsAnchor("agentsFiles")
             if let path {
                 DisclosureRow(title: "Manual Setup", detail: "For other agents", isOpen: $showManual)
                     .settingsAnchor("manualSetup")
@@ -52,6 +58,11 @@ struct AgentSettings: View {
             Button("Allow Editing") { allowEdits = true }
         } message: {
             Text("Agents will be able to rename calls, change tags and speakers, and run transcriptions and summaries again.")
+        }
+        .confirmationDialog("Allow agents to transcribe files?", isPresented: $confirmFiles) {
+            Button("Allow Transcribing Files") { allowFiles = true }
+        } message: {
+            Text("Agents will be able to have any audio or video file on this Mac transcribed, with the provider chosen in Transcription. With a cloud provider, the audio is sent to it. Files are not kept unless the agent asks to save them.")
         }
         .onAppear { if nav.wants(["manualSetup"], in: .integrations) { showManual = true } }
         .onChange(of: nav.request) { _, _ in if nav.wants(["manualSetup"], in: .integrations) { showManual = true } }

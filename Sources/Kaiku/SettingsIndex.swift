@@ -151,6 +151,7 @@ enum SettingsIndex {
         e(.integrations, "webhook", "Webhook", "Custom Template", ["body", "json", "template"]),
         e(.integrations, "agents", "Agents (MCP)", "Add to Claude Code", ["mcp", "agent", "claude code", "claude desktop", "codex"]),
         e(.integrations, "agentsEdit", "Agents (MCP)", "Allow agents to edit calls", ["mcp", "agent", "edit", "permission"]),
+        e(.integrations, "agentsFiles", "Agents (MCP)", "Allow agents to transcribe files", ["mcp", "agent", "file", "transcribe", "permission"]),
         e(.integrations, "agents", "Agents (MCP)", "Manual Setup", ["mcp", "snippet", "config"]),
         e(.integrations, "raycast", "Raycast", "Install in Raycast", ["raycast", "extension"]),
     ]
