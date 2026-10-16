@@ -182,6 +182,7 @@ enum Keys {
     static let readingFullWidth = "readingFullWidth"
     /// Address of the Ollama or custom server.
     static func baseURL(_ p: SummaryProviderKind) -> String { "baseURL.\(p.rawValue)" }
+    static let agentsAllowFiles = KaikuAgents.allowFilesKey
     static let discardShortEnabled = "discardShortEnabled"
     static let discardShortSeconds = "discardShortSeconds"
     /// "total" or "speech".
@@ -271,6 +272,7 @@ enum AppSettings {
             Keys.agentsAllowEdits: false,
             Keys.readingTextSize: ReadingSize.standard,
             Keys.readingFullWidth: false,
+            Keys.agentsAllowFiles: false,
             Keys.discardShortEnabled: true,
             Keys.discardShortSeconds: 30,
             Keys.discardShortMode: "total",
@@ -413,6 +415,7 @@ enum AppSettings {
 
     static var removeEcho: Bool { defaults.bool(forKey: Keys.removeEcho) }
     static var summaryEnabled: Bool { defaults.bool(forKey: Keys.summaryEnabled) }
+    static var agentsAllowFiles: Bool { defaults.bool(forKey: Keys.agentsAllowFiles) }
     static var discardShortEnabled: Bool { defaults.bool(forKey: Keys.discardShortEnabled) }
     static var discardShortSeconds: Int { max(defaults.integer(forKey: Keys.discardShortSeconds), 1) }
     static var discardShortCountsSpeech: Bool { defaults.string(forKey: Keys.discardShortMode) == "speech" }

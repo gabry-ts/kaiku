@@ -258,6 +258,19 @@ final class MCPTests: XCTestCase {
         XCTAssertNil(AgentRequest(url: URL(string: "kaiku://transcribe")!))
     }
 
+    func testFileJobURLsRoundTrip() {
+        let path = "/Users/me/Downloads/Voice memo & notes #2.m4a"
+        for job in [FileJob(path: path), FileJob(path: path, save: true, language: "it", summary: true)] {
+            let request = AgentRequest.transcribeFile(job)
+            XCTAssertEqual(AgentRequest(url: request.url), request)
+        }
+        // A job id from a URL never leaves the jobs folder.
+        XCTAssertNil(AgentRequest(url: URL(string: "kaiku://transcribe-file?path=%2Fa.m4a&job=..%2F..%2Fetc")!))
+        XCTAssertNil(AgentRequest(url: URL(string: "kaiku://transcribe-file?path=%2Fa.m4a")!))
+        XCTAssertNil(KaikuAgents.jobFolder("../x"))
+        XCTAssertNotNil(KaikuAgents.jobFolder(FileJob.newID()))
+    }
+
     func testBaseFolderDefault() {
         let home = URL(fileURLWithPath: "/Users/me", isDirectory: true)
         XCTAssertEqual(KaikuAgents.baseFolder(savedPath: nil, home: home).path, "/Users/me/Documents/Kaiku")

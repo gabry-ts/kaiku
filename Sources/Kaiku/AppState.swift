@@ -957,6 +957,11 @@ final class AppState: ObservableObject {
             Log.app.error("Ignored URL: \(url.absoluteString, privacy: .public)")
             return
         }
+        // Not a call of the library: it has its own switch in Settings.
+        if case .transcribeFile(let job) = request {
+            AgentTranscription.run(job)
+            return
+        }
         guard AppSettings.agentsAllowEdits else {
             Log.app.error("Ignored an agent request: editing by agents is off")
             return
@@ -970,6 +975,8 @@ final class AppState: ObservableObject {
         case .transcribe:
             Log.app.info("An agent asked to transcribe \(folder.url.lastPathComponent, privacy: .public)")
             transcribe(folder: folder, provider: AppSettings.provider)
+        case .transcribeFile:
+            break
         case .summarize:
             Log.app.info("An agent asked to summarize \(folder.url.lastPathComponent, privacy: .public)")
             Task {

@@ -10,6 +10,7 @@ public enum KaikuAgents {
     /// Preferences keys read by the server.
     public static let baseFolderKey = "baseFolder"
     public static let allowEditsKey = "agentsAllowEdits"
+    public static let allowFilesKey = "agentsAllowFiles"
     /// Posted by the server after it changes a call, so the open library reloads.
     public static let libraryChangedNotification = "com.gabrielepartiti.kaiku.libraryChanged"
 
@@ -20,19 +21,81 @@ public enum KaikuAgents {
         return path.isEmpty ? home.appendingPathComponent("Documents/Kaiku", isDirectory: true)
             : URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
+
+    /// Where the app transcribes files for agents, one folder per job, outside the library.
+    public static var jobsFolder: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Kaiku/agent-jobs", isDirectory: true)
+    }
+
+    /// The folder of a job, or nil for an id that isn't one (it comes from a URL).
+    public static func jobFolder(_ job: String) -> URL? {
+        guard FileJob.isValidID(job) else { return nil }
+        return jobsFolder.appendingPathComponent(job, isDirectory: true)
+    }
 #endif
+}
+
+/// A file an agent asked the app to transcribe, outside the library unless `save`.
+public struct FileJob: Equatable, Sendable {
+    /// Short hex id, also the job's folder name.
+    public var id: String
+    /// The audio or video file, an absolute path.
+    public var path: String
+    /// Keep it in the library as an imported call.
+    public var save: Bool
+    /// The language code to transcribe in; nil uses the app's setting.
+    public var language: String?
+    /// Also write a summary.
+    public var summary: Bool
+
+    public init(id: String = FileJob.newID(), path: String, save: Bool = false, language: String? = nil, summary: Bool = false) {
+        self.id = id
+        self.path = path
+        self.save = save
+        self.language = language
+        self.summary = summary
+    }
+
+    public static func newID() -> String {
+        String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(12))
+    }
+
+    public static func isValidID(_ id: String) -> Bool {
+        (8...32).contains(id.count) && id.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+    }
+}
+
+/// Written last in a job's folder, once the app is done with it.
+public struct FileJobResult: Codable, Equatable, Sendable {
+    public static let fileName = "result.json"
+    /// Why the file couldn't be transcribed.
+    public var error: String?
+    /// The transcript is there, but the summary asked for couldn't be written.
+    public var summaryError: String?
+    /// Where the call went in the library, when saved.
+    public var savedFolder: String?
+
+    public init(error: String? = nil, summaryError: String? = nil, savedFolder: String? = nil) {
+        self.error = error
+        self.summaryError = summaryError
+        self.savedFolder = savedFolder
+    }
 }
 
 /// Work only the app can do, asked for by the MCP server with a `kaiku://` URL.
 public enum AgentRequest: Equatable, Sendable {
     case transcribe(folder: String)
     case summarize(folder: String)
+    case transcribeFile(FileJob)
 
     public static let scheme = "kaiku"
 
+    /// The call's folder; for a file, the file.
     public var folder: String {
         switch self {
         case .transcribe(let f), .summarize(let f): return f
+        case .transcribeFile(let job): return job.path
         }
     }
 
@@ -40,23 +103,39 @@ public enum AgentRequest: Equatable, Sendable {
         switch self {
         case .transcribe: return "transcribe"
         case .summarize: return "summarize"
+        case .transcribeFile: return "transcribe-file"
         }
     }
 
-    /// `kaiku://transcribe?folder=%2FUsers%2F…`
+    /// `kaiku://transcribe?folder=%2FUsers%2F…`, `kaiku://transcribe-file?path=…&job=…&save=1`
     public var url: URL {
         let allowed = CharacterSet(charactersIn: AgentConfig.asciiAlphanumerics + "-._~")
-        let value = folder.addingPercentEncoding(withAllowedCharacters: allowed) ?? folder
-        return URL(string: "\(Self.scheme)://\(action)?folder=\(value)")!
+        func encode(_ v: String) -> String { v.addingPercentEncoding(withAllowedCharacters: allowed) ?? v }
+        guard case .transcribeFile(let job) = self else {
+            return URL(string: "\(Self.scheme)://\(action)?folder=\(encode(folder))")!
+        }
+        var query = "path=\(encode(job.path))&job=\(encode(job.id))&save=\(job.save ? 1 : 0)&summary=\(job.summary ? 1 : 0)"
+        if let language = job.language { query += "&language=\(encode(language))" }
+        return URL(string: "\(Self.scheme)://\(action)?\(query)")!
     }
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == Self.scheme,
-              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let folder = parts.queryItems?.first(where: { $0.name == "folder" })?.value, !folder.isEmpty else { return nil }
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        func value(_ name: String) -> String? {
+            parts.queryItems?.first(where: { $0.name == name })?.value.flatMap { $0.isEmpty ? nil : $0 }
+        }
         switch url.host?.lowercased() {
-        case "transcribe": self = .transcribe(folder: folder)
-        case "summarize": self = .summarize(folder: folder)
+        case "transcribe":
+            guard let folder = value("folder") else { return nil }
+            self = .transcribe(folder: folder)
+        case "summarize":
+            guard let folder = value("folder") else { return nil }
+            self = .summarize(folder: folder)
+        case "transcribe-file":
+            guard let path = value("path"), let id = value("job"), FileJob.isValidID(id) else { return nil }
+            self = .transcribeFile(FileJob(id: id, path: path, save: value("save") == "1",
+                                           language: value("language"), summary: value("summary") == "1"))
         default: return nil
         }
     }
